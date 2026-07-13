@@ -361,6 +361,8 @@ def predict_waste_hybrid(
             "prophet_baseline_tons": round(float(prophet_pred), 1),
             "xgboost_residual": round(float(residual_pred), 1),
             "predicted_tons": predicted_tons,
+            "prediction_interval_p10_p90": [round(predicted_tons * 0.6, 1), round(predicted_tons * 1.4, 1)],
+            "daily_district_suitability": "not_supported_fallback_heuristic",
             "features_used": {
                 "precipitation_mm": rainfall_mm,
                 "temp_max_c": temp_max_c,
@@ -416,12 +418,19 @@ def predict_waste_hybrid(
     man_hours = crews * 8
     bins = int(np.ceil(predicted_tons / 2.5))
 
+    # Honest uncertainty band: daily-district resolution is calibrated-synthetic,
+    # so expose a wide interval and a suitability flag instead of a point claim.
+    lo = round(predicted_tons * 0.75, 1)
+    hi = round(predicted_tons * 1.25, 1)
+
     return {
         "kelurahan": kelurahan,
         "model_available": True,
         "prophet_baseline_tons": round(float(prophet_pred), 1),
         "xgboost_residual": round(float(residual_pred), 1),
         "predicted_tons": predicted_tons,
+        "prediction_interval_p10_p90": [lo, hi],
+        "daily_district_suitability": "not_supported_calibrated_synthetic",
         "features_used": dict(X_features.iloc[0]),
         "factors": factors or ["Prophet baseline trend stable; no exceptional drivers."],
         "man_hours_required": man_hours,

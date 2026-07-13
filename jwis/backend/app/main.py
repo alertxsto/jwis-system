@@ -31,6 +31,7 @@ from app.engine import (
 from app.astar_routing import reroute_payload
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
+from app.forecast_metrics import suitability_labels
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
@@ -312,6 +313,14 @@ def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest) -> dict:
 @app.get("/api/ml/models")
 def ml_models_status() -> list[dict[str, Any]]:
     return list_hybrid_models()
+
+@app.get("/api/ml/suitability")
+def ml_suitability() -> dict[str, Any]:
+    """Honest per-resolution suitability; daily-district is not claimed reliable."""
+    return {
+        "resolutions": suitability_labels(),
+        "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
+    }
 
 @app.post("/api/ml/predict")
 def ml_predict_district(payload: HybridPredictRequest) -> dict[str, Any]:

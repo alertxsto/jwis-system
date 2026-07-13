@@ -94,6 +94,24 @@ For each test year Y: train on all days before Y, predict all of Y (pooled acros
 | Kelapa Gading | Jakarta Utara | 12.10 | -0.309 | 19.81 | +38.9% |
 | **AVERAGE** | — | **19.01** | **-0.153** | — | — |
 
+## Forecast suitability contract (what JWIS may claim)
+
+The API exposes `/api/ml/suitability` and every prediction now carries a
+`daily_district_suitability` flag plus a `prediction_interval_p10_p90` band.
+Claims are bounded by evidence:
+
+| Resolution | Claim | Basis |
+|---|---|--:|
+| Hotspot spatial rank | high | Spearman ρ 0.998 |
+| City-day | reliable | R² 0.893 |
+| District-month | reliable | R² 0.966 |
+| District-week | reliable | R² 0.954 |
+| District-day | **NOT supported** | calibrated-synthetic target |
+
+Metrics module (`app/forecast_metrics.py`) provides WAPE, MASE (vs seasonal-naive),
+and MAE so future retraining benchmarks the model against naive baselines rather
+than presenting scores in a vacuum. MASE < 1 is required to claim the ML beats naive.
+
 ## Reproducibility
 
 - Training window: **2021-01-01 .. 2026-05-29** (82,950 kecamatan-day rows).
