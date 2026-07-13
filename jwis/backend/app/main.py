@@ -666,9 +666,13 @@ def get_events_permits() -> list[dict[str, Any]]:
     return events
 
 @app.get("/api/fleet/astar-reroute")
-def get_astar_reroute() -> dict[str, Any]:
+def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
     global TRAFFIC_JAM_ACTIVE
-    return reroute_payload(TRAFFIC_JAM_ACTIVE)
+    truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
+    origin = None
+    if truck and truck.get("latest_position"):
+        origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
+    return reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
 
 @app.get("/api/fleet/{truck_code}/breadcrumbs")
 def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:

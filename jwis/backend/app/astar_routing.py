@@ -68,50 +68,61 @@ def haversine_distance(coord1, coord2):
     return 2 * R * asin(sqrt(a))
 
 
-@lru_cache(maxsize=64)
-def edge_geometry(u: str, v: str) -> tuple[tuple, ...]:
-    """Road-following geometry for one edge via OSRM (cached).
+@lru_cache(maxsize=256)
+def _osrm_edge(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> tuple:
+    """OSRM road geometry + distance(km) + duration(min) for one coordinate edge.
 
-    Returns a tuple of {lat,lng}-like tuples. Falls back to the straight-line
-    endpoints (labeled by the caller) when OSRM is unreachable.
+    Cached on coordinates (not node names) so route_from_truck's local graph
+    reuses the cache. Returns (geometry_tuple, distance_km, duration_min, is_osrm).
+    Falls back to the straight-line endpoints + haversine when OSRM is down.
     """
-    a = (NODES[u][0], NODES[u][1])
-    b = (NODES[v][0], NODES[v][1])
-    route = fetch_osrm_route(f"{u}-{v}", a, b, timeout_seconds=6.0)
+    route = fetch_osrm_route("edge", (a_lat, a_lng), (b_lat, b_lng), timeout_seconds=6.0)
     if route.get("source") == "osrm" and route.get("path"):
-        return tuple((p["lat"], p["lng"]) for p in route["path"])
-    return ((a[0], a[1]), (b[0], b[1]))
+        geom = tuple((p["lat"], p["lng"]) for p in route["path"])
+        return geom, float(route["distance_km"]), float(route["eta_minutes"]), True
+    d = haversine_distance((a_lat, a_lng), (b_lat, b_lng))
+    return (((a_lat, a_lng), (b_lat, b_lng)), d, (d / 45) * 60, False)
 
 
-def build_path_from_sequence(node_sequence) -> tuple[list[dict], str]:
+def build_path_from_sequence(node_sequence, nodes) -> tuple[list[dict], str, float, float]:
     """Concatenate OSRM edge geometry across the node sequence.
 
-    Returns (path, geometry_source) where geometry_source is "osrm" if every
-    edge resolved through OSRM, else "fallback-straight-line".
+    Returns (path, geometry_source, osrm_distance_km, osrm_duration_min). Distance
+    and duration come from OSRM per edge, not the manual EDGES weights.
     """
     path: list[dict] = []
     source = "osrm"
+    total_km = 0.0
+    total_min = 0.0
     for i in range(len(node_sequence) - 1):
         u, v = node_sequence[i], node_sequence[i + 1]
-        geom = edge_geometry(u, v)
-        if len(geom) <= 2:
+        geom, dist_km, dur_min, is_osrm = _osrm_edge(nodes[u][0], nodes[u][1], nodes[v][0], nodes[v][1])
+        if not is_osrm:
             source = "fallback-straight-line"
+        total_km += dist_km
+        total_min += dur_min
         for lat, lng in geom:
             point = {"lat": round(lat, 6), "lng": round(lng, 6)}
             if not path or path[-1] != point:
                 path.append(point)
-    return path, source
+    return path, source, round(total_km, 1), round(total_min)
 
 
 def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
-                     congested_edges=None, blocked_edges=None):
+                     congested_edges=None, blocked_edges=None,
+                     nodes=None, edges=None):
     """A* shortest path with permit gating, traffic weighting, and OSRM geometry.
 
     - blocked_edges (permit): never traversed.
     - congested_edges: x5 traffic penalty on the optimization cost.
-    Returns separated fields: optimization_cost (weighted), physical_distance_km
-    (raw sum), eta_minutes (from distance at truck speed), plus OSRM path geometry.
+    - nodes/edges: optional local graph (route_from_truck passes copies so the
+      global graph is never mutated).
+    Returns separated fields: optimization_cost (weighted search cost),
+    physical_distance_km (from OSRM geometry), eta_minutes (from OSRM durations),
+    plus OSRM path geometry.
     """
+    nodes = nodes if nodes is not None else NODES
+    edges = edges if edges is not None else EDGES
     congested_edges = congested_edges or []
     blocked_edges = blocked_edges or []
 
@@ -126,33 +137,33 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
 
     def heuristic(node):
         return haversine_distance(
-            (NODES[node][0], NODES[node][1]),
-            (NODES[goal][0], NODES[goal][1]),
+            (nodes[node][0], nodes[node][1]),
+            (nodes[goal][0], nodes[goal][1]),
         )
 
-    adj = {n: [] for n in NODES}
-    for u, v, d in EDGES:
+    adj = {n: [] for n in nodes}
+    for u, v, d in edges:
         adj[u].append((v, d))
         adj[v].append((u, d))
 
-    pq = [(heuristic(start), 0.0, 0.0, start, [start])]
+    pq = [(heuristic(start), 0.0, start, [start])]
     visited = {}
 
     while pq:
-        f, cost, dist_km, u, path = heapq.heappop(pq)
+        f, cost, u, path = heapq.heappop(pq)
 
         if u == goal:
-            detailed, geom_source = build_path_from_sequence(path)
+            detailed, geom_source, osrm_km, osrm_min = build_path_from_sequence(path, nodes)
             return {
                 "success": True,
                 "sequence": path,
-                "sequence_labels": [NODES[n][2] for n in path],
+                "sequence_labels": [nodes[n][2] for n in path],
                 "path": detailed,
                 "geometry_source": geom_source,
                 "optimization_cost": round(cost, 2),
-                "physical_distance_km": round(dist_km, 1),
-                "distance_km": round(dist_km, 1),
-                "eta_minutes": max(15, round((dist_km / 45) * 60)),
+                "physical_distance_km": osrm_km,
+                "distance_km": osrm_km,
+                "eta_minutes": max(15, osrm_min),
                 "is_diverted": len(congested_edges) > 0,
             }
 
@@ -165,10 +176,9 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
                 continue
             multiplier = 5.0 if (u, v) in congested_set else 1.0
             cost_new = cost + dist * multiplier
-            dist_new = dist_km + dist
             f_new = cost_new + heuristic(v)
             if v not in visited or visited[v] > cost_new:
-                heapq.heappush(pq, (f_new, cost_new, dist_new, v, path + [v]))
+                heapq.heappush(pq, (f_new, cost_new, v, path + [v]))
 
     return {"success": False, "message": "No route found."}
 
@@ -191,28 +201,40 @@ def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG",)) -> str:
 
 
 def route_from_truck(position: dict, goal="TPA_BANTARGEBANG", **kwargs) -> dict:
-    """Route anchored to a truck's real GPS: inject the position as ORIGIN so the
-    rendered path starts within 50m of the marker, then A* to the goal."""
+    """Route anchored to a truck's real GPS, on a LOCAL graph copy.
+
+    Builds a per-request copy of NODES/EDGES with a fresh ORIGIN at the truck
+    position + a connector edge to the nearest node, so concurrent requests for
+    different trucks never mutate or leak into the shared global graph.
+    """
     lat, lng = position["lat"], position["lng"]
     snap = nearest_node(lat, lng)
-    NODES["ORIGIN"] = (lat, lng, "Posisi Truk (GPS)")
-    if ("ORIGIN", snap, 0.0) not in EDGES and snap != "ORIGIN":
-        d = haversine_distance((lat, lng), (NODES[snap][0], NODES[snap][1]))
-        adj_edge = ("ORIGIN", snap, round(d, 2))
-        if adj_edge not in EDGES:
-            EDGES.append(adj_edge)
-    edge_geometry.cache_clear()
-    return find_astar_route(start="ORIGIN", goal=goal, **kwargs)
+    nodes = dict(NODES)
+    edges = list(EDGES)
+    nodes["ORIGIN"] = (lat, lng, "Posisi Truk (GPS)")
+    if snap != "ORIGIN":
+        d = haversine_distance((lat, lng), (nodes[snap][0], nodes[snap][1]))
+        edges.append(("ORIGIN", snap, round(d, 2)))
+    return find_astar_route(start="ORIGIN", goal=goal, nodes=nodes, edges=edges, **kwargs)
 
 
-def reroute_payload(jam_active: bool, congested_edges=None):
+def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None):
     """Return normal and (if a jam actually hits the active route) diverted route.
 
-    A jam on an edge NOT on the active route does not trigger a diversion — a
-    truck is not rerouted for congestion it never touches.
+    - origin_position: {lat,lng} GPS to anchor the route origin at the real truck
+      marker (falls back to the fixed ORIGIN node when absent).
+    - Congestion is emitted as a road-segment LineString (OSRM geometry) with the
+      segment name, source, and traffic multiplier — not just a midpoint pin.
+    A jam on an edge NOT on the active route does not trigger a diversion.
     """
     jam_edges = congested_edges if congested_edges is not None else DEMO_CONGESTED_EDGES
-    normal = find_astar_route(congested_edges=[])
+
+    def _route(cong):
+        if origin_position:
+            return route_from_truck(origin_position, congested_edges=cong)
+        return find_astar_route(congested_edges=cong)
+
+    normal = _route([])
     normal_edges = set(zip(normal["sequence"], normal["sequence"][1:]))
     normal_edges |= {(v, u) for (u, v) in normal_edges}
 
@@ -223,6 +245,7 @@ def reroute_payload(jam_active: bool, congested_edges=None):
             "active_route": normal,
             "abandoned_route": None,
             "congestion_points": [],
+            "congestion_segments": [],
             "message": (
                 "Lalu lintas normal. Truk mengikuti rute terpendek ke TPA Bantargebang."
                 if not jam_active else
@@ -230,13 +253,22 @@ def reroute_payload(jam_active: bool, congested_edges=None):
             ),
         }
 
-    diverted = find_astar_route(congested_edges=jam_edges)
+    diverted = _route(jam_edges)
     jam_points = []
+    jam_segments = []
     for u, v in jam_edges:
         jam_points.append({
             "lat": round((NODES[u][0] + NODES[v][0]) / 2, 6),
             "lng": round((NODES[u][1] + NODES[v][1]) / 2, 6),
             "label": f"Macet total: {NODES[u][2]} -> {NODES[v][2]}",
+        })
+        geom, dist_km, _dur, _osrm = _osrm_edge(NODES[u][0], NODES[u][1], NODES[v][0], NODES[v][1])
+        jam_segments.append({
+            "name": f"{NODES[u][2]} -> {NODES[v][2]}",
+            "coordinates": [{"lat": round(la, 6), "lng": round(ln, 6)} for la, ln in geom],
+            "traffic_multiplier": 5.0,
+            "source": "SIMULATED CONGESTION",
+            "distance_km": dist_km,
         })
     extra_km = round(diverted["distance_km"] - normal["distance_km"], 1)
     return {
@@ -244,6 +276,7 @@ def reroute_payload(jam_active: bool, congested_edges=None):
         "active_route": diverted,
         "abandoned_route": normal,
         "congestion_points": jam_points,
+        "congestion_segments": jam_segments,
         "message": (
             f"Kemacetan terdeteksi di koridor aktif. A* membelokkan truk "
             f"via {' -> '.join(NODES[n][2] for n in diverted['sequence'][1:-1])}. "
