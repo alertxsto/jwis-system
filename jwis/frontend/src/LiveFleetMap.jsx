@@ -44,6 +44,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   
   // Track active markers and their previous coordinates for interpolation
   const activeMarkersRef = useRef({});
+  const tpaMarkerRef = useRef(null);
 
   // A* dynamic rerouting state
   const [astarData, setAstarData] = useState(null);
@@ -155,6 +156,12 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
 
       const assignedData = featureCollection(assignedFeatures);
       const actualData = featureCollection(actualFeatures);
+
+      if (import.meta.env.DEV) {
+        window.__jwisMapFeatures = {
+          actualKinds: actualFeatures.map((f) => f.properties?.kind),
+        };
+      }
 
       if (!map.getSource("assigned-routes")) {
         map.addSource("assigned-routes", { type: "geojson", data: assignedData });
@@ -482,9 +489,8 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
         if (!response.ok) throw new Error("tpa unavailable");
         const q = await response.json();
         if (q.lat == null || q.lng == null) return;
-        const key = "tpa-marker";
-        if (activeMarkersRef.current[key]) {
-          activeMarkersRef.current[key].marker.remove();
+        if (tpaMarkerRef.current) {
+          tpaMarkerRef.current.remove();
         }
         const el = document.createElement("div");
         el.className = "tpa-marker";
@@ -500,7 +506,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
           .setLngLat([q.lng, q.lat])
           .setPopup(popup)
           .addTo(map);
-        activeMarkersRef.current[key] = { marker };
+        tpaMarkerRef.current = marker;
       } catch {
         // TPA marker is non-critical
       }
