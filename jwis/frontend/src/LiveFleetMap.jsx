@@ -112,6 +112,8 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   const [astarData, setAstarData] = useState(null);
   const [eventPermits, setEventPermits] = useState([]);
   const [breadcrumbs, setBreadcrumbs] = useState({});
+  const [unlicensed, setUnlicensed] = useState([]);
+  const unlicensedMarkersRef = useRef([]);
 
 
   useEffect(() => {
@@ -141,6 +143,19 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
     }
     if (trucks?.length) fetchBreadcrumbs();
   }, [trucks]);
+
+  useEffect(() => {
+    async function fetchUnlicensed() {
+      try {
+        const res = await fetch(`${API_URL}/fleet/unlicensed-collectors`);
+        if (res.ok) {
+          const j = await res.json();
+          setUnlicensed(j.alerts || []);
+        }
+      } catch {}
+    }
+    fetchUnlicensed();
+  }, []);
 
   useEffect(() => {
     async function fetchAstar() {
@@ -628,6 +643,27 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
       }
     }
 
+    function renderUnlicensed() {
+      const map = mapInstance;
+      if (!map) return;
+      unlicensedMarkersRef.current.forEach((m) => m.remove());
+      unlicensedMarkersRef.current = [];
+      (unlicensed || []).forEach((a) => {
+        if (a.lat == null || a.lng == null) return;
+        const el = document.createElement("div");
+        el.className = "unlicensed-marker";
+        el.title = a.plate;
+        const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
+          `<div class="map-popup"><h4>Unlicensed collector</h4>` +
+          `<p><b>${a.plate}</b></p><p>${a.message}</p>` +
+          `<p class="popup-src">${a.data_class || "SIMULATED"} · registry match</p></div>`
+        );
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([a.lng, a.lat]).setPopup(popup).addTo(map);
+        unlicensedMarkersRef.current.push(marker);
+      });
+    }
+
     let cancelled = false;
     function renderWhenReady() {
       if (cancelled) return;
@@ -643,12 +679,13 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
       renderHeatmap();
       renderOsrm();
       renderTpa();
+      renderUnlicensed();
     }
     renderWhenReady();
     return () => {
       cancelled = true;
     };
-  }, [mapInstance]);
+  }, [mapInstance, unlicensed]);
 
   return (
     <div className="maplibre-shell">

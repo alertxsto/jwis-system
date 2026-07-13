@@ -30,6 +30,7 @@ from app.engine import (
 )
 from app.astar_routing import reroute_payload
 from app.gps_feed import latest_breadcrumbs
+from app.collector_registry import scan_observed_vehicles
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
@@ -678,6 +679,23 @@ def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
     if truck and truck.get("latest_position"):
         origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
     return reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
+
+@app.get("/api/fleet/unlicensed-collectors")
+def unlicensed_collectors() -> dict[str, Any]:
+    """Detect observed vehicles operating outside the DLH registry (Case 1 illegal activity)."""
+    observed = [
+        {"plate": "B 1234 CD", "lat": -6.1490, "lng": 106.8700},
+        {"plate": "Z 8842 KX", "lat": -6.1602, "lng": 106.8351},
+        {"plate": "F 5521 QN", "lat": -6.2410, "lng": 106.9012},
+    ]
+    alerts = scan_observed_vehicles(observed)
+    return {
+        "observed_count": len(observed),
+        "unauthorized_count": len(alerts),
+        "alerts": alerts,
+        "data_class": "SIMULATED",
+        "data_note": "Illustrative observed vehicles; registry match against real DLH fleet plates.",
+    }
 
 @app.get("/api/fleet/{truck_code}/breadcrumbs")
 def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
