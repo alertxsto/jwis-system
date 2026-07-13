@@ -108,6 +108,17 @@ def build_path_from_sequence(node_sequence, nodes) -> tuple[list[dict], str, flo
     return path, source, round(total_km, 1), round(total_min)
 
 
+def _heuristic_minutes(node: str, goal: str, nodes: dict) -> float:
+    """Zero heuristic: admissible by construction on this small graph, making A*
+    equivalent to Dijkstra and guaranteeing an optimal (never-worse) route.
+
+    A straight-line-km/45 estimate can overestimate true OSRM duration when roads
+    are faster than 45 km/h, breaking admissibility (audit found 22/1260 worse
+    scenarios). Zero never overestimates.
+    """
+    return 0.0
+
+
 def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
                      congested_edges=None, blocked_edges=None,
                      nodes=None, edges=None):
@@ -136,12 +147,7 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
         blocked_set.add((v, u))
 
     def heuristic(node):
-        km = haversine_distance(
-            (nodes[node][0], nodes[node][1]),
-            (nodes[goal][0], nodes[goal][1]),
-        )
-        # Admissible duration estimate: straight-line km at max truck speed.
-        return (km / 45.0) * 60.0
+        return _heuristic_minutes(node, goal, nodes)
 
     def edge_duration_min(u, v):
         _geom, _km, dur_min, _osrm = _osrm_edge(nodes[u][0], nodes[u][1], nodes[v][0], nodes[v][1])

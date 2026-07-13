@@ -72,6 +72,84 @@ class AstarGpsAnchorTests(unittest.TestCase):
         self.assertGreater(r["physical_distance_km"], 40,
                            "OSRM road distance should exceed the manual straight-line sum")
 
+    def test_astar_cost_matches_directed_dijkstra(self):
+        # A* with a zero heuristic must equal directed Dijkstra's optimal cost,
+        # never worse, across jam/permit scenarios (admissible by construction).
+        import heapq as _hq
+        from app.astar_routing import find_astar_route, NODES, EDGES, _edge_meta, _osrm_edge
+
+        def dijkstra(congested, blocked):
+            cset = set(congested) | {(v, u) for (u, v) in congested}
+            bset = set(blocked) | {(v, u) for (u, v) in blocked}
+            adj = {n: [] for n in NODES}
+            for u, v, _d in EDGES:
+                adj[u].append(v); adj[v].append(u)
+            pq = [(0.0, "ORIGIN")]
+            best = {"ORIGIN": 0.0}
+            while pq:
+                cost, u = _hq.heappop(pq)
+                if u == "TPA_BANTARGEBANG":
+                    return round(cost, 2)
+                if cost > best.get(u, float("inf")):
+                    continue
+                for v in adj[u]:
+                    if (u, v) in bset or not _edge_meta(u, v)["permit_allowed"]:
+                        continue
+                    _g, _km, dur, _o = _osrm_edge(NODES[u][0], NODES[u][1], NODES[v][0], NODES[v][1])
+                    mult = 5.0 if (u, v) in cset else 1.0
+                    nc = cost + dur * mult
+                    if nc < best.get(v, float("inf")):
+                        best[v] = nc
+                        _hq.heappush(pq, (nc, v))
+            return None
+
+        scenarios = [([], []), ([("CAWANG", "BEKASI_BARAT")], []), ([], [("ORIGIN", "SLIPI")])]
+        for cong, blk in scenarios:
+            astar = find_astar_route(congested_edges=cong, blocked_edges=blk)
+            ref = dijkstra(cong, blk)
+            self.assertIsNotNone(ref)
+            self.assertAlmostEqual(astar["optimization_cost"], ref, delta=0.5,
+                                   msg=f"A* not optimal for cong={cong} blk={blk}")
+
+    def test_astar_heuristic_is_admissible(self):
+        # Admissibility: h(node) must never exceed the true optimal duration cost
+        # from that node to goal. A straight-line-km/45 heuristic can overestimate
+        # when roads are faster than 45km/h; a zero heuristic is always admissible.
+        import heapq as _hq
+        from app.astar_routing import NODES, EDGES, _edge_meta, _osrm_edge, _heuristic_minutes
+
+        def true_cost_to_goal(start):
+            adj = {n: [] for n in NODES}
+            for u, v, _d in EDGES:
+                adj[u].append(v); adj[v].append(u)
+            pq = [(0.0, start)]
+            best = {start: 0.0}
+            while pq:
+                c, u = _hq.heappop(pq)
+                if u == "TPA_BANTARGEBANG":
+                    return c
+                if c > best.get(u, float("inf")):
+                    continue
+                for v in adj[u]:
+                    if not _edge_meta(u, v)["permit_allowed"]:
+                        continue
+                    _g, _km, dur, _o = _osrm_edge(NODES[u][0], NODES[u][1], NODES[v][0], NODES[v][1])
+                    nc = c + dur
+                    if nc < best.get(v, float("inf")):
+                        best[v] = nc
+                        _hq.heappush(pq, (nc, v))
+            return None
+
+        for node in NODES:
+            if node == "TPA_BANTARGEBANG":
+                continue
+            true_cost = true_cost_to_goal(node)
+            if true_cost is None:
+                continue
+            h = _heuristic_minutes(node, "TPA_BANTARGEBANG", NODES)
+            self.assertLessEqual(h, true_cost + 0.01,
+                                 f"heuristic inadmissible at {node}: h={h:.1f} > true={true_cost:.1f}")
+
     def test_warm_edge_cache_populates_all_edges(self):
         from app.astar_routing import warm_edge_cache, EDGES
         count = warm_edge_cache()
