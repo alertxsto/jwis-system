@@ -6,6 +6,7 @@ from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 
 class HistoryStore:
@@ -32,6 +33,20 @@ class HistoryStore:
                     )
                     """
                 )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS dispatches (
+                        id TEXT PRIMARY KEY,
+                        truck_code TEXT NOT NULL,
+                        instruction TEXT NOT NULL,
+                        manager_id TEXT NOT NULL,
+                        field_status TEXT NOT NULL,
+                        confirmed_note TEXT NOT NULL DEFAULT '',
+                        created_at TEXT NOT NULL,
+                        confirmed_at TEXT
+                    )
+                    """
+                )
 
     def record_event(self, event_type: str, payload: dict[str, Any]) -> None:
         with closing(self._connect()) as connection:
@@ -55,3 +70,54 @@ class HistoryStore:
             }
             for row in rows
         ]
+
+    def save_dispatch(self, truck_code: str, instruction: str, manager_id: str) -> dict[str, Any]:
+        dispatch = {
+            "id": str(uuid4()),
+            "truck_code": truck_code,
+            "instruction": instruction,
+            "manager_id": manager_id,
+            "field_status": "PENDING",
+            "confirmed_note": "",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "confirmed_at": None,
+        }
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    "INSERT INTO dispatches (id, truck_code, instruction, manager_id, "
+                    "field_status, confirmed_note, created_at, confirmed_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (dispatch["id"], truck_code, instruction, manager_id, "PENDING",
+                     "", dispatch["created_at"], None),
+                )
+        return dispatch
+
+    def update_dispatch_status(self, dispatch_id: str, status: str, note: str = "") -> dict[str, Any]:
+        confirmed_at = datetime.now(timezone.utc).isoformat()
+        with closing(self._connect()) as connection:
+            with connection:
+                cur = connection.execute(
+                    "UPDATE dispatches SET field_status=?, confirmed_note=?, confirmed_at=? WHERE id=?",
+                    (status, note, confirmed_at, dispatch_id),
+                )
+                if cur.rowcount == 0:
+                    raise KeyError(f"Dispatch {dispatch_id} was not found.")
+        return {"id": dispatch_id, "field_status": status, "confirmed_note": note,
+                "confirmed_at": confirmed_at}
+
+    def list_dispatches(self) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM dispatches ORDER BY created_at ASC"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def pending_dispatches(self, truck_code: str) -> list[dict[str, Any]]:
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT * FROM dispatches WHERE truck_code=? AND field_status='PENDING' "
+                "ORDER BY created_at ASC",
+                (truck_code,),
+            ).fetchall()
+        return [dict(row) for row in rows]

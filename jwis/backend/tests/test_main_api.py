@@ -37,6 +37,36 @@ class MainApiTests(unittest.TestCase):
         self.assertEqual(low.status_code, 422)
         self.assertEqual(high.status_code, 422)
 
+    def test_dispatch_rejects_empty_truck_code(self):
+        response = self.client.post(
+            "/api/dispatch",
+            json={"truck_code": "", "instruction": "go"},
+        )
+        self.assertEqual(response.status_code, 422)
+
+    def test_dispatch_persists_and_confirms(self):
+        created = self.client.post(
+            "/api/dispatch",
+            json={"truck_code": "T-047", "instruction": "Route B", "manager_id": "MGR-1"},
+        )
+        self.assertEqual(created.status_code, 200)
+        did = created.json()["id"]
+        pending = self.client.get("/api/dispatch/T-047").json()
+        self.assertTrue(any(d["id"] == did for d in pending))
+        conf = self.client.post(f"/api/dispatch/{did}/confirm",
+                                json={"status": "SIAP", "note": "ok"})
+        self.assertEqual(conf.status_code, 200)
+        self.assertEqual(conf.json()["field_status"], "SIAP")
+
+    def test_whatsapp_alert_is_honest_when_unconfigured(self):
+        response = self.client.post(
+            "/api/whatsapp/alert",
+            json={"truck_code": "T-047", "issue": "deviation", "recommendation": "reroute"},
+        )
+        self.assertEqual(response.status_code, 200)
+        # Without OpenWA env configured, it must NOT claim a real send.
+        self.assertFalse(response.json().get("sent", True))
+
 
 if __name__ == "__main__":
     unittest.main()

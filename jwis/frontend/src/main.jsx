@@ -1304,8 +1304,8 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
                   <td>{trip.fuel_consumed_liters} L</td>
                   <td>{trip.points?.length || 0} points</td>
                   <td>
-                    {trip.deviations_count > 0 ? (
-                      <StatusPill tone="danger">{trip.deviations_count} deviations</StatusPill>
+                    {(trip.deviations_count ?? trip.deviations_detected ?? 0) > 0 ? (
+                      <StatusPill tone="danger">{trip.deviations_count ?? trip.deviations_detected} deviations</StatusPill>
                     ) : (
                       <StatusPill tone="success">Clean</StatusPill>
                     )}

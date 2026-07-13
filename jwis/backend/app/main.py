@@ -57,31 +57,31 @@ app.add_middleware(
 # ── Request Models ───────────────────────────────────────────────────
 
 class AssistantRequest(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=2000)
 
 class WhatsAppAlertRequest(BaseModel):
-    truck_code: str
-    issue: str
-    recommendation: str
+    truck_code: str = Field(min_length=1, max_length=20)
+    issue: str = Field(min_length=1, max_length=500)
+    recommendation: str = Field(min_length=1, max_length=500)
     chat_id: str = "6285229890542-1620000000@g.us" # Bibin default group
 
 class DispatchRequest(BaseModel):
-    truck_code: str
-    instruction: str
-    manager_id: str = "manager_central"
+    truck_code: str = Field(min_length=1, max_length=20)
+    instruction: str = Field(min_length=1, max_length=500)
+    manager_id: str = Field(default="manager_central", min_length=1, max_length=50)
 
 class DispatchConfirmRequest(BaseModel):
-    status: str
-    note: str = ""
+    status: str = Field(min_length=1, max_length=30)
+    note: str = Field(default="", max_length=500)
 
 class HybridPredictRequest(BaseModel):
-    kelurahan: str
-    precipitation_mm: float = 0.0
-    temp_max_c: float = 31.0
-    wind_max_kmh: float = 10.0
+    kelurahan: str = Field(min_length=1, max_length=50)
+    precipitation_mm: float = Field(default=0.0, ge=0, le=1000)
+    temp_max_c: float = Field(default=31.0, ge=-10, le=60)
+    wind_max_kmh: float = Field(default=10.0, ge=0, le=300)
     is_weekend: bool = False
     is_holiday: bool = False
-    event_attendance: int = 0
+    event_attendance: int = Field(default=0, ge=0, le=5_000_000)
     target_date: date | None = None
 
 # ── Existing Endpoints ───────────────────────────────────────────────
@@ -275,35 +275,38 @@ def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
     client = OpenWAClient.from_env()
     msg = build_alert_message(payload.truck_code, payload.issue, payload.recommendation)
     res = client.send_text(payload.chat_id, msg)
-    
-    # Auto-fallback for demo purposes so it always shows success mock
-    if not res.get("sent", False):
-        res = {
-            "provider": "openwa-mock",
-            "sent": True,
-            "message": f"WhatsApp notification successfully triggered via gateway mock API.",
-            "payload": {
-                "recipient": payload.chat_id,
-                "body": msg
-            }
-        }
-    history_store.record_event("whatsapp_alert", {"truck_code": payload.truck_code, "status": "sent"})
+    history_store.record_event("whatsapp_alert",
+                               {"truck_code": payload.truck_code, "sent": res.get("sent", False)})
     return res
+
+
+@app.post("/api/whatsapp/alert/simulate")
+def whatsapp_alert_simulate(payload: WhatsAppAlertRequest) -> dict:
+    """Explicit demo-only simulation of a WhatsApp alert (clearly not a real send)."""
+    msg = build_alert_message(payload.truck_code, payload.issue, payload.recommendation)
+    return {
+        "provider": "openwa-simulated",
+        "sent": False,
+        "simulated": True,
+        "message": "Demo simulation only — no real WhatsApp message was sent.",
+        "payload": {"recipient": payload.chat_id, "body": msg},
+    }
 
 @app.post("/api/dispatch")
 def create_dispatch(payload: DispatchRequest) -> dict:
-    d = dispatch_center.create_dispatch(payload.truck_code, payload.instruction, payload.manager_id)
+    d = history_store.save_dispatch(payload.truck_code, payload.instruction, payload.manager_id)
+    dispatch_center._dispatches.append(d)
     history_store.record_event("dispatch_created", {"truck_code": payload.truck_code, "dispatch_id": d["id"]})
     return d
 
 @app.get("/api/dispatch/{truck_code}")
 def pending_dispatches(truck_code: str) -> list[dict]:
-    return dispatch_center.pending_for_truck(truck_code)
+    return history_store.pending_dispatches(truck_code)
 
 @app.post("/api/dispatch/{dispatch_id}/confirm")
 def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest) -> dict:
     try:
-        d = dispatch_center.confirm(dispatch_id, payload.status, payload.note)
+        d = history_store.update_dispatch_status(dispatch_id, payload.status, payload.note)
     except KeyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     history_store.record_event("dispatch_confirmed", {"dispatch_id": dispatch_id, "status": payload.status})
@@ -419,11 +422,12 @@ def approve_operations_plan(plan_id: str) -> dict[str, Any]:
     plan["status"] = "approved"
     created = []
     for a in plan["assignments"]:
-        d = dispatch_center.create_dispatch(
+        d = history_store.save_dispatch(
             truck_code=a["truck_code"],
             instruction=f"Collect {a['assigned_tons']:.0f}t at {a['area']} (plan {plan_id})",
             manager_id="operations_optimizer",
         )
+        dispatch_center._dispatches.append(d)
         created.append(d["id"])
     plan["dispatch_ids"] = created
     history_store.record_event("operations_plan_approved", {"plan_id": plan_id, "dispatches": len(created)})
@@ -450,7 +454,7 @@ def fleet_history(
                 {"lat": -6.1490, "lng": 106.8700, "timestamp": f"{t_date}T08:45:00Z"},
                 {"lat": -6.1540, "lng": 106.8780, "timestamp": f"{t_date}T09:15:00Z"},
             ],
-            "deviations_detected": 0
+            "deviations_detected": 0, "deviations_count": 0
         },
         {
             "truck_code": "T-047",
@@ -463,7 +467,7 @@ def fleet_history(
                 {"lat": -6.1664, "lng": 106.7638, "timestamp": f"{t_date}T08:10:00Z"},
                 {"lat": -6.1949, "lng": 106.7898, "timestamp": f"{t_date}T08:35:00Z"},
             ],
-            "deviations_detected": 1
+            "deviations_detected": 1, "deviations_count": 1
         },
         {
             "truck_code": "T-088",
@@ -476,7 +480,7 @@ def fleet_history(
                 {"lat": -6.2900, "lng": 106.8070, "timestamp": f"{t_date}T08:38:00Z"},
                 {"lat": -6.2870, "lng": 106.8290, "timestamp": f"{t_date}T09:02:00Z"},
             ],
-            "deviations_detected": 0
+            "deviations_detected": 0, "deviations_count": 0
         }
     ]
     
