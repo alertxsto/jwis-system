@@ -22,3 +22,7 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Runtime SQLite (regenerated at runtime)
+jwis_history.db
+*.db-journal
