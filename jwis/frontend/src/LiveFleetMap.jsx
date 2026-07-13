@@ -112,6 +112,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   const [astarData, setAstarData] = useState(null);
   const [eventPermits, setEventPermits] = useState([]);
   const [breadcrumbs, setBreadcrumbs] = useState({});
+  const [mapTruth, setMapTruth] = useState({});
   const [unlicensed, setUnlicensed] = useState([]);
   const unlicensedMarkersRef = useRef([]);
   const [playbackTruck, setPlaybackTruck] = useState(null);
@@ -161,6 +162,23 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   }, []);
 
   useEffect(() => {
+    async function fetchMapTruth() {
+      try {
+        const res = await fetch(`${API_URL}/fleet/map-truth`);
+        if (res.ok) {
+          const j = await res.json();
+          const byCode = {};
+          (j.trucks || []).forEach((t) => { byCode[t.truck_code] = t; });
+          setMapTruth(byCode);
+        }
+      } catch {}
+    }
+    fetchMapTruth();
+    const timer = setInterval(fetchMapTruth, 8000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     async function fetchAstar() {
       try {
         const res = await fetch(`${API_URL}/fleet/astar-reroute`);
@@ -207,18 +225,21 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
       const actualFeatures = [];
 
       trucks.forEach((truck) => {
-        if (truck.assigned_path?.length) {
+        const truth = mapTruth[truck.truck_code];
+        // Prefer backend map-truth road-following geometry; fall back to raw waypoints.
+        const assignedGeom = truth?.assigned_route?.geometry?.length
+          ? truth.assigned_route.geometry.map(toLngLat)
+          : (truck.assigned_path || []).map(toLngLat);
+        if (assignedGeom.length) {
           assignedFeatures.push(
-            routeFeature(
-              `${truck.truck_code}-assigned`,
-              truck.assigned_path.map(toLngLat),
-              "assigned",
-              truck.truck_code,
-            ),
+            routeFeature(`${truck.truck_code}-assigned`, assignedGeom, "assigned", truck.truck_code),
           );
         }
 
-        const actualPath = buildActualPath(truck, breadcrumbs[truck.truck_code]);
+        const truthActual = truth?.actual_route?.geometry?.length
+          ? truth.actual_route.geometry.map(toLngLat)
+          : null;
+        const actualPath = truthActual || buildActualPath(truck, breadcrumbs[truck.truck_code]);
         if (actualPath.length) {
           const assignedLine = (truck.assigned_path || []).map(toLngLat);
           if (truck.deviation?.violated) {
@@ -373,7 +394,10 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
       trucks
         .filter((truck) => truck.latest_position)
         .forEach((truck) => {
-          const targetCoords = [truck.latest_position.lng, truck.latest_position.lat];
+          const snapped = mapTruth[truck.truck_code]?.snapped_gps;
+          const targetCoords = snapped
+            ? [snapped.lng, snapped.lat]
+            : [truck.latest_position.lng, truck.latest_position.lat];
           const key = truck.truck_code;
           const isAnomalous = truck.deviation?.violated;
           const statusClass = isAnomalous ? "is-critical" : truck.is_damaged ? "is-warning" : "is-normal";
@@ -520,7 +544,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
       cancelled = true;
     };
 
-  }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs]);
+  }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs, mapTruth]);
 
   useEffect(() => {
     async function renderHeatmap() {

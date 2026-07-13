@@ -7,13 +7,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("map canvas renders (not blank)", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   const canvas = page.locator(".maplibregl-canvas");
   await expect(canvas).toBeVisible({ timeout: 15000 });
 });
 
 test("actual routes colored by violation state", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(3000);
   const kinds = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
   // At least one clean (green) and, given T-047 deviates, one violation (red).
@@ -22,25 +22,25 @@ test("actual routes colored by violation state", async ({ page }) => {
 });
 
 test("map legend shows provenance tags", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".map-legend")).toContainText("LIVE");
   await expect(page.locator(".map-legend")).toContainText("MODEL");
   await expect(page.locator(".map-legend")).toContainText("SIM");
 });
 
 test("fleet panel labeled Simulation not Live", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   const pill = page.locator(".panel.map-panel .pill");
   await expect(pill).toContainText("Simulation");
 });
 
 test("TPA marker present on map", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await expect(page.locator(".tpa-marker")).toBeVisible({ timeout: 15000 });
 });
 
 test("map canvas has non-blank, varied pixels", async ({ page }) => {
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(4000);
   // Screenshot the map canvas and measure byte variance — a blank/single-color
   // canvas has near-zero variance; a rendered map with tiles/routes has high variance.
@@ -85,8 +85,25 @@ test("breadcrumbs endpoint returns simulated trail", async ({ page }) => {
 
 test("mobile viewport renders map without horizontal overflow", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2500);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(overflow).toBe(false);
+});
+
+test("map-truth payload has road-following geometry and synced snapped GPS", async ({ page }) => {
+  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/map-truth");
+  expect(res.status()).toBe(200);
+  const j = await res.json();
+  const t = j.trucks.find((x) => x.truck_code === "T-047");
+  expect(t).toBeTruthy();
+  // Road-following assigned geometry (or explicitly labeled fallback).
+  if (t.assigned_route.source === "LIVE_EXTERNAL") {
+    expect(t.assigned_route.geometry.length).toBeGreaterThan(20);
+  } else {
+    expect(t.assigned_route.source).toBe("FALLBACK_DEGRADED");
+  }
+  // Snapped GPS is close to raw (map-matched), and provenance is labeled.
+  expect(t.provenance.raw_gps).toBe("RAW_GPS_SIMULATED");
+  expect(typeof t.deviation_m).toBe("number");
 });

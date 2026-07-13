@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
 from urllib.request import Request, urlopen
@@ -67,9 +68,14 @@ def fallback_route(name: str, origin: tuple[float, float], destination: tuple[fl
 def snap_to_road(lat: float, lng: float, timeout_seconds: float = 6.0) -> dict[str, Any]:
     """Snap a raw GPS point to the nearest road via OSRM /nearest.
 
-    Returns raw + snapped coordinates and a provenance source. Falls back to the
-    raw point (labeled RAW_GPS_UNSNAPPED) when OSRM is unreachable.
+    Cached by coordinate. Returns raw + snapped coordinates and provenance;
+    falls back to the raw point (RAW_GPS_UNSNAPPED) when OSRM is unreachable.
     """
+    return {**_snap_cached(round(lat, 6), round(lng, 6), timeout_seconds)}
+
+
+@lru_cache(maxsize=256)
+def _snap_cached(lat: float, lng: float, timeout_seconds: float) -> dict[str, Any]:
     url = f"{OSRM_BASE_URL}/nearest/v1/driving/{lng},{lat}?number=1"
     raw = {"lat": lat, "lng": lng}
     try:
@@ -87,11 +93,19 @@ def snap_to_road(lat: float, lng: float, timeout_seconds: float = 6.0) -> dict[s
 def road_route(coords: list[tuple[float, float]], timeout_seconds: float = 8.0) -> dict[str, Any]:
     """Road-following geometry through ordered (lat,lng) waypoints via OSRM /route.
 
-    Returns geometry [{lat,lng}], distance_km, duration_min, and a provenance
-    source (LIVE_EXTERNAL or FALLBACK_DEGRADED straight line).
+    Cached by coordinate tuple so repeat/warm calls are instant. Returns geometry
+    [{lat,lng}], distance_km, duration_min, and provenance (LIVE_EXTERNAL or
+    FALLBACK_DEGRADED straight line).
     """
+    key = tuple((round(la, 6), round(ln, 6)) for la, ln in coords)
+    result = _road_route_cached(key, timeout_seconds)
+    return {**result, "geometry": [dict(p) for p in result["geometry"]]}
+
+
+@lru_cache(maxsize=256)
+def _road_route_cached(coords: tuple, timeout_seconds: float) -> dict[str, Any]:
     if len(coords) < 2:
-        return {"geometry": [{"lat": c[0], "lng": c[1]} for c in coords],
+        return {"geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
                 "distance_km": 0.0, "duration_min": 0.0, "source": "FALLBACK_DEGRADED"}
     pts = ";".join(f"{lng},{lat}" for lat, lng in coords)
     url = f"{OSRM_BASE_URL}/route/v1/driving/{pts}?overview=full&geometries=geojson&steps=false"
@@ -101,13 +115,13 @@ def road_route(coords: list[tuple[float, float]], timeout_seconds: float = 8.0) 
             payload = json.loads(response.read().decode("utf-8"))
         if payload.get("code") == "Ok" and payload.get("routes"):
             route = payload["routes"][0]
-            geom = [{"lat": la, "lng": ln} for ln, la in route["geometry"]["coordinates"]]
+            geom = tuple({"lat": la, "lng": ln} for ln, la in route["geometry"]["coordinates"])
             return {"geometry": geom, "distance_km": round(route["distance"] / 1000, 1),
                     "duration_min": round(route["duration"] / 60), "source": "LIVE_EXTERNAL"}
     except Exception:
         pass
     km = sum(_haversine_km(coords[i], coords[i + 1]) for i in range(len(coords) - 1))
-    return {"geometry": [{"lat": c[0], "lng": c[1]} for c in coords],
+    return {"geometry": tuple({"lat": c[0], "lng": c[1]} for c in coords),
             "distance_km": round(km, 1), "duration_min": round(km / 45 * 60),
             "source": "FALLBACK_DEGRADED"}
 

@@ -52,11 +52,20 @@ TRAFFIC_JAM_ACTIVE = False
 
 @app.on_event("startup")
 def _warm_route_cache() -> None:
-    """Warm the OSRM edge cache in a background thread so the first live demo
-    request is fast and never blocks on cold synchronous OSRM fetches."""
+    """Warm OSRM caches (A* edges + per-truck map-truth routes) in a background
+    thread so the first live demo request is fast, never blocking on cold OSRM."""
     import threading
     from app.astar_routing import warm_edge_cache
-    threading.Thread(target=warm_edge_cache, daemon=True).start()
+
+    def _warm():
+        warm_edge_cache()
+        for t in TRUCKS:
+            try:
+                build_map_truth(t)
+            except Exception:
+                pass
+
+    threading.Thread(target=_warm, daemon=True).start()
 
 import os
 
