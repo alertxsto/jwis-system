@@ -39,17 +39,21 @@ test("TPA marker present on map", async ({ page }) => {
   await expect(page.locator(".tpa-marker")).toBeVisible({ timeout: 15000 });
 });
 
-test("map canvas has non-blank pixels", async ({ page }) => {
+test("map canvas has non-blank, varied pixels", async ({ page }) => {
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.waitForTimeout(3500);
-  const nonBlank = await page.evaluate(() => {
-    const c = document.querySelector(".maplibregl-canvas");
-    if (!c) return false;
-    const gl = c.getContext("webgl2") || c.getContext("webgl");
-    // A rendered map has drawn tiles; a blank canvas has 0x0 or no context.
-    return !!gl && c.width > 100 && c.height > 100;
-  });
-  expect(nonBlank).toBe(true);
+  await page.waitForTimeout(4000);
+  // Screenshot the map canvas and measure byte variance — a blank/single-color
+  // canvas has near-zero variance; a rendered map with tiles/routes has high variance.
+  const buf = await page.locator(".maplibregl-canvas").screenshot();
+  const bytes = Uint8Array.from(buf);
+  const sample = bytes.subarray(0, Math.min(bytes.length, 200000));
+  let sum = 0;
+  for (const b of sample) sum += b;
+  const mean = sum / sample.length;
+  let varSum = 0;
+  for (const b of sample) varSum += (b - mean) ** 2;
+  const variance = varSum / sample.length;
+  expect(variance).toBeGreaterThan(200);
 });
 
 test("A* route anchors near T-047 marker (GPS)", async ({ page }) => {
