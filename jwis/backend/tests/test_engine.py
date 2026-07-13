@@ -3,9 +3,57 @@ import unittest
 from app.engine import (
     DispatchCenter,
     detect_route_deviation,
+    distance_point_to_polyline_m,
     forecast_waste_risk,
     recommend_routes,
 )
+
+
+class RouteDeviationGeometryTests(unittest.TestCase):
+    def test_point_on_segment_midpoint_is_near_zero(self):
+        # A point exactly on the line between two waypoints is on-route,
+        # even though it is far (hundreds of metres) from either waypoint.
+        a = (-6.175, 106.820)
+        b = (-6.195, 106.840)
+        midpoint = (-6.185, 106.830)
+        dist = distance_point_to_polyline_m(midpoint, [a, b])
+        self.assertLess(dist, 50, f"midpoint wrongly {dist:.0f}m off the segment")
+
+    def test_midpoint_not_flagged_as_deviation(self):
+        result = detect_route_deviation(
+            assigned_path=[(-6.175, 106.820), (-6.195, 106.840)],
+            latest_position=(-6.185, 106.830),
+            threshold_meters=500,
+        )
+        self.assertFalse(result["violated"], "point on route segment must not be a deviation")
+
+    def test_point_truly_off_route_is_flagged(self):
+        result = detect_route_deviation(
+            assigned_path=[(-6.175, 106.820), (-6.195, 106.840)],
+            latest_position=(-6.221, 106.785),
+            threshold_meters=500,
+        )
+        self.assertTrue(result["violated"])
+        self.assertGreater(result["distance_meters"], 500)
+
+    def test_alert_exposes_rule_flags_ml_score_and_confidence(self):
+        result = detect_route_deviation(
+            assigned_path=[(-6.175, 106.820), (-6.195, 106.840)],
+            latest_position=(-6.221, 106.785),
+            threshold_meters=500,
+        )
+        self.assertIn("rule_flags", result)
+        self.assertIn("ml_score", result)
+        self.assertIn("confidence", result)
+
+    def test_gps_noise_within_threshold_is_not_critical(self):
+        # ~30m off (GPS jitter) with a tight threshold should stay non-critical.
+        result = detect_route_deviation(
+            assigned_path=[(-6.175, 106.820), (-6.195, 106.840)],
+            latest_position=(-6.1851, 106.8302),
+            threshold_meters=500,
+        )
+        self.assertNotEqual(result["severity"], "critical")
 
 
 class EngineTests(unittest.TestCase):

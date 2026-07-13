@@ -62,6 +62,41 @@ def _haversine_meters(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 2 * R * asin(sqrt(val))
 
 
+def _latlng_to_local_m(point, origin) -> tuple[float, float]:
+    """Equirectangular projection to local metres around origin (small-area ok)."""
+    R = 6371000.0
+    lat0 = radians(origin[0])
+    x = radians(point[1] - origin[1]) * cos(lat0) * R
+    y = radians(point[0] - origin[0]) * R
+    return x, y
+
+
+def _point_to_segment_m(p, a, b) -> float:
+    """Shortest distance (metres) from point p to segment a-b."""
+    px, py = _latlng_to_local_m(p, a)
+    bx, by = _latlng_to_local_m(b, a)
+    seg_len_sq = bx * bx + by * by
+    if seg_len_sq == 0:
+        return sqrt(px * px + py * py)
+    t = max(0.0, min(1.0, (px * bx + py * by) / seg_len_sq))
+    cx, cy = t * bx, t * by
+    return sqrt((px - cx) ** 2 + (py - cy) ** 2)
+
+
+def distance_point_to_polyline_m(position, path) -> float:
+    """Shortest distance (metres) from a position to a polyline route.
+
+    Distance is measured to the nearest route SEGMENT, not the nearest
+    waypoint — a truck mid-segment is on-route even if far from any vertex.
+    """
+    if not path:
+        return float("inf")
+    if len(path) == 1:
+        return _haversine_meters(position, path[0])
+    return min(_point_to_segment_m(position, path[i], path[i + 1])
+              for i in range(len(path) - 1))
+
+
 def detect_route_deviation(
     assigned_path: list[tuple[float, float]],
     latest_position: tuple[float, float],
@@ -73,35 +108,59 @@ def detect_route_deviation(
             "violated": True,
             "distance_meters": 0,
             "ml_outlier": False,
+            "ml_score": None,
+            "rule_flags": ["no_assigned_route"],
+            "confidence": 1.0,
             "severity": "unknown",
             "message": "No assigned route is available for comparison.",
         }
 
-    distance = min(_haversine_meters(latest_position, w) for w in assigned_path)
-    heuristic_violated = distance > threshold_meters
+    distance = distance_point_to_polyline_m(latest_position, assigned_path)
+    rule_flags: list[str] = []
+    if distance > threshold_meters:
+        rule_flags.append("off_corridor")
+    if distance > threshold_meters * 2:
+        rule_flags.append("far_off_corridor")
 
-    # Isolation Forest ML detection
     ml_flagged = False
+    ml_score: float | None = None
     if _ISOLATION_MODEL is not None:
         try:
-            pred = _ISOLATION_MODEL.predict(
-                np.array([[latest_position[0], latest_position[1], speed_kmh]])
-            )[0]
-            ml_flagged = bool(pred == -1)  # Ensure native Python bool, not numpy.bool_
+            arr = np.array([[latest_position[0], latest_position[1], speed_kmh]])
+            ml_flagged = bool(_ISOLATION_MODEL.predict(arr)[0] == -1)
+            ml_score = float(_ISOLATION_MODEL.score_samples(arr)[0])
+            if ml_flagged:
+                rule_flags.append("ml_outlier")
         except Exception:
             pass
 
+    heuristic_violated = distance > threshold_meters
     violated = heuristic_violated or ml_flagged
+
+    # Severity: distance-driven rules are authoritative; ML alone is a warning.
     severity = "normal"
     if distance > threshold_meters * 2:
         severity = "critical"
     elif violated:
         severity = "warning"
 
+    # Confidence: high when rule and ML agree, moderate when only one fires.
+    if heuristic_violated and ml_flagged:
+        confidence = 0.95
+    elif heuristic_violated:
+        confidence = 0.8
+    elif ml_flagged:
+        confidence = 0.5
+    else:
+        confidence = 0.9
+
     return {
         "violated": violated,
         "distance_meters": round(distance, 1),
         "ml_outlier": ml_flagged,
+        "ml_score": round(ml_score, 4) if ml_score is not None else None,
+        "rule_flags": rule_flags,
+        "confidence": confidence,
         "severity": severity,
         "message": (
             f"Truck is {distance:.0f} meters from the assigned corridor."
