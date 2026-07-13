@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import {
   Activity,
   AlertTriangle,
@@ -1447,36 +1448,67 @@ function FieldApp() {
   const [truckCode, setTruckCode] = useState("T-047");
   const [dispatches, setDispatches] = useState([]);
   const [status, setStatus] = useState("Ready for duty");
+  const [timeline, setTimeline] = useState([]);
+  const [online, setOnline] = useState(navigator.onLine);
+  const [queued, setQueued] = useState(readOutbox().length);
+  const [incidentReason, setIncidentReason] = useState("");
 
   async function loadDispatches() {
     try {
       const response = await fetch(`${API_URL}/dispatch/${truckCode}`);
       if (!response.ok) throw new Error("no api");
       setDispatches(await response.json());
+      setOnline(true);
     } catch {
       setDispatches([]);
+      setOnline(false);
     }
   }
 
+  function logTimeline(event) {
+    setTimeline((prev) => [{ event, at: new Date().toLocaleTimeString("id-ID") }, ...prev].slice(0, 8));
+  }
+
   async function confirm(dispatchId, value) {
+    const note = value === "ISSUE" ? (incidentReason || "Issue reported from field") : "Confirmed from field PWA";
     try {
-      await fetch(`${API_URL}/dispatch/${dispatchId}/confirm`, {
+      if (!navigator.onLine) throw new Error("offline");
+      const res = await fetch(`${API_URL}/dispatch/${dispatchId}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: value, note: "Confirmed from field PWA" }),
+        body: JSON.stringify({ status: value, note }),
       });
+      if (!res.ok) throw new Error("send failed");
       setStatus(value === "READY" ? "Instruction accepted" : "Issue escalated to manager");
+      logTimeline(`${value} sent`);
       loadDispatches();
     } catch {
-      setStatus("Demo confirmation recorded locally");
-      setDispatches([]);
+      const n = enqueue({ dispatchId, status: value, note });
+      setQueued(n);
+      setStatus("Offline — confirmation queued for sync");
+      logTimeline(`${value} queued (offline)`);
     }
+  }
+
+  async function syncNow() {
+    const { flushed, remaining } = await flushOutbox(API_URL);
+    setQueued(remaining);
+    if (flushed) logTimeline(`${flushed} queued action(s) synced`);
+    loadDispatches();
   }
 
   useEffect(() => {
     loadDispatches();
     const timer = setInterval(loadDispatches, 5000);
-    return () => clearInterval(timer);
+    const onOnline = () => { setOnline(true); syncNow(); };
+    const onOffline = () => setOnline(false);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
   }, [truckCode]);
 
   const activeDispatch = dispatches[0];
@@ -1489,8 +1521,14 @@ function FieldApp() {
             <p className="eyebrow">JWIS Field Worker</p>
             <h1>{truckCode}</h1>
           </div>
-          <StatusPill tone="live">Polling</StatusPill>
+          <StatusPill tone={online ? "live" : "warning"}>{online ? "Online" : "Offline"}</StatusPill>
         </div>
+        {queued > 0 && (
+          <div className="field-status" style={{ background: "#fef3c7" }}>
+            <span>{queued} action(s) queued offline</span>
+            <button className="primary-button" onClick={syncNow} disabled={!online}>Sync now</button>
+          </div>
+        )}
         <label className="field-label" htmlFor="truck-code">Truck code</label>
         <select id="truck-code" value={truckCode} onChange={(event) => setTruckCode(event.target.value)}>
           <option>T-047</option>
@@ -1511,6 +1549,12 @@ function FieldApp() {
                 <p>{activeDispatch.instruction}</p>
               </div>
             </div>
+            <input
+              className="field-input"
+              placeholder="Incident reason (if reporting an issue)"
+              value={incidentReason}
+              onChange={(e) => setIncidentReason(e.target.value)}
+            />
             <div className="field-actions">
               <button className="primary-button" onClick={() => confirm(activeDispatch.id, "READY")}><Check size={16} /> Ready</button>
               <button className="danger-button" onClick={() => confirm(activeDispatch.id, "ISSUE")}><X size={16} /> Report issue</button>
@@ -1522,6 +1566,17 @@ function FieldApp() {
             <strong>No pending instruction</strong>
             <p>Keep following the assigned collection corridor.</p>
           </article>
+        )}
+
+        {timeline.length > 0 && (
+          <div className="field-timeline">
+            <strong>Activity timeline</strong>
+            <ul>
+              {timeline.map((t, i) => (
+                <li key={i}>{t.at} — {t.event}</li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <a className="back-link" href="/"><ChevronRight size={16} /> Return to command center</a>
