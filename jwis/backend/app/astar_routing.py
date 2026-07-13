@@ -207,6 +207,16 @@ def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG", "ORIGIN"))
     return best
 
 
+def warm_edge_cache() -> int:
+    """Precompute OSRM geometry for every graph edge so the first demo request
+    is warm (no cold synchronous OSRM fetch during the live demo)."""
+    count = 0
+    for u, v, _d in EDGES:
+        _osrm_edge(NODES[u][0], NODES[u][1], NODES[v][0], NODES[v][1])
+        count += 1
+    return count
+
+
 def build_gps_graph(position: dict) -> tuple[dict, list]:
     """Local graph copy with a fresh GPS ORIGIN and a single connector edge.
 

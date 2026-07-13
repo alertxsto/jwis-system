@@ -48,6 +48,15 @@ history_store = HistoryStore()
 dispatch_center = DispatchCenter()
 TRAFFIC_JAM_ACTIVE = False
 
+
+@app.on_event("startup")
+def _warm_route_cache() -> None:
+    """Warm the OSRM edge cache in a background thread so the first live demo
+    request is fast and never blocks on cold synchronous OSRM fetches."""
+    import threading
+    from app.astar_routing import warm_edge_cache
+    threading.Thread(target=warm_edge_cache, daemon=True).start()
+
 import os
 
 _ALLOWED_ORIGINS = os.getenv(

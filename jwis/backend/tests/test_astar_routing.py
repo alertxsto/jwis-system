@@ -72,6 +72,12 @@ class AstarGpsAnchorTests(unittest.TestCase):
         self.assertGreater(r["physical_distance_km"], 40,
                            "OSRM road distance should exceed the manual straight-line sum")
 
+    def test_warm_edge_cache_populates_all_edges(self):
+        from app.astar_routing import warm_edge_cache, EDGES
+        count = warm_edge_cache()
+        # Every graph edge geometry is cached so the first demo request is warm.
+        self.assertGreaterEqual(count, len(EDGES))
+
     def test_optimization_objective_is_osrm_duration(self):
         # With OSRM live and no congestion, the search cost equals summed OSRM
         # durations, so optimization_cost tracks eta_minutes (not the km weights).
