@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from app.data import ASSIGNED_PATHS
+from app.data import ASSIGNED_PATHS, ACTUAL_PATHS
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,9 @@ def latest_breadcrumbs(truck_code: str, points: int = 6,
     Emits `points` breadcrumbs ending "now", spaced `interval_seconds` apart,
     walking the assigned path geometry. Returns [] for unknown trucks.
     """
-    path = ASSIGNED_PATHS.get(truck_code)
+    # Trail follows the truck's ACTUAL movement (deviation path); falls back to
+    # the assigned corridor only when no actual track exists.
+    path = ACTUAL_PATHS.get(truck_code) or ASSIGNED_PATHS.get(truck_code)
     if not path:
         return []
 

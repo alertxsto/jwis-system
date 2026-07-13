@@ -18,6 +18,42 @@ function buildActualPath(truck) {
   return [toLngLat(assigned[0]), latest, toLngLat(assigned[assigned.length - 1])];
 }
 
+// Metres between two [lng,lat] points (equirectangular, small-area accurate).
+function metersBetween(a, b) {
+  const R = 6371000;
+  const lat0 = (a[1] * Math.PI) / 180;
+  const x = ((b[0] - a[0]) * Math.PI / 180) * Math.cos(lat0) * R;
+  const y = ((b[1] - a[1]) * Math.PI / 180) * R;
+  return Math.sqrt(x * x + y * y);
+}
+
+// Shortest metres from point p to a polyline (nearest vertex approximation).
+function distToPolyline(p, line) {
+  let min = Infinity;
+  for (const v of line) min = Math.min(min, metersBetween(p, v));
+  return min;
+}
+
+// Split an actual path into consecutive clean/violation segments by distance to
+// the assigned corridor, so only the off-corridor portion is drawn red.
+function splitByCorridor(actual, assigned, thresholdM = 500) {
+  if (!assigned.length) return [{ kind: "actual-clean", coords: actual }];
+  const segs = [];
+  let cur = null;
+  for (const pt of actual) {
+    const violating = distToPolyline(pt, assigned) > thresholdM;
+    const kind = violating ? "actual-violation" : "actual-clean";
+    if (!cur || cur.kind !== kind) {
+      if (cur) cur.coords.push(pt); // bridge so segments join visually
+      cur = { kind, coords: cur ? [cur.coords[cur.coords.length - 1], pt] : [pt] };
+      segs.push(cur);
+    } else {
+      cur.coords.push(pt);
+    }
+  }
+  return segs;
+}
+
 function featureCollection(features) {
   return {
     type: "FeatureCollection",
@@ -121,8 +157,18 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
 
         const actualPath = buildActualPath(truck);
         if (actualPath.length) {
-          const actualKind = truck.deviation?.violated ? "actual-violation" : "actual-clean";
-          actualFeatures.push(routeFeature(`${truck.truck_code}-actual`, actualPath, actualKind, truck.truck_code));
+          const assignedLine = (truck.assigned_path || []).map(toLngLat);
+          if (truck.deviation?.violated) {
+            // Draw only the off-corridor portion red; keep in-corridor green.
+            const segs = splitByCorridor(actualPath, assignedLine);
+            segs.forEach((s, i) => {
+              if (s.coords.length >= 2) {
+                actualFeatures.push(routeFeature(`${truck.truck_code}-actual-${i}`, s.coords, s.kind, truck.truck_code));
+              }
+            });
+          } else {
+            actualFeatures.push(routeFeature(`${truck.truck_code}-actual`, actualPath, "actual-clean", truck.truck_code));
+          }
         }
       });
 
