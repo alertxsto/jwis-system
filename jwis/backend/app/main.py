@@ -31,6 +31,7 @@ from app.engine import (
 from app.astar_routing import reroute_payload
 from app.gps_feed import latest_breadcrumbs
 from app.collector_registry import scan_observed_vehicles
+from app.map_truth import build_map_truth
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
@@ -728,6 +729,11 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
         "permit": {"source": active.get("permit_source", "SIMULATED PERMIT CONSTRAINT")},
         "recommendation": recs or ["Normal operation; no intervention needed."],
     }
+
+@app.get("/api/fleet/map-truth")
+def fleet_map_truth() -> dict[str, Any]:
+    """Single geospatial-truth payload for every truck (frontend renders verbatim)."""
+    return {"trucks": [build_map_truth(t) for t in TRUCKS]}
 
 @app.get("/api/fleet/unlicensed-collectors")
 def unlicensed_collectors() -> dict[str, Any]:
