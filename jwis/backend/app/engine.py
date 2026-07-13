@@ -214,38 +214,49 @@ def estimate_tpa_queue_wait(waiting_trucks: int, throughput_per_hour: int = 30) 
     }
 
 
-def simulate_staggered_dispatch(active_trucks: int) -> dict[str, Any]:
+def simulate_staggered_dispatch(active_trucks: int, weighbridges: int = 2,
+                                service_rate_per_hour: float = 30.0) -> dict[str, Any]:
+    """Compare unstaggered vs staggered arrivals using the queue simulation.
+
+    Baseline crowds all trucks into the peak hour; staggering spreads the same
+    trucks across a wider window (modeled as a lower effective peak-hour load).
+    Both waits come from the seeded discrete-event simulation, not fixed numbers.
     """
-    Simulate staggered departure schedule optimization to prove TPA queue reduction.
-    """
-    unoptimized_wait = 116  # standard baseline wait
-    unoptimized_queue = 47
-    
-    # 58.6% reduction in wait times (from 116 to 48 minutes) via dynamic spacing
-    optimized_wait = 48
-    optimized_queue = 19
-    
+    from app.queue_simulation import simulate_queue
+
+    active_trucks = max(0, int(active_trucks))
+    baseline = simulate_queue(active_trucks, weighbridges, service_rate_per_hour, seed=42)
+    # Staggering spreads arrivals; model as ~40% of trucks landing in the peak hour.
+    staggered_peak = max(1, round(active_trucks * 0.6))
+    staggered = simulate_queue(staggered_peak, weighbridges, service_rate_per_hour, seed=42)
+
     stagger_intervals_minutes = 15
     schedule = []
     today = datetime.now()
-    
     for i in range(active_trucks):
         dept_time = (today + timedelta(minutes=i * stagger_intervals_minutes)).strftime("%H:%M")
         schedule.append({
             "truck_index": i + 1,
             "suggested_departure": dept_time,
             "slot_status": "assigned",
-            "tpa_wait_est_minutes": max(15, round(optimized_wait - (i * 1.5)))
+            "tpa_wait_est_minutes": staggered["mean_wait_minutes"],
         })
-        
+
+    b_wait = baseline["mean_wait_minutes"]
+    s_wait = staggered["mean_wait_minutes"]
+    reduction = round(((b_wait - s_wait) / b_wait) * 100, 1) if b_wait > 0 else 0.0
     return {
-        "baseline_wait_minutes": unoptimized_wait,
-        "baseline_queue_trucks": unoptimized_queue,
-        "optimized_wait_minutes": optimized_wait,
-        "optimized_queue_trucks": optimized_queue,
-        "queue_reduction_percent": round(((unoptimized_wait - optimized_wait) / unoptimized_wait) * 100, 1),
+        "baseline_wait_minutes": b_wait,
+        "baseline_p95_minutes": baseline["p95_wait_minutes"],
+        "baseline_queue_trucks": baseline["max_queue"],
+        "optimized_wait_minutes": s_wait,
+        "optimized_p95_minutes": staggered["p95_wait_minutes"],
+        "optimized_queue_trucks": staggered["max_queue"],
+        "queue_reduction_percent": reduction,
         "recommended_stagger_minutes": stagger_intervals_minutes,
-        "dispatch_slots": schedule
+        "wait_ci95": staggered["wait_ci95"],
+        "method": "seeded discrete-event queue simulation",
+        "dispatch_slots": schedule,
     }
 
 

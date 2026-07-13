@@ -29,6 +29,7 @@ from app.engine import (
     DispatchCenter
 )
 from app.astar_routing import reroute_payload
+from app.queue_simulation import simulate_queue
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
@@ -430,23 +431,27 @@ def post_stagger_simulation(active_trucks: int = 5) -> dict[str, Any]:
 
 @app.get("/api/tpa/queue-status")
 def get_tpa_queue_status() -> dict[str, Any]:
-    # Dynamic queue status based on active simulation or hour of day
+    """Live TPA queue status; wait time computed by the discrete-event simulation."""
     import time
     hour = time.localtime().tm_hour
-    # Peak hours: morning 8-10, afternoon 14-16
-    base_trucks = 14
-    if 8 <= hour <= 10 or 14 <= hour <= 16:
-        base_trucks = 32
-        
-    wait_time = round(base_trucks * 2.8)
+    # Arrival count is time-of-day driven (peak morning 8-10, afternoon 14-16).
+    base_trucks = 32 if (8 <= hour <= 10 or 14 <= hour <= 16) else 14
+
+    sim = simulate_queue(base_trucks, weighbridges=2, service_rate_per_hour=30.0, seed=42)
+    wait_time = sim["mean_wait_minutes"]
     status_label = "CRITICAL (Antrian Padat)" if wait_time > 60 else "NORMAL (Lancar)" if wait_time < 30 else "WARNING (Padat Merayap)"
-    
+
     return {
         "trucks_in_queue": base_trucks,
         "avg_wait_minutes": wait_time,
+        "p95_wait_minutes": sim["p95_wait_minutes"],
+        "max_queue": sim["max_queue"],
+        "utilization": sim["utilization"],
+        "wait_ci95": sim["wait_ci95"],
         "weighbridge_status": "OPERATIONAL" if wait_time < 80 else "DEGRADED (Overload)",
-        "processing_rate_tph": 120, # Tons per hour
+        "processing_rate_tph": 120,
         "status_label": status_label,
+        "method": "seeded discrete-event queue simulation",
         "scale_logs": [
             {"time": "15:30", "truck": "T-088", "weight_ton": 18.2, "status": "Cleared"},
             {"time": "15:34", "truck": "T-112", "weight_ton": 17.5, "status": "Cleared"},
