@@ -114,6 +114,9 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   const [breadcrumbs, setBreadcrumbs] = useState({});
   const [unlicensed, setUnlicensed] = useState([]);
   const unlicensedMarkersRef = useRef([]);
+  const [playbackTruck, setPlaybackTruck] = useState(null);
+  const playbackMarkerRef = useRef(null);
+  const [layers, setLayers] = useState({ heatmap: true, osrm: true, unlicensed: true });
 
 
   useEffect(() => {
@@ -687,9 +690,49 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
     };
   }, [mapInstance, unlicensed]);
 
+  // Toggle map layer visibility from the layer controls.
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !map.isStyleLoaded?.()) return;
+    const set = (id, on) => { if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none"); };
+    set("kelurahan-heatmap-fill", layers.heatmap);
+    set("kelurahan-heatmap-outline", layers.heatmap);
+    set("osrm-route-line", layers.osrm);
+  }, [layers, mapInstance]);
+
+  // Trip playback: animate a marker along the selected truck's breadcrumb trail.
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !playbackTruck) return;
+    const trail = breadcrumbs[playbackTruck];
+    if (!trail || trail.length < 2) return;
+    if (playbackMarkerRef.current) playbackMarkerRef.current.remove();
+    const el = document.createElement("div");
+    el.className = "playback-marker";
+    const marker = new maplibregl.Marker({ element: el }).setLngLat([trail[0].lng, trail[0].lat]).addTo(map);
+    playbackMarkerRef.current = marker;
+    let i = 0;
+    const timer = setInterval(() => {
+      i += 1;
+      if (i >= trail.length) { clearInterval(timer); return; }
+      marker.setLngLat([trail[i].lng, trail[i].lat]);
+    }, 700);
+    return () => { clearInterval(timer); marker.remove(); playbackMarkerRef.current = null; };
+  }, [playbackTruck, breadcrumbs, mapInstance]);
+
+  const playbackOptions = Object.keys(breadcrumbs);
+
   return (
     <div className="maplibre-shell">
       <div ref={containerRef} className="maplibre-container" />
+      <div className="map-controls">
+        <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
+        <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
+        <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
+          <option value="">Trip playback…</option>
+          {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
       <div className="map-legend" aria-label="Map legend">
         <span><i className="legend-heatmap" /> District waste risk <em className="legend-tag">MODEL</em></span>
         <span><i className="legend-assigned" /> Assigned corridor <em className="legend-tag">SIM</em></span>
