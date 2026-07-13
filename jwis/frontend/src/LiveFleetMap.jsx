@@ -37,7 +37,7 @@ function routeFeature(id, coordinates, kind, truckCode) {
   };
 }
 
-export function LiveFleetMap({ trucks }) {
+export function LiveFleetMap({ trucks, onSelectTruck }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
@@ -263,22 +263,36 @@ export function LiveFleetMap({ trucks }) {
           
           let existing = activeMarkersRef.current[key];
 
-          if (!existing) {
-            // Create brand new marker
-            const element = document.createElement("button");
-            element.className = `truck-marker ${statusClass}`;
-            element.type = "button";
-            element.setAttribute("aria-label", `${truck.truck_code} ${truck.assigned_zone}`);
-            element.innerHTML = `<span>${truck.truck_code}</span>`;
-
-            const popup = new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(`
+          const popupHtml = `
               <div class="map-popup">
                 <strong>${truck.truck_code}</strong>
                 <span>${truck.driver_name} - ${truck.assigned_zone}</span>
                 <p>${isAnomalous ? "Route violation" : truck.is_damaged ? "Fleet damage" : "Normal corridor"}</p>
                 <small>${Math.round(truck.deviation?.distance_meters || 0)} m from assigned path - ${truck.latest_position.speed_kmh} km/h</small>
+                <small>Updated ${truck.latest_position.updated_seconds_ago ?? "?"}s ago</small>
+                <p class="popup-src">SIMULATION · not live GPS</p>
+                <button class="popup-dispatch" data-truck="${truck.truck_code}">Dispatch ${truck.truck_code}</button>
               </div>
-            `);
+            `;
+
+          if (!existing) {
+            const element = document.createElement("button");
+            element.className = `truck-marker ${statusClass}`;
+            element.type = "button";
+            element.setAttribute("aria-label", `${truck.truck_code} ${truck.assigned_zone}`);
+            element.innerHTML = `<span>${truck.truck_code}</span>`;
+            element.addEventListener("click", () => {
+              map.flyTo({ center: targetCoords, zoom: 14, duration: 800 });
+              if (typeof onSelectTruck === "function") onSelectTruck(truck.truck_code);
+            });
+
+            const popup = new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(popupHtml);
+            popup.on("open", () => {
+              const btn = document.querySelector(`.popup-dispatch[data-truck="${truck.truck_code}"]`);
+              if (btn && typeof onSelectTruck === "function") {
+                btn.addEventListener("click", () => onSelectTruck(truck.truck_code, true));
+              }
+            });
 
             const marker = new maplibregl.Marker({ element, anchor: "bottom", offset: [0, -8] })
               .setLngLat(targetCoords)
@@ -287,18 +301,10 @@ export function LiveFleetMap({ trucks }) {
 
             nextMarkers[key] = { marker, element, coords: targetCoords };
           } else {
-            // Update popup content and marker class
             existing.element.className = `truck-marker ${statusClass}`;
             const popup = existing.marker.getPopup();
             if (popup) {
-              popup.setHTML(`
-                <div class="map-popup">
-                  <strong>${truck.truck_code}</strong>
-                  <span>${truck.driver_name} - ${truck.assigned_zone}</span>
-                  <p>${isAnomalous ? "Route violation" : truck.is_damaged ? "Fleet damage" : "Normal corridor"}</p>
-                  <small>${Math.round(truck.deviation?.distance_meters || 0)} m from assigned path - ${truck.latest_position.speed_kmh} km/h</small>
-                </div>
-              `);
+              popup.setHTML(popupHtml);
             }
 
             // Digital twin smooth interpolation loop

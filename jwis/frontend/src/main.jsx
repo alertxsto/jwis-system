@@ -313,7 +313,7 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
   );
 }
 
-function MapPanel({ trucks }) {
+function MapPanel({ trucks, onSelectTruck }) {
   return (
     <section className="panel map-panel">
       <div className="panel-title">
@@ -323,7 +323,7 @@ function MapPanel({ trucks }) {
         </div>
         <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
       </div>
-      <LiveFleetMap trucks={trucks} />
+      <LiveFleetMap trucks={trucks} onSelectTruck={onSelectTruck} />
     </section>
   );
 }
@@ -1430,7 +1430,13 @@ function CommandCenter({ onLogout }) {
       </section>
 
       <section className="main-grid">
-        <div id="map-panel" className="map-anchor"><MapPanel trucks={snapshot.trucks} /></div>
+        <div id="map-panel" className="map-anchor"><MapPanel trucks={snapshot.trucks} onSelectTruck={(code, dispatch) => {
+          setFilterTruck(code);
+          if (dispatch) {
+            const el = document.getElementById("history-panel");
+            if (el) el.scrollIntoView({ behavior: "smooth" });
+          }
+        }} /></div>
         <FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />
         <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
         <RouteEvidencePanel route={snapshot.osrm_route} />
