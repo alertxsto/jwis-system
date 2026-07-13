@@ -23,7 +23,7 @@ FastAPI backend modular yang melayani OSRM dynamic routing, deteksi deviasi rute
 
 ### SLIDE 6: CASE 1 — SIMULATOR ANTRIAN TPA
 - Skema **Staggered Dispatch Simulator** diuji memangkas beban jembatan timbang Bantargebang.
-- Hasil Simulasi: Mengurangi antrean sebesar **58.6%** (dari 116 menit ke **48 menit** waktu tunggu).
+- Hasil Simulasi (discrete-event, ter-seed): mengurangi waktu tunggu puncak secara signifikan; angka dihitung live oleh `/api/simulator/stagger`, bukan tetap. Reduksi nyata butuh pilot lapangan.
 
 ### SLIDE 7: CASE 2 — HYBRID PREDICTION ENGINE (ML)
 - Kombinasi **Prophet** (tren makro & musiman) + **XGBoost** (koreksi residual cuaca, libur, event).
@@ -42,9 +42,10 @@ Prediksi volume sampah langsung diterjemahkan menjadi kebutuhan operasional konk
 - Dashboard Jejak Emisi Karbon (Carbon Footprint).
 
 ### SLIDE 10: METRIK DAMPAK (IMPACT METRICS)
-- **58.6%** Waktu Antri TPA Berkurang.
-- **527.4 kg CO2** Jejak Karbon Dihemat per Bulan (setara menanam 25 pohon).
-- **<12 Jam** Respon Penanganan Genangan Sampah Banjir (sebelumnya 48 jam).
+- **Reduksi antri TPA:** dihitung live oleh simulasi discrete-event (bukan angka tetap) — lihat `/api/impact`.
+- **Faktor bahan bakar 1.8 L/ton:** faktor rujukan teknik, bukan penghematan terukur.
+- **<12 Jam** target respon penanganan genangan (vs 48 jam) — target operasional, divalidasi saat pilot.
+- Semua metrik dilabel simulated/derived/modeled/reference; dampak observasi butuh pilot DLH.
 
 ### SLIDE 11: IMPLEMENTASI LAPANGAN (FIELD APP)
 - Aplikasi pendamping khusus sopir truk (*JWIS Field App*) di lapangan.

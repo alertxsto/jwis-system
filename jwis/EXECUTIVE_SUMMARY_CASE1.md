@@ -16,7 +16,7 @@ Pusat komando real-time yang menggabungkan tracking GPS, deteksi anomali ML, dan
 ### DAMPAK TERUKUR
 | Metrik | Sebelum | Dengan JWIS | Perbaikan |
 |---|---|---|---|
-| Waktu tunggu TPA | 116 menit | 48 menit | **-58.6%** |
+| Waktu tunggu TPA | peak-hour crowding | staggered arrivals | **turun (simulasi discrete-event)** |
 | Truk antri puncak | 47 unit | 19 unit | **-59.6%** |
 | Kepatuhan koridor rute | manual/tak terukur | 80% terpantau | real-time |
 | Emisi karbon (optimasi rute) | — | 17.58 kg CO2/hari dihemat | 527 kg/bln |

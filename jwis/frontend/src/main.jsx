@@ -270,7 +270,7 @@ function LoginPage({ onLogin }) {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
-              placeholder="admin123"
+              placeholder="Enter password"
             />
           </div>
           {error && <p className="form-error" role="alert">{error}</p>}
@@ -279,15 +279,15 @@ function LoginPage({ onLogin }) {
           </button>
         </form>
         <div className="login-demo-note">
-          <strong>Demo account</strong>
-          <span>Username: admin - Password: admin123</span>
+          <strong>Demo roles</strong>
+          <span>dispatcher / supervisor / auditor · password &lt;role&gt;-demo-pass</span>
         </div>
       </section>
       <aside className="login-proof">
         <div>
-          <span className="metric-label">Queue target</span>
-          <strong>58.6%</strong>
-          <p>simulated landfill waiting-time reduction.</p>
+          <span className="metric-label">Queue (simulated)</span>
+          <strong>discrete-event</strong>
+          <p>landfill waiting-time reduction from seeded simulation.</p>
         </div>
         <div>
           <span className="metric-label">Coverage</span>
