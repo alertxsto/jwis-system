@@ -675,8 +675,10 @@ def get_events_permits() -> list[dict[str, Any]]:
 def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
     global TRAFFIC_JAM_ACTIVE
     truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
+    if truck is None:
+        raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
     origin = None
-    if truck and truck.get("latest_position"):
+    if truck.get("latest_position"):
         origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
     return reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
 

@@ -67,6 +67,14 @@ class MainApiTests(unittest.TestCase):
         # Without OpenWA env configured, it must NOT claim a real send.
         self.assertFalse(response.json().get("sent", True))
 
+    def test_astar_reroute_rejects_unknown_truck(self):
+        response = self.client.get("/api/fleet/astar-reroute?truck_code=NOT-A-TRUCK")
+        self.assertEqual(response.status_code, 404)
+
+    def test_astar_reroute_accepts_known_truck(self):
+        response = self.client.get("/api/fleet/astar-reroute?truck_code=T-047")
+        self.assertEqual(response.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()
