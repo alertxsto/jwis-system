@@ -30,3 +30,10 @@ jwis_history.db
 # Playwright artifacts
 test-results/
 playwright-report/
+
+# Local audit screenshots
+audit_*.png
+audit2_*.png
+audit3_*.png
+final_*.png
+verify_*.png
