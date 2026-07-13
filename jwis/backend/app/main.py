@@ -29,6 +29,7 @@ from app.engine import (
     DispatchCenter
 )
 from app.astar_routing import reroute_payload
+from app.gps_feed import latest_breadcrumbs
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
@@ -668,6 +669,21 @@ def get_events_permits() -> list[dict[str, Any]]:
 def get_astar_reroute() -> dict[str, Any]:
     global TRAFFIC_JAM_ACTIVE
     return reroute_payload(TRAFFIC_JAM_ACTIVE)
+
+@app.get("/api/fleet/{truck_code}/breadcrumbs")
+def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
+    """Timestamped GPS trail for a truck (simulated feed, pilot-ready contract)."""
+    trail = latest_breadcrumbs(truck_code)
+    return {
+        "truck_code": truck_code,
+        "source": "simulated",
+        "note": "Simulated breadcrumb feed; swap to DLH AVL at pilot with no contract change.",
+        "breadcrumbs": [
+            {"lat": b.lat, "lng": b.lng, "timestamp": b.timestamp,
+             "speed_kmh": b.speed_kmh, "source": b.source}
+            for b in trail
+        ],
+    }
 
 @app.post("/api/fleet/astar-simulate-jam")
 def post_astar_simulate_jam(active: bool) -> dict[str, Any]:
