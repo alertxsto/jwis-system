@@ -178,22 +178,61 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
 DEMO_CONGESTED_EDGES = [("CAWANG", "BEKASI_BARAT")]
 
 
-def reroute_payload(jam_active: bool):
-    """Return both the normal and (if jammed) the A*-diverted route for the frontend."""
+def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG",)) -> str:
+    """Snap a GPS coordinate to the closest network node (origin anchoring)."""
+    best, best_d = None, float("inf")
+    for name, (nlat, nlng, _label) in NODES.items():
+        if name in exclude:
+            continue
+        d = haversine_distance((lat, lng), (nlat, nlng))
+        if d < best_d:
+            best, best_d = name, d
+    return best
+
+
+def route_from_truck(position: dict, goal="TPA_BANTARGEBANG", **kwargs) -> dict:
+    """Route anchored to a truck's real GPS: inject the position as ORIGIN so the
+    rendered path starts within 50m of the marker, then A* to the goal."""
+    lat, lng = position["lat"], position["lng"]
+    snap = nearest_node(lat, lng)
+    NODES["ORIGIN"] = (lat, lng, "Posisi Truk (GPS)")
+    if ("ORIGIN", snap, 0.0) not in EDGES and snap != "ORIGIN":
+        d = haversine_distance((lat, lng), (NODES[snap][0], NODES[snap][1]))
+        adj_edge = ("ORIGIN", snap, round(d, 2))
+        if adj_edge not in EDGES:
+            EDGES.append(adj_edge)
+    edge_geometry.cache_clear()
+    return find_astar_route(start="ORIGIN", goal=goal, **kwargs)
+
+
+def reroute_payload(jam_active: bool, congested_edges=None):
+    """Return normal and (if a jam actually hits the active route) diverted route.
+
+    A jam on an edge NOT on the active route does not trigger a diversion — a
+    truck is not rerouted for congestion it never touches.
+    """
+    jam_edges = congested_edges if congested_edges is not None else DEMO_CONGESTED_EDGES
     normal = find_astar_route(congested_edges=[])
-    if not jam_active:
+    normal_edges = set(zip(normal["sequence"], normal["sequence"][1:]))
+    normal_edges |= {(v, u) for (u, v) in normal_edges}
+
+    hits_route = any((u, v) in normal_edges for (u, v) in jam_edges)
+    if not jam_active or not hits_route:
         return {
-            "jam_active": False,
+            "jam_active": jam_active,
             "active_route": normal,
             "abandoned_route": None,
             "congestion_points": [],
-            "message": "Lalu lintas normal. Truk mengikuti rute terpendek ke TPA Bantargebang.",
+            "message": (
+                "Lalu lintas normal. Truk mengikuti rute terpendek ke TPA Bantargebang."
+                if not jam_active else
+                "Kemacetan terdeteksi di luar koridor aktif truk. Rute tidak diubah."
+            ),
         }
 
-    diverted = find_astar_route(congested_edges=DEMO_CONGESTED_EDGES)
-    # congestion marker = midpoint of the jammed edge
+    diverted = find_astar_route(congested_edges=jam_edges)
     jam_points = []
-    for u, v in DEMO_CONGESTED_EDGES:
+    for u, v in jam_edges:
         jam_points.append({
             "lat": round((NODES[u][0] + NODES[v][0]) / 2, 6),
             "lng": round((NODES[u][1] + NODES[v][1]) / 2, 6),
@@ -206,9 +245,9 @@ def reroute_payload(jam_active: bool):
         "abandoned_route": normal,
         "congestion_points": jam_points,
         "message": (
-            f"Kemacetan terdeteksi di koridor Cawang. A* otomatis membelokkan truk "
+            f"Kemacetan terdeteksi di koridor aktif. A* membelokkan truk "
             f"via {' -> '.join(NODES[n][2] for n in diverted['sequence'][1:-1])}. "
-            f"Jarak +{extra_km} km, namun menghindari gridlock total."
+            f"Jarak +{extra_km} km, menghindari gridlock."
         ),
     }
 

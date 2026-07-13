@@ -32,5 +32,25 @@ class AstarPermitTests(unittest.TestCase):
         self.assertNotIn(("SLIPI", "ORIGIN"), pairs)
 
 
+class AstarGpsAnchorTests(unittest.TestCase):
+    def test_origin_snaps_within_50m_of_truck_gps(self):
+        from app.astar_routing import route_from_truck, haversine_distance
+        pos = {"lat": -6.221, "lng": 106.785}
+        r = route_from_truck(pos)
+        self.assertTrue(r["success"])
+        first = r["path"][0]
+        dist_m = haversine_distance((pos["lat"], pos["lng"]), (first["lat"], first["lng"])) * 1000
+        self.assertLess(dist_m, 50, f"route origin {dist_m:.0f}m from truck GPS")
+
+    def test_jam_off_route_does_not_divert(self):
+        from app.astar_routing import reroute_payload
+        # A jam on an edge that is NOT on the normal active route must not change it.
+        normal = reroute_payload(False)["active_route"]["sequence"]
+        # Force a jam on an off-route edge (Bekasi Timur spur, rarely on the path).
+        result = reroute_payload(True, congested_edges=[("BEKASI_TIMUR", "TPA_BANTARGEBANG")])
+        if not set(zip(normal, normal[1:])) & {("BEKASI_TIMUR", "TPA_BANTARGEBANG"), ("TPA_BANTARGEBANG", "BEKASI_TIMUR")}:
+            self.assertEqual(result["active_route"]["sequence"], normal)
+
+
 if __name__ == "__main__":
     unittest.main()
