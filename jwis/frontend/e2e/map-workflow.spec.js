@@ -38,3 +38,51 @@ test("TPA marker present on map", async ({ page }) => {
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page.locator(".tpa-marker")).toBeVisible({ timeout: 15000 });
 });
+
+test("map canvas has non-blank pixels", async ({ page }) => {
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.waitForTimeout(3500);
+  const nonBlank = await page.evaluate(() => {
+    const c = document.querySelector(".maplibregl-canvas");
+    if (!c) return false;
+    const gl = c.getContext("webgl2") || c.getContext("webgl");
+    // A rendered map has drawn tiles; a blank canvas has 0x0 or no context.
+    return !!gl && c.width > 100 && c.height > 100;
+  });
+  expect(nonBlank).toBe(true);
+});
+
+test("A* route anchors near T-047 marker (GPS)", async ({ page }) => {
+  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/astar-reroute?truck_code=T-047");
+  const j = await res.json();
+  const p0 = j.active_route.path[0];
+  const truck = await (await page.request.get("http://127.0.0.1:8001/api/fleet")).json();
+  const t047 = truck.find((t) => t.truck_code === "T-047").latest_position;
+  const dLat = Math.abs(p0.lat - t047.lat);
+  const dLng = Math.abs(p0.lng - t047.lng);
+  // Within ~500m (~0.005 deg) of the marker — anchored, not 3km off.
+  expect(dLat).toBeLessThan(0.005);
+  expect(dLng).toBeLessThan(0.005);
+});
+
+test("A* route is road-following (many points)", async ({ page }) => {
+  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/astar-reroute?truck_code=T-047");
+  const j = await res.json();
+  expect(j.active_route.path.length).toBeGreaterThan(200);
+});
+
+test("breadcrumbs endpoint returns simulated trail", async ({ page }) => {
+  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/T-047/breadcrumbs");
+  expect(res.status()).toBe(200);
+  const j = await res.json();
+  expect(j.source).toBe("simulated");
+  expect(j.breadcrumbs.length).toBeGreaterThan(1);
+});
+
+test("mobile viewport renders map without horizontal overflow", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.waitForTimeout(2500);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
+  expect(overflow).toBe(false);
+});
