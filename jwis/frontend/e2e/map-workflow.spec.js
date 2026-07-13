@@ -39,21 +39,29 @@ test("TPA marker present on map", async ({ page }) => {
   await expect(page.locator(".tpa-marker")).toBeVisible({ timeout: 15000 });
 });
 
-test("map canvas has non-blank, varied pixels", async ({ page }) => {
+test("map canvas has real color diversity (decoded pixels, not byte variance)", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(4000);
-  // Screenshot the map canvas and measure byte variance — a blank/single-color
-  // canvas has near-zero variance; a rendered map with tiles/routes has high variance.
+  await page.waitForTimeout(4500);
   const buf = await page.locator(".maplibregl-canvas").screenshot();
-  const bytes = Uint8Array.from(buf);
-  const sample = bytes.subarray(0, Math.min(bytes.length, 200000));
-  let sum = 0;
-  for (const b of sample) sum += b;
-  const mean = sum / sample.length;
-  let varSum = 0;
-  for (const b of sample) varSum += (b - mean) ** 2;
-  const variance = varSum / sample.length;
-  expect(variance).toBeGreaterThan(200);
+  const dataUrl = "data:image/png;base64," + buf.toString("base64");
+  // Decode the PNG into real RGBA pixels in the browser, then count distinct
+  // coarse color buckets. A blank/single-color canvas yields very few buckets;
+  // a rendered map (tiles, roads, markers) yields many.
+  const buckets = await page.evaluate(async (url) => {
+    const img = await createImageBitmap(await (await fetch(url)).blob());
+    const cv = document.createElement("canvas");
+    cv.width = img.width; cv.height = img.height;
+    const ctx = cv.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    const { data } = ctx.getImageData(0, 0, cv.width, cv.height);
+    const seen = new Set();
+    for (let i = 0; i < data.length; i += 4 * 37) {
+      const r = data[i] >> 5, g = data[i + 1] >> 5, b = data[i + 2] >> 5;
+      seen.add((r << 6) | (g << 3) | b);
+    }
+    return seen.size;
+  }, dataUrl);
+  expect(buckets).toBeGreaterThan(12);
 });
 
 test("A* route anchors near T-047 marker (GPS)", async ({ page }) => {
