@@ -682,6 +682,44 @@ def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
         origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
     return reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
 
+@app.get("/api/fleet/route-decision")
+def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
+    """One payload unifying every Case-1 route signal for a truck: OSRM ETA/
+    distance, vehicle damage status, TPA queue, traffic, and permit — so a
+    dispatcher sees a single decision, not five disconnected panels."""
+    global TRAFFIC_JAM_ACTIVE
+    truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
+    if truck is None:
+        raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
+    origin = None
+    if truck.get("latest_position"):
+        origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
+    route = reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
+    active = route["active_route"]
+    queue = simulate_queue(32 if TRAFFIC_JAM_ACTIVE else 14, weighbridges=2, service_rate_per_hour=30.0, seed=42)
+    vehicle_status = "DAMAGED" if truck.get("is_damaged") else ("DEVIATION" if truck["deviation"]["violated"] else "OK")
+    recs = []
+    if truck.get("is_damaged"):
+        recs.append("Vehicle damaged — assign backup capacity.")
+    if truck["deviation"]["violated"]:
+        recs.append("Off assigned corridor — redirect to recommended route.")
+    if TRAFFIC_JAM_ACTIVE:
+        recs.append("Active-route congestion — A* diversion applied.")
+    if queue["mean_wait_minutes"] > 45:
+        recs.append("TPA queue high — stagger arrival.")
+    return {
+        "truck_code": truck_code,
+        "eta_minutes": active["eta_minutes"],
+        "physical_distance_km": active["physical_distance_km"],
+        "optimization_cost": active["optimization_cost"],
+        "vehicle_status": vehicle_status,
+        "tpa_queue": {"wait_minutes": queue["mean_wait_minutes"], "p95": queue["p95_wait_minutes"],
+                      "source": "MODEL OUTPUT"},
+        "traffic": {"jam_active": TRAFFIC_JAM_ACTIVE, "source": "SIMULATED CONGESTION"},
+        "permit": {"source": active.get("permit_source", "SIMULATED PERMIT CONSTRAINT")},
+        "recommendation": recs or ["Normal operation; no intervention needed."],
+    }
+
 @app.get("/api/fleet/unlicensed-collectors")
 def unlicensed_collectors() -> dict[str, Any]:
     """Detect observed vehicles operating outside the DLH registry (Case 1 illegal activity)."""

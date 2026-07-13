@@ -75,6 +75,18 @@ class MainApiTests(unittest.TestCase):
         response = self.client.get("/api/fleet/astar-reroute?truck_code=T-047")
         self.assertEqual(response.status_code, 200)
 
+    def test_route_decision_unifies_all_signals(self):
+        r = self.client.get("/api/fleet/route-decision?truck_code=T-047")
+        self.assertEqual(r.status_code, 200)
+        j = r.json()
+        for key in ("truck_code", "eta_minutes", "physical_distance_km",
+                    "vehicle_status", "tpa_queue", "traffic", "permit", "recommendation"):
+            self.assertIn(key, j)
+
+    def test_route_decision_unknown_truck_404(self):
+        r = self.client.get("/api/fleet/route-decision?truck_code=GHOST")
+        self.assertEqual(r.status_code, 404)
+
 
 if __name__ == "__main__":
     unittest.main()
