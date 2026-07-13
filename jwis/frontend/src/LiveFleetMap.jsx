@@ -286,6 +286,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>Forecast:</b> ${ev.predicted_waste_tons} tons of waste</p>
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>Field Crews:</b> ${ev.crews_required} people</p>
                 <p style="margin: 0; font-size: 11px;"><b>Backup Fleet:</b> ${ev.backup_trucks_required} trucks</p>
+                <p class="popup-src" style="margin: 6px 0 0;">${ev.data_class || "SIMULATED"} · ${ev.data_note || "illustrative event, not official permit data"}</p>
               </div>
             `);
 
@@ -410,6 +411,30 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
         });
       } else {
         map.getSource("jam-points").setData(jamData);
+      }
+
+      // Congestion as a highlighted ROAD SEGMENT (LineString), not just a pin.
+      const segFeatures = (astarData?.jam_active && astarData.congestion_segments || []).map((seg, i) => ({
+        type: "Feature",
+        id: "jamseg-" + i,
+        properties: { name: seg.name, source: seg.source, multiplier: seg.traffic_multiplier },
+        geometry: { type: "LineString", coordinates: (seg.coordinates || []).map((c) => [c.lng, c.lat]) },
+      }));
+      const segData = featureCollection(segFeatures);
+      if (!map.getSource("jam-segments")) {
+        map.addSource("jam-segments", { type: "geojson", data: segData });
+        map.addLayer({
+          id: "jam-segments-line",
+          type: "line",
+          source: "jam-segments",
+          paint: {
+            "line-color": "#dc2626",
+            "line-width": 7,
+            "line-opacity": 0.7,
+          },
+        });
+      } else {
+        map.getSource("jam-segments").setData(segData);
       }
     }
 

@@ -663,6 +663,11 @@ def get_events_permits() -> list[dict[str, Any]]:
             "status": "ACTIVE_SUNDAY",
         },
     ]
+    # Fixture events: permit numbers/attendance are illustrative, not official
+    # DLH permit data. Label each so the UI never presents them as real permits.
+    for e in events:
+        e["data_class"] = "SIMULATED"
+        e["data_note"] = "Illustrative event; not official DLH permit data."
     return events
 
 @app.get("/api/fleet/astar-reroute")

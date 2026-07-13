@@ -165,6 +165,7 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
                 "distance_km": osrm_km,
                 "eta_minutes": max(15, osrm_min),
                 "is_diverted": len(congested_edges) > 0,
+                "permit_source": "SIMULATED PERMIT CONSTRAINT (not official DLH permit dataset)",
             }
 
         if u in visited and visited[u] <= cost:
