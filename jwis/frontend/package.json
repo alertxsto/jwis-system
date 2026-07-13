@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",
@@ -17,5 +18,8 @@
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
   }
 }
