@@ -120,7 +120,8 @@ export function LiveFleetMap({ trucks }) {
 
         const actualPath = buildActualPath(truck);
         if (actualPath.length) {
-          actualFeatures.push(routeFeature(`${truck.truck_code}-actual`, actualPath, "actual", truck.truck_code));
+          const actualKind = truck.deviation?.violated ? "actual-violation" : "actual-clean";
+          actualFeatures.push(routeFeature(`${truck.truck_code}-actual`, actualPath, actualKind, truck.truck_code));
         }
       });
 
@@ -191,8 +192,10 @@ export function LiveFleetMap({ trucks }) {
           paint: {
             "line-color": [
               "case",
-              ["==", ["get", "kind"], "actual"],
+              ["==", ["get", "kind"], "actual-violation"],
               "#b42318",
+              ["==", ["get", "kind"], "astar-active"],
+              "#0891b2",
               "#176b54",
             ],
             "line-width": [
