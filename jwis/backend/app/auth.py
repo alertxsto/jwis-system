@@ -46,4 +46,14 @@ def has_permission(role: str, permission: str) -> bool:
 def token_for(principal: dict[str, str]) -> str:
     """Opaque demo token binding username+role (not a signed JWT; pilot-grade)."""
     raw = f"{principal['username']}:{principal['role']}".encode()
-    return hashlib.sha256(raw).hexdigest()
+    tok = hashlib.sha256(raw).hexdigest()
+    _TOKEN_REGISTRY[tok] = principal["role"]
+    return tok
+
+
+# Issued-token -> role. In-process registry; a real deployment uses signed JWTs.
+_TOKEN_REGISTRY: dict[str, str] = {}
+
+
+def role_for_token(token: str) -> str | None:
+    return _TOKEN_REGISTRY.get(token)

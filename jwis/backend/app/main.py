@@ -14,7 +14,7 @@ import json
 from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Any
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -32,7 +32,7 @@ from app.astar_routing import reroute_payload
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
-from app.auth import ROLES, authenticate, has_permission, token_for
+from app.auth import ROLES, authenticate, has_permission, token_for, role_for_token
 from app.impact import build_impact_report
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
@@ -139,6 +139,21 @@ def auth_login(payload: LoginRequest) -> dict[str, Any]:
         "permissions": sorted(ROLES[principal["role"]]),
         "token": token_for(principal),
     }
+
+
+def require_permission(permission: str):
+    """FastAPI dependency: 401 if no valid token, 403 if role lacks the permission."""
+    def _dep(authorization: str | None = Header(default=None)) -> str:
+        if not authorization or not authorization.lower().startswith("bearer "):
+            raise HTTPException(status_code=401, detail="Missing bearer token.")
+        token = authorization.split(" ", 1)[1].strip()
+        role = role_for_token(token)
+        if role is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired token.")
+        if not has_permission(role, permission):
+            raise HTTPException(status_code=403, detail=f"Role '{role}' lacks '{permission}'.")
+        return role
+    return _dep
 
 @app.get("/api/data/provenance")
 def data_provenance_endpoint() -> dict[str, Any]:
@@ -469,7 +484,7 @@ def create_operations_plan(
 
 
 @app.post("/api/operations/{plan_id}/approve")
-def approve_operations_plan(plan_id: str) -> dict[str, Any]:
+def approve_operations_plan(plan_id: str, _role: str = Depends(require_permission("operations:approve"))) -> dict[str, Any]:
     """Approve a plan and push each assignment through the dispatch contract."""
     plan = _OPERATIONS_PLANS.get(plan_id)
     if plan is None:
