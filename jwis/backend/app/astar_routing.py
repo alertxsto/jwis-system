@@ -136,15 +136,21 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
         blocked_set.add((v, u))
 
     def heuristic(node):
-        return haversine_distance(
+        km = haversine_distance(
             (nodes[node][0], nodes[node][1]),
             (nodes[goal][0], nodes[goal][1]),
         )
+        # Admissible duration estimate: straight-line km at max truck speed.
+        return (km / 45.0) * 60.0
+
+    def edge_duration_min(u, v):
+        _geom, _km, dur_min, _osrm = _osrm_edge(nodes[u][0], nodes[u][1], nodes[v][0], nodes[v][1])
+        return dur_min
 
     adj = {n: [] for n in nodes}
     for u, v, d in edges:
-        adj[u].append((v, d))
-        adj[v].append((u, d))
+        adj[u].append(v)
+        adj[v].append(u)
 
     pq = [(heuristic(start), 0.0, start, [start])]
     visited = {}
@@ -172,11 +178,11 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
             continue
         visited[u] = cost
 
-        for v, dist in adj[u]:
+        for v in adj[u]:
             if (u, v) in blocked_set or not _edge_meta(u, v)["permit_allowed"]:
                 continue
             multiplier = 5.0 if (u, v) in congested_set else 1.0
-            cost_new = cost + dist * multiplier
+            cost_new = cost + edge_duration_min(u, v) * multiplier
             f_new = cost_new + heuristic(v)
             if v not in visited or visited[v] > cost_new:
                 heapq.heappush(pq, (f_new, cost_new, v, path + [v]))

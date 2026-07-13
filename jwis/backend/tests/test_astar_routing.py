@@ -72,6 +72,16 @@ class AstarGpsAnchorTests(unittest.TestCase):
         self.assertGreater(r["physical_distance_km"], 40,
                            "OSRM road distance should exceed the manual straight-line sum")
 
+    def test_optimization_objective_is_osrm_duration(self):
+        # With OSRM live and no congestion, the search cost equals summed OSRM
+        # durations, so optimization_cost tracks eta_minutes (not the km weights).
+        from app.astar_routing import find_astar_route
+        r = find_astar_route()
+        if r.get("geometry_source") != "osrm":
+            self.skipTest("OSRM unreachable")
+        self.assertAlmostEqual(r["optimization_cost"], r["eta_minutes"], delta=2,
+                               msg="A* objective is not OSRM duration")
+
     def test_jam_off_route_does_not_divert(self):
         from app.astar_routing import reroute_payload
         # A jam on an edge that is NOT on the normal active route must not change it.
