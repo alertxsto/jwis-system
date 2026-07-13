@@ -10,7 +10,9 @@ function toLngLat(point) {
   return [point.lng, point.lat];
 }
 
-function buildActualPath(truck) {
+function buildActualPath(truck, trail) {
+  // Prefer the live GPS breadcrumb trail (timestamped actual movement).
+  if (trail?.length > 1) return trail.map((b) => [b.lng, b.lat]);
   if (truck.actual_path?.length) return truck.actual_path.map(toLngLat);
   const assigned = truck.assigned_path || [];
   const latest = truck.latest_position ? [truck.latest_position.lng, truck.latest_position.lat] : null;
@@ -109,6 +111,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   // A* dynamic rerouting state
   const [astarData, setAstarData] = useState(null);
   const [eventPermits, setEventPermits] = useState([]);
+  const [breadcrumbs, setBreadcrumbs] = useState({});
 
 
   useEffect(() => {
@@ -120,6 +123,24 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
     }
     fetchPermits();
   }, []);
+
+  useEffect(() => {
+    async function fetchBreadcrumbs() {
+      const codes = (trucks || []).map((t) => t.truck_code);
+      const out = {};
+      await Promise.all(codes.map(async (code) => {
+        try {
+          const res = await fetch(`${API_URL}/fleet/${code}/breadcrumbs`);
+          if (res.ok) {
+            const j = await res.json();
+            if (j.breadcrumbs?.length > 1) out[code] = j.breadcrumbs;
+          }
+        } catch {}
+      }));
+      setBreadcrumbs(out);
+    }
+    if (trucks?.length) fetchBreadcrumbs();
+  }, [trucks]);
 
   useEffect(() => {
     async function fetchAstar() {
@@ -179,7 +200,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
           );
         }
 
-        const actualPath = buildActualPath(truck);
+        const actualPath = buildActualPath(truck, breadcrumbs[truck.truck_code]);
         if (actualPath.length) {
           const assignedLine = (truck.assigned_path || []).map(toLngLat);
           if (truck.deviation?.violated) {
@@ -481,7 +502,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
       cancelled = true;
     };
 
-  }, [trucks, astarData, eventPermits, mapInstance]);
+  }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs]);
 
   useEffect(() => {
     async function renderHeatmap() {
