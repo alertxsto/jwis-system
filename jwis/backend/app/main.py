@@ -30,6 +30,7 @@ from app.engine import (
 )
 from app.astar_routing import reroute_payload
 from app.queue_simulation import simulate_queue
+from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
@@ -308,7 +309,6 @@ def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest) -> dict:
     return d
 
 # ── New Hybrid ML Endpoints ──────────────────────────────────────────
-
 @app.get("/api/ml/models")
 def ml_models_status() -> list[dict[str, Any]]:
     return list_hybrid_models()
@@ -352,6 +352,73 @@ def ml_predict_all(
         )
         results.append(res)
     return results
+
+# ── Integrated Operations Optimizer (Case 2 -> Case 1 bridge) ────────
+
+_OPERATIONS_PLANS: dict[str, dict[str, Any]] = {}
+
+
+@app.post("/api/operations/plan")
+def create_operations_plan(
+    rainfall_mm: float = 0.0,
+    event_attendance: int = 0,
+    is_weekend: bool = False,
+    top_n: int = 5,
+) -> dict[str, Any]:
+    """Build a dispatch plan from forecast hotspots + real fleet via CP-SAT."""
+    preds = predictions_kecamatan(rainfall_mm=rainfall_mm, event_attendance=event_attendance,
+                                  is_weekend=is_weekend)
+    hotspots = preds["top_hotspots"][:top_n]
+    demands = [
+        Demand(area=h["slug"], tons=float(h["predicted_tons"]),
+               lat=float(h.get("lat") or 0.0), lng=float(h.get("lng") or 0.0),
+               priority=rank)
+        for rank, h in enumerate(reversed(hotspots), start=1)
+    ]
+    vehicles = [
+        Vehicle(truck_code=t["truck_code"], capacity_tons=18.0,
+                available=not t["is_damaged"],
+                permit_compliant=not t["deviation"]["violated"])
+        for t in TRUCKS
+    ]
+    plan = build_operational_plan(demands, vehicles)
+    payload = {
+        "plan_id": plan.plan_id,
+        "status": "proposed",
+        "assignments": [
+            {"truck_code": a.truck_code, "area": a.area,
+             "assigned_tons": a.assigned_tons, "evidence": a.evidence}
+            for a in plan.assignments
+        ],
+        "unmet_reasons": plan.unmet_reasons,
+        "total_demand_tons": plan.total_demand_tons,
+        "total_assigned_tons": plan.total_assigned_tons,
+        "scenario": {"rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
+                     "is_weekend": is_weekend},
+    }
+    _OPERATIONS_PLANS[plan.plan_id] = payload
+    history_store.record_event("operations_plan_created", {"plan_id": plan.plan_id})
+    return payload
+
+
+@app.post("/api/operations/{plan_id}/approve")
+def approve_operations_plan(plan_id: str) -> dict[str, Any]:
+    """Approve a plan and push each assignment through the dispatch contract."""
+    plan = _OPERATIONS_PLANS.get(plan_id)
+    if plan is None:
+        raise HTTPException(status_code=404, detail=f"Plan {plan_id} not found.")
+    plan["status"] = "approved"
+    created = []
+    for a in plan["assignments"]:
+        d = dispatch_center.create_dispatch(
+            truck_code=a["truck_code"],
+            instruction=f"Collect {a['assigned_tons']:.0f}t at {a['area']} (plan {plan_id})",
+            manager_id="operations_optimizer",
+        )
+        created.append(d["id"])
+    plan["dispatch_ids"] = created
+    history_store.record_event("operations_plan_approved", {"plan_id": plan_id, "dispatches": len(created)})
+    return plan
 
 # ── Advanced Fleet Intelligence Endpoints (New) ──────────────────────
 
