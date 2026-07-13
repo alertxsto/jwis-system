@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JWIS Semifinal Video Cards</title>
+  <style>
+    :root { font-family: Inter, "Segoe UI", Arial, sans-serif; color: #10202b; background: #eaf1f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 1280px; min-height: 720px; overflow: hidden; }
+    .card { width: 100vw; height: 100vh; min-height: 720px; display: grid; grid-template-rows: 22% 1fr 12%; background: linear-gradient(180deg, #dcecff 0%, #f7fafc 52%, #e8f3ef 100%); }
+    .brand-strip { position: relative; overflow: hidden; background: #88b3df; border-bottom: 1px solid rgba(16,32,43,.12); }
+    .brand-strip img { position: absolute; width: 100%; height: auto; top: 0; left: 0; transform: translateY(-1%); }
+    .content { display: grid; place-items: center; padding: 32px 7vw; text-align: center; }
+    .content-inner { max-width: 1500px; }
+    .eyebrow { margin: 0 0 14px; color: #176b54; font-size: clamp(18px, 1.5vw, 30px); font-weight: 800; text-transform: uppercase; }
+    h1 { margin: 0; color: #0f3761; font-size: clamp(52px, 6vw, 112px); line-height: .98; }
+    .subtitle { margin: 22px auto 0; max-width: 1200px; color: #344452; font-size: clamp(22px, 2vw, 38px); line-height: 1.35; }
+    .identity { margin-top: 30px; display: inline-grid; gap: 8px; padding: 18px 28px; border: 2px solid #b42318; border-radius: 8px; background: #fff; }
+    .identity strong { font-size: clamp(20px, 1.6vw, 30px); }
+    .identity span { color: #526170; font-size: clamp(16px, 1.2vw, 24px); }
+    .footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 0 7vw; color: #fff; background: #0f3761; font-size: clamp(16px, 1.2vw, 23px); font-weight: 700; }
+    .closing .content-inner { max-width: 1200px; }
+    .closing h1 { font-size: clamp(58px, 6vw, 108px); }
+    .closing .brand-strip img { transform: translateY(-1%); }
+    .hint { position: fixed; right: 14px; bottom: 14px; padding: 8px 11px; color: #fff; background: rgba(16,32,43,.8); border-radius: 6px; font-size: 12px; }
+    @media print { .hint { display: none; } }
+  </style>
+</head>
+<body>
+  <section class="card opening" id="opening">
+    <div class="brand-strip"><img src="assets/official-guidelines.png" alt="Official AI Open Innovation Challenge partner logos" /></div>
+    <main class="content"><div class="content-inner">
+      <p class="eyebrow">AI Open Innovation Challenge 2026 — Semifinal Prototype</p>
+      <h1>JWIS</h1>
+      <p class="subtitle">Jakarta Waste Intelligence System<br />From reactive monitoring to predictive field action</p>
+      <div class="identity">
+        <strong id="teamName">[TEAM NAME — REQUIRED]</strong>
+        <span id="members">[TEAM MEMBERS — REQUIRED]</span>
+      </div>
+    </div></main>
+    <footer class="footer"><span>Case Provider: Dinas Lingkungan Hidup DKI Jakarta</span><span>Case 1 + Case 2 Integrated</span></footer>
+  </section>
+
+  <section class="card closing" id="closing" hidden>
+    <div class="brand-strip"><img src="assets/official-guidelines.png" alt="Official AI Open Innovation Challenge partner logos" /></div>
+    <main class="content"><div class="content-inner">
+      <p class="eyebrow">Detect. Predict. Dispatch. Confirm.</p>
+      <h1>Thank You</h1>
+      <p class="subtitle">JWIS gives DLH one operational loop from data to decision to field action.</p>
+      <div class="identity"><strong id="closingTeamName">[TEAM NAME — REQUIRED]</strong><span>AI Open Innovation Challenge 2026 Semifinalist</span></div>
+    </div></main>
+    <footer class="footer"><span>Jakarta Waste Intelligence System</span><span>Prototype Demonstration</span></footer>
+  </section>
+  <div class="hint">Press 1: opening · Press 2: closing · F11: fullscreen</div>
+  <script>
+    const VIDEO_CONFIG = {
+      teamName: "[TEAM NAME — REQUIRED]",
+      members: "[MEMBER 1 — ROLE] · [MEMBER 2 — ROLE] · [MEMBER 3 — ROLE]"
+    };
+    document.getElementById("teamName").textContent = VIDEO_CONFIG.teamName;
+    document.getElementById("closingTeamName").textContent = VIDEO_CONFIG.teamName;
+    document.getElementById("members").textContent = VIDEO_CONFIG.members;
+    function showCard(id) {
+      document.getElementById("opening").hidden = id !== "opening";
+      document.getElementById("closing").hidden = id !== "closing";
+    }
+    addEventListener("keydown", (event) => {
+      if (event.key === "1") showCard("opening");
+      if (event.key === "2") showCard("closing");
+    });
+  </script>
+</body>
+</html>

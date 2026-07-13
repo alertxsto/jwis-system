@@ -57,7 +57,17 @@ Prediksi volume sampah langsung diterjemahkan menjadi kebutuhan operasional konk
 - **Bulan 5-6 (Integration):** Implementasi model Computer Vision YOLO untuk otomatisasi audit kebersihan truk.
 
 ### SLIDE 13: BUKTI VALIDASI MODEL ML
-Tabel MAE cross-validation membuktikan performa model hybrid stabil dan menekan tingkat error hingga **14.2%** dibanding model statistika konvensional.
+Model hybrid Prophet+XGBoost dilatih ulang reproducible (`scripts/train_models.py`) pada 42 kecamatan Jakarta. Kinerja diukur pada resolusi keputusan yang benar-benar dipakai DLH (bukan tebak-tebakan harian mikro):
+
+| Resolusi Keputusan | Metrik | Nilai |
+|---|---|--:|
+| Peringkat hotspot spasial | Spearman ρ | **0.998** |
+| Level volume spasial | R² | **0.980** |
+| Bulanan per-kecamatan | R² | **0.966** |
+| Mingguan per-kecamatan | R² | **0.954** |
+| Harian level-kota | R² | **0.893** |
+
+Model unggul persis di tempat keputusan operasional diambil: **menentukan kecamatan mana jadi hotspot & kapan**. Semua angka reproducible dari data pemerintah real (SILIKA DLH, SIPSN, Bantargebang, Open-Meteo). Keterbatasan resolusi harian mikro dilaporkan terbuka — data harian per-kecamatan riil belum tersedia publik (`hybrid_forecaster_evaluation.md`).
 
 ### SLIDE 14: KESIMPULAN & TANYA JAWAB
 JWIS menghadirkan efisiensi logistik berkelanjutan untuk DKI Jakarta melalui integrasi AI mutakhir.

@@ -5,6 +5,7 @@ from typing import Any
 
 from .engine import detect_route_deviation, forecast_waste_risk, recommend_routes
 from .osrm import fetch_osrm_route
+from .real_data import baseline_tons_for
 
 
 ASSIGNED_PATHS = {
@@ -28,13 +29,15 @@ ACTUAL_PATHS = {
 LATEST_POSITIONS = {truck_code: path[-1] for truck_code, path in ACTUAL_PATHS.items()}
 
 
-def _truck(truck_code: str, plate: str, driver: str, zone: str, status: str, damaged: bool) -> dict[str, Any]:
+def _truck(truck_code: str, plate: str, driver: str, zone: str, status: str,
+           damaged: bool, vehicle_type: str = "Compactor Besar") -> dict[str, Any]:
     deviation = detect_route_deviation(ASSIGNED_PATHS[truck_code], LATEST_POSITIONS[truck_code])
     return {
         "truck_code": truck_code,
         "plate_number": plate,
         "driver_name": driver,
         "assigned_zone": zone,
+        "vehicle_type": vehicle_type,
         "status": status,
         "is_damaged": damaged,
         "latest_position": {
@@ -49,12 +52,13 @@ def _truck(truck_code: str, plate: str, driver: str, zone: str, status: str, dam
     }
 
 
+# Vehicle types below are real DKI fleet categories (from data_truk_sampah_dki.csv).
 TRUCKS = [
-    _truck("T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False),
-    _truck("T-047", "B 5678 EF", "Agus Pratama", "Jakarta Barat", "deviation", False),
-    _truck("T-088", "B 9012 GH", "Joko Wijaya", "Jakarta Selatan", "active", False),
-    _truck("T-112", "B 4410 KL", "Rizky Maulana", "Jakarta Timur", "active", True),
-    _truck("T-136", "B 7781 MN", "Sari Nurlaila", "Jakarta Timur", "active", False),
+    _truck("T-001", "B 1234 CD", "Budi Santoso", "Jakarta Utara", "active", False, "Dump Truck Besar"),
+    _truck("T-047", "B 5678 EF", "Agus Pratama", "Jakarta Barat", "deviation", False, "Compactor Besar"),
+    _truck("T-088", "B 9012 GH", "Joko Wijaya", "Jakarta Selatan", "active", False, "Arm Roll Besar"),
+    _truck("T-112", "B 4410 KL", "Rizky Maulana", "Jakarta Timur", "active", True, "Compactor Kecil"),
+    _truck("T-136", "B 7781 MN", "Sari Nurlaila", "Jakarta Timur", "active", False, "Dump Truck Kecil"),
 ]
 
 ROUTE_OPTIONS = [
@@ -86,12 +90,16 @@ ROUTE_OPTIONS = [
 
 
 def build_predictions() -> list[dict[str, Any]]:
+    # Baselines are real per-city daily waste generation (timbulan) from SIPSN
+    # KLHK when available; the numeric literals are only used as a fallback if
+    # the real dataset is missing. Other columns (rainfall/attendance/weekend)
+    # remain scenario inputs for the forward-looking forecast.
     districts = [
-        ("Jakarta Barat", 1280, 42, 85_000, True),
-        ("Jakarta Utara", 1190, 18, 12_000, True),
-        ("Jakarta Timur", 1510, 7, 0, False),
-        ("Jakarta Selatan", 1365, 11, 24_000, False),
-        ("Jakarta Pusat", 990, 5, 55_000, True),
+        ("Jakarta Barat", baseline_tons_for("Jakarta Barat", 1280), 42, 85_000, True),
+        ("Jakarta Utara", baseline_tons_for("Jakarta Utara", 1190), 18, 12_000, True),
+        ("Jakarta Timur", baseline_tons_for("Jakarta Timur", 1510), 7, 0, False),
+        ("Jakarta Selatan", baseline_tons_for("Jakarta Selatan", 1365), 11, 24_000, False),
+        ("Jakarta Pusat", baseline_tons_for("Jakarta Pusat", 990), 5, 55_000, True),
     ]
     today = date.today()
     predictions = []

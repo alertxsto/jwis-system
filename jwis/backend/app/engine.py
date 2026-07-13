@@ -21,9 +21,16 @@ import pandas as pd
 import joblib
 
 MODELS_DIR = Path(__file__).resolve().parents[1] / "data" / "models"
+# 42 Jakarta kecamatan (matches scripts/train_models.py; models named by slug).
 _KELURAHAN_SLUGS = [
-    "gambir", "tebet", "cengkareng", "kebon_jeruk", "tanjung_priok", 
-    "koja", "jagakarsa", "pulogadung", "kalideres", "kramat_jati"
+    "gambir", "sawah_besar", "kemayoran", "senen", "cempaka_putih", "menteng",
+    "tanah_abang", "johar_baru", "penjaringan", "tanjung_priok", "koja",
+    "cilincing", "pademangan", "kelapa_gading", "cengkareng", "grogol_petamburan",
+    "taman_sari", "tambora", "kebon_jeruk", "kali_deres", "palmerah", "kembangan",
+    "tebet", "setiabudi", "mampang_prapatan", "pasar_minggu", "kebayoran_lama",
+    "cilandak", "kebayoran_baru", "pancoran", "jagakarsa", "pesanggrahan",
+    "matraman", "pulo_gadung", "jatinegara", "kramat_jati", "pasar_rebo",
+    "cakung", "duren_sawit", "makasar", "ciracas", "cipayung",
 ]
 
 def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
@@ -267,11 +274,11 @@ def predict_waste_hybrid(
     models = _load_hybrid(slug)
 
     if models is None:
-        # High quality fallback to preserve demo robustness if model files are removed
-        fallback_baseline = 450.0
+        # Fallback when a model file is missing: coarse heuristic, clearly labeled.
+        fallback_baseline = 150.0
         prophet_pred = fallback_baseline * (1.05 if is_weekend else 1.0)
         residual_pred = (rainfall_mm * 1.2) + (event_attendance * 0.003)
-        predicted_tons = max(300.0, round(float(prophet_pred + residual_pred), 1))
+        predicted_tons = max(0.0, round(float(prophet_pred + residual_pred), 1))
         
         # Calculate requirements
         crews = int(np.ceil(predicted_tons / 18))
@@ -318,7 +325,7 @@ def predict_waste_hybrid(
     }])
     residual_pred = xgboost_model.predict(X_features)[0]
 
-    predicted_tons = max(300.0, round(float(prophet_pred + residual_pred), 1))
+    predicted_tons = max(0.0, round(float(prophet_pred + residual_pred), 1))
 
     factors: list[str] = []
     if rainfall_mm >= 30:

@@ -123,7 +123,7 @@ const fallbackSnapshot = {
     {
       district: "Jakarta Barat",
       date: "2026-06-01",
-      predicted_tons: 1814.4,
+      predicted_tons: 3136.7,
       spike_percent: 41,
       risk_level: "critical",
       recommended_extra_trucks: 29,
@@ -421,6 +421,100 @@ function PredictionPanel({ predictions }) {
   );
 }
 
+function KecamatanMapPanel() {
+  const [data, setData] = useState(null);
+  const [rain, setRain] = useState(0);
+  const [attendance, setAttendance] = useState(0);
+  const [weekend, setWeekend] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        rainfall_mm: String(rain),
+        event_attendance: String(attendance),
+        is_weekend: String(weekend),
+      });
+      const res = await fetch(`${API_URL}/predictions/kecamatan?${params.toString()}`);
+      setData(await res.json());
+    } catch (e) {
+      setData(null);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const rows = data?.kecamatan || [];
+  const maxTons = rows.length ? rows[0].predicted_tons : 1;
+  const readinessColor = {
+    sufficient: "#16a34a",
+    tight: "#d97706",
+    under_capacity: "#dc2626",
+    unknown: "#64748b",
+  };
+
+  return (
+    <section className="panel wide">
+      <div className="panel-title">
+        <div>
+          <h2>Peta Timbulan Sampah per Kecamatan (Case 2)</h2>
+          <p>
+            Prediksi hybrid Prophet+XGBoost untuk {data?.kecamatan_count || 42} kecamatan DKI,
+            di-anchor ke timbulan resmi SILIKA DLH 2023. Total prediksi:{" "}
+            <b>{data?.total_predicted_tons?.toLocaleString("id-ID") || "…"} ton/hari</b>.
+          </p>
+        </div>
+        <MapPinned size={20} />
+      </div>
+
+      <div className="scenario-controls">
+        <label>Curah hujan (mm): <b>{rain}</b>
+          <input type="range" min="0" max="60" value={rain} onChange={(e) => setRain(+e.target.value)} />
+        </label>
+        <label>Event pengunjung: <b>{attendance.toLocaleString("id-ID")}</b>
+          <input type="range" min="0" max="200000" step="5000" value={attendance} onChange={(e) => setAttendance(+e.target.value)} />
+        </label>
+        <label className="scenario-check">
+          <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} /> Weekend
+        </label>
+        <button className="primary-button" onClick={load} disabled={loading}>
+          {loading ? "Menghitung…" : "Prediksi ulang"}
+        </button>
+      </div>
+
+      <div className="kec-list">
+        {rows.slice(0, 12).map((k) => (
+          <article className="kec-row" key={k.slug}>
+            <div className="kec-head">
+              <strong>{k.kecamatan}</strong>
+              <span>{k.city}</span>
+            </div>
+            <div className="bar" aria-label={`${k.predicted_tons} ton`}>
+              <span style={{ width: `${Math.min(100, (k.predicted_tons / maxTons) * 100)}%` }} />
+            </div>
+            <div className="kec-meta">
+              <b>{k.predicted_tons.toLocaleString("id-ID")} t</b>
+              <span>{k.trucks_required} truk · {k.crews_required} kru · {k.man_hours_required} m-hr</span>
+              <span className="kec-facility" style={{ color: readinessColor[k.facility_readiness] }}>
+                {k.facility_over_capacity ? "⚠ TPS over-capacity" : "TPS " + k.facility_readiness}
+              </span>
+            </div>
+          </article>
+        ))}
+      </div>
+      <p className="kec-note">
+        Menampilkan 12 hotspot teratas dari {rows.length} kecamatan. Baseline & lokasi = SILIKA DLH 2023 (real);
+        resolusi harian = calibrated-synthetic anchored to real data.
+      </p>
+    </section>
+  );
+}
+
 function WeatherPanel({ weather }) {
   const forecast = weather?.forecast || [];
   const peak = forecast.reduce(
@@ -590,19 +684,43 @@ function AssistantPanel() {
 function ScenarioPanel() {
   const [attendance, setAttendance] = useState(85000);
   const [rainfall, setRainfall] = useState(42);
-  const spike = Math.round((attendance >= 50000 ? 18 : attendance >= 10000 ? 9 : 0) + (rainfall >= 30 ? 16 : rainfall >= 10 ? 8 : 0) + 7);
-  const predictedTons = Math.round(1280 * (1 + spike / 100));
-  const extraTrucks = Math.max(0, Math.round((1280 * spike / 100) / 18));
-  const extraCrews = Math.max(0, Math.round(extraTrucks / 2));
-  const manHours = Math.ceil(predictedTons / 18) * 8;
-  const bins = Math.ceil(predictedTons / 2.5);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  async function run() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        rainfall_mm: String(rainfall),
+        event_attendance: String(attendance),
+        is_weekend: "true",
+      });
+      const res = await fetch(`${API_URL}/predictions/kecamatan?${params.toString()}`);
+      if (res.ok) setData(await res.json());
+    } catch {
+      setData(null);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const top5 = (data?.top_hotspots || []).slice(0, 5);
+  const totalTons = data?.total_predicted_tons || 0;
+  const manHours = top5.reduce((s, k) => s + (k.man_hours_required || 0), 0);
+  const crews = top5.reduce((s, k) => s + (k.crews_required || 0), 0);
+  const trucks = top5.reduce((s, k) => s + (k.trucks_required || 0), 0);
+  const bins = top5.reduce((s, k) => s + (k.disposal_bins_required || 0), 0);
 
   return (
     <section className="panel scenario-panel">
       <div className="panel-title">
         <div>
           <h2>Event Scenario Simulator (Case 2)</h2>
-          <p>Adjust crowd scale and rainfall risk to estimate required trucks, crews, and facilities.</p>
+          <p>Skenario cuaca + keramaian dijalankan melalui model hybrid 42 kecamatan (live), bukan estimasi statis.</p>
         </div>
         <Users size={20} />
       </div>
@@ -617,15 +735,19 @@ function ScenarioPanel() {
           <input type="range" min="0" max="100" step="1" value={rainfall} onChange={(event) => setRainfall(Number(event.target.value))} />
           <small>{rainfall} mm</small>
         </label>
+        <button className="primary-button" onClick={run} disabled={loading}>
+          {loading ? "Menghitung…" : "Jalankan skenario"}
+        </button>
       </div>
       <div className="scenario-result">
-        <strong>+{spike}% waste-volume spike ({predictedTons.toLocaleString("en-US")} tons)</strong>
-        <span>{extraTrucks} extra trucks - {extraCrews} extra crews</span>
+        <strong>Total prediksi {totalTons.toLocaleString("id-ID")} ton/hari ({data?.kecamatan_count || 42} kecamatan)</strong>
+        <span>Puncak: {top5[0]?.kecamatan || "…"} — {top5[0]?.predicted_tons?.toLocaleString("id-ID") || "…"} ton</span>
       </div>
       <div className="scenario-reqs">
-        <div className="req-chip"><b>{manHours}</b><span>man-hours</span></div>
-        <div className="req-chip"><b>{Math.ceil(predictedTons / 18)}</b><span>field crews</span></div>
-        <div className="req-chip"><b>{bins}</b><span>large bins</span></div>
+        <div className="req-chip"><b>{manHours}</b><span>man-hours (top 5)</span></div>
+        <div className="req-chip"><b>{crews}</b><span>field crews (top 5)</span></div>
+        <div className="req-chip"><b>{trucks}</b><span>trucks (top 5)</span></div>
+        <div className="req-chip"><b>{bins}</b><span>large bins (top 5)</span></div>
       </div>
     </section>
   );
@@ -1302,6 +1424,7 @@ function CommandCenter({ onLogout }) {
         <RouteEvidencePanel route={snapshot.osrm_route} />
         <CarbonPanel />
         <PredictionPanel predictions={snapshot.critical_predictions} />
+        <KecamatanMapPanel />
         <WeatherPanel weather={snapshot.weather} />
         <VoicePanel onCommand={handleVoiceCommand} />
         <AssistantPanel />

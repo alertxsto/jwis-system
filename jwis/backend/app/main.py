@@ -34,6 +34,7 @@ from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
 from app.storage import HistoryStore
 from app.whatsapp import OpenWAClient, build_alert_message
+from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
 history_store = HistoryStore()
@@ -85,6 +86,77 @@ class HybridPredictRequest(BaseModel):
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "healthy", "service": "jwis-backend", "version": "2.5.0"}
+
+@app.get("/api/data/provenance")
+def data_provenance_endpoint() -> dict[str, Any]:
+    """Transparency: which real government datasets are currently loaded."""
+    return {
+        "provenance": data_provenance(),
+        "city_timbulan": load_city_timbulan(),
+    }
+
+@app.get("/api/predictions/kecamatan")
+def predictions_kecamatan(
+    rainfall_mm: float = Query(0.0, ge=0),
+    event_attendance: int = Query(0, ge=0),
+    is_weekend: bool = False,
+    is_holiday: bool = False,
+    target_date: date | None = None,
+) -> dict[str, Any]:
+    """Case 2 temporal-spatial map: per-kecamatan hybrid ML prediction over the
+    real 42-kecamatan SILIKA baseline, with facility-readiness recommendation.
+
+    Each kecamatan gets a live Prophet+XGBoost prediction plus operational needs
+    (crews, man-hours, extra trucks) and a TPS capacity signal.
+    """
+    kecs = load_kecamatan_map()
+    features = []
+    for k in kecs:
+        pred = predict_waste_hybrid(
+            kelurahan=k["slug"],
+            rainfall_mm=rainfall_mm,
+            is_weekend=is_weekend,
+            is_holiday=is_holiday,
+            event_attendance=event_attendance,
+            target_date=target_date.isoformat() if target_date else None,
+        )
+        tons = pred["predicted_tons"]
+        cap = k.get("tps_capacity_ton_per_day")
+        facility_alert = bool(cap is not None and tons > cap)
+        features.append({
+            **k,
+            "predicted_tons": tons,
+            "model_available": pred["model_available"],
+            "crews_required": pred["crews_required"],
+            "man_hours_required": pred["man_hours_required"],
+            "disposal_bins_required": pred["disposal_bins_required"],
+            "trucks_required": max(1, round(tons / 18)),
+            "facility_over_capacity": facility_alert,
+        })
+    features.sort(key=lambda f: f["predicted_tons"], reverse=True)
+    total = sum(f["predicted_tons"] for f in features)
+    return {
+        "generated_for": (target_date.isoformat() if target_date else date.today().isoformat()),
+        "scenario": {
+            "rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
+            "is_weekend": is_weekend, "is_holiday": is_holiday,
+        },
+        "kecamatan_count": len(features),
+        "total_predicted_tons": round(total, 1),
+        "top_hotspots": features[:5],
+        "kecamatan": features,
+        "source": "SILIKA DLH 2023 baseline + Prophet/XGBoost hybrid (real 5yr pipeline)",
+    }
+
+@app.get("/api/fleet/composition")
+def fleet_composition() -> dict[str, Any]:
+    """Real DKI waste-truck fleet census (Case 1 grounding)."""
+    return load_fleet_composition()
+
+@app.get("/api/events/official")
+def official_events() -> list[dict[str, Any]]:
+    """Real, officially-scraped Jakarta events (attendance may be unknown)."""
+    return load_official_events()
 
 @app.get("/api/command-center")
 def command_center() -> dict:
@@ -450,6 +522,24 @@ def get_fleet_executive_report() -> JSONResponse:
     Export operational executive summary formatted in Markdown for DLH managers.
     """
     today_str = date.today().strftime("%d %B %Y")
+
+    # Case 2 numbers computed live from the 42-kecamatan hybrid model under a
+    # heavy-rain weekend scenario, so the report matches the actual model output.
+    scenario_kecs = predictions_kecamatan(
+        rainfall_mm=42.0, event_attendance=0, is_weekend=True, is_holiday=False,
+    )
+    baseline_kecs = predictions_kecamatan(
+        rainfall_mm=0.0, event_attendance=0, is_weekend=False, is_holiday=False,
+    )
+    top = scenario_kecs["top_hotspots"][0]
+    base_lookup = {k["slug"]: k["predicted_tons"] for k in baseline_kecs["kecamatan"]}
+    top_base = base_lookup.get(top["slug"], top["predicted_tons"])
+    spike_pct = round((top["predicted_tons"] - top_base) / top_base * 100, 1) if top_base else 0.0
+    extra_crews = sum(k["crews_required"] for k in scenario_kecs["top_hotspots"])
+    extra_manhours = sum(k["man_hours_required"] for k in scenario_kecs["top_hotspots"])
+    extra_trucks = sum(k["trucks_required"] for k in scenario_kecs["top_hotspots"])
+    extra_bins = sum(k["disposal_bins_required"] for k in scenario_kecs["top_hotspots"])
+
     report = f"""# LAPORAN EKSEKUTIF JWIS
 Tanggal Cetak: {today_str}
 Sistem: Jakarta Waste Intelligence System (JWIS)
@@ -461,10 +551,11 @@ Sistem optimalisasi logistik JWIS berhasil meningkatkan efisiensi armada secara 
 - **Kepatuhan Koridor Rute:** Tingkat kepatuhan rute armada mencapai **80%** (4 dari 5 armada beroperasi dalam koridor hijau terdaftar).
 
 ## 2. PREDIKSI VOLUME & KEBUTUHAN SUMBER DAYA (CASE 2)
-Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk 10 Kelurahan Kunci Jakarta:
-- **Puncak Prediksi Volume:** Jakarta Barat diproyeksikan mengalami lonjakan volume sampah sebesar **+41%** (Total: **1,820.3 ton**) karena faktor cuaca ekstrim (curah hujan 42mm) dan event keramaian bertepatan dengan akhir pekan.
-- **Kebutuhan Manpower:** Dibutuhkan **65 kru lapangan tambahan** dengan alokasi total **520 man-hours** untuk membersihkan wilayah berisiko genangan dalam waktu kurang dari 12 jam (sebelumnya mencapai 48 jam).
-- **Kesiapan Armada & Fasilitas:** Merekomendasikan pengerahan armada siaga cadangan sebanyak **28 unit** dan penempatan **72 unit tempat penampungan sampah besar** tambahan di zona merah Jakarta Barat.
+Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs['kecamatan_count']} kecamatan Jakarta (skenario hujan ekstrim 42mm + akhir pekan):
+- **Puncak Prediksi Volume:** Kecamatan {top['kecamatan']} ({top['city']}) diproyeksikan mengalami volume sampah tertinggi sebesar **{top['predicted_tons']:.1f} ton/hari** (**+{spike_pct}%** vs kondisi normal).
+- **Total Volume Kota:** Estimasi total {scenario_kecs['kecamatan_count']} kecamatan mencapai **{scenario_kecs['total_predicted_tons']:.1f} ton/hari** pada skenario ini.
+- **Kebutuhan Manpower (5 hotspot teratas):** Dibutuhkan **{extra_crews} kru lapangan** dengan alokasi total **{extra_manhours} man-hours**.
+- **Kesiapan Armada & Fasilitas (5 hotspot teratas):** Merekomendasikan pengerahan **{extra_trucks} unit armada** dan penempatan **{extra_bins} unit tempat penampungan sampah besar**.
 
 ## 3. REKOMENDASI MANAJEMEN SEGERA
 1. Aktifkan penundaan staggered keberangkatan truk non-darurat sebesar 15 menit.

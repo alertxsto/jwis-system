@@ -12,6 +12,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 SOURCES = ROOT / "data" / "sources"
+REAL = ROOT / "data" / "real"
 
 
 def fetch_json(url: str, timeout: float = 30) -> dict | list:
@@ -23,6 +24,32 @@ def fetch_json(url: str, timeout: float = 30) -> dict | list:
 def write_json(path: Path, payload: dict | list) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def verify_real_datasets() -> dict:
+    """
+    Report on the real, government-sourced datasets bundled under data/real.
+
+    These are pulled from SIPSN KLHK (sampahnasional.kemenlh.go.id),
+    data.go.id (TPST Bantargebang weighing records), and official Jakarta
+    event schedules. Unlike the synthetic seed below, these are authoritative
+    and are used as the primary baselines by the backend (see real_data.py).
+    """
+    expected = {
+        "sipsn_timbulan_2018_2025_dki.csv": "SIPSN KLHK per-city daily timbulan (2021-2025)",
+        "sipsn_timbulan_2025_dki.csv": "SIPSN KLHK per-city daily timbulan (2025)",
+        "bantargebang_hasil_penimbangan.csv": "data.go.id TPST Bantargebang weighing (to 2026-04)",
+        "jakarta_events_2026_scraped_official_clean.csv": "Official Jakarta Fair/JIExpo/GBK events",
+        "kelurahan_dki_full_267.geojson": "267 DKI kelurahan polygons",
+    }
+    present = {name: (REAL / name).exists() for name in expected}
+    return {
+        "name": "real_datasets",
+        "url": "https://sampahnasional.kemenlh.go.id | https://data.go.id",
+        "status": "verified" if all(present.values()) else "partial",
+        "files_present": present,
+        "descriptions": expected,
+    }
 
 
 def acquire_open_meteo_history() -> dict:
@@ -156,13 +183,18 @@ def acquire_waste_dataset_metadata() -> dict:
 
 
 def acquire_waste_csv_fallback() -> dict:
+    """
+    Synthetic seed retained ONLY as a last-resort fallback. Real per-city
+    baselines now come from data/real (SIPSN KLHK); see verify_real_datasets
+    and backend/app/real_data.py. This file is explicitly labeled synthetic.
+    """
     rows = [
         ["date", "kelurahan", "city", "baseline_tons", "predicted_tons", "source"],
-        ["2026-06-01", "Kebon Jeruk", "Jakarta Barat", 1240, 1748.4, "synthetic_from_case_assumptions"],
-        ["2026-06-01", "Cengkareng", "Jakarta Barat", 1280, 1676.8, "synthetic_from_case_assumptions"],
-        ["2026-06-01", "Gambir", "Jakarta Pusat", 990, 1237.5, "synthetic_from_case_assumptions"],
-        ["2026-06-01", "Pulogadung", "Jakarta Timur", 1510, 1736.5, "synthetic_from_case_assumptions"],
-        ["2026-06-01", "Tebet", "Jakarta Selatan", 1365, 1624.4, "synthetic_from_case_assumptions"],
+        ["2026-06-01", "Kebon Jeruk", "Jakarta Barat", 1240, 1748.4, "synthetic_fallback_only"],
+        ["2026-06-01", "Cengkareng", "Jakarta Barat", 1280, 1676.8, "synthetic_fallback_only"],
+        ["2026-06-01", "Gambir", "Jakarta Pusat", 990, 1237.5, "synthetic_fallback_only"],
+        ["2026-06-01", "Pulogadung", "Jakarta Timur", 1510, 1736.5, "synthetic_fallback_only"],
+        ["2026-06-01", "Tebet", "Jakarta Selatan", 1365, 1624.4, "synthetic_fallback_only"],
     ]
     path = RAW / "jakarta_waste_forecast_seed.csv"
     path.write_text("\n".join(",".join(map(str, row)) for row in rows), encoding="utf-8")
@@ -191,6 +223,7 @@ def acquire_dummy_events() -> dict:
 def main() -> int:
     SOURCES.mkdir(parents=True, exist_ok=True)
     tasks = [
+        verify_real_datasets,
         acquire_open_meteo_history,
         acquire_holidays,
         acquire_gadm_jakarta,

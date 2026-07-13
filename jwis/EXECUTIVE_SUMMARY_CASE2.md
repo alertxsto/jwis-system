@@ -15,15 +15,19 @@ Peramalan dua tahap untuk menangkap baik tren makro maupun lonjakan ekstrim hari
 Dilatih untuk **10 kelurahan kunci** menggunakan data cuaca riil Open-Meteo (2 tahun, lat -6.21 lon 106.85) + 24 hari libur nasional 2026.
 
 ### HASIL VALIDASI MODEL
-Reduksi Mean Absolute Error (MAE) konsisten **12–14%** dibanding baseline Prophet murni:
+Dilatih ulang secara reproducible (`scripts/train_models.py`) pada **42 kecamatan** Jakarta memakai baseline spasial real SILIKA DLH 2023 + sinyal temporal real (SIPSN, Bantargebang, cuaca Open-Meteo, libur, event). Kinerja pada resolusi keputusan operasional DLH:
 
-| Kelurahan | MAE Prophet | MAE Hybrid | Perbaikan |
-|---|---|---|---|
-| Kebon Jeruk | 91.13 t | 79.34 t | 12.9% |
-| Tebet | 114.50 t | 98.20 t | 14.2% |
-| Menteng | 68.90 t | 59.10 t | 14.2% |
+| Resolusi Keputusan | Metrik | Nilai |
+|---|---|--:|
+| Peringkat hotspot spasial | Spearman ρ | 0.998 |
+| Level volume spasial | R² | 0.980 |
+| Bulanan per-kecamatan | R² | 0.966 |
+| Mingguan per-kecamatan | R² | 0.954 |
+| Harian level-kota | R² | 0.893 |
 
-Verifikasi runtime: **10/10 model kelurahan ter-load (`model_available: True`)** dan menghasilkan inferensi nyata (bukan fallback heuristik).
+Model unggul di tempat keputusan diambil: menentukan **kecamatan mana jadi hotspot & kapan**. Resolusi harian mikro per-kecamatan lemah (data harian riil tak tersedia publik) dan dilaporkan terbuka — bukan disembunyikan. Laporan lengkap: `data/processed/hybrid_forecaster_evaluation.md`.
+
+Verifikasi runtime: **42/42 model kecamatan ter-load (`model_available: True`)** dengan inferensi bervariasi realistis (mis. Cengkareng 513 t/hari, Tanjung Priok 422 t/hari, Menteng 76 t/hari pada skenario hujan 42mm + akhir pekan) — bukan angka clamp konstan.
 
 ### DARI PREDIKSI KE AKSI — PERENCANAAN SUMBER DAYA
 Setiap prediksi volume otomatis diterjemahkan menjadi kebutuhan operasional konkret:
@@ -33,7 +37,7 @@ Setiap prediksi volume otomatis diterjemahkan menjadi kebutuhan operasional konk
 
 ### DAMPAK TERUKUR
 - Respon penanganan genangan sampah banjir turun dari **48 jam → <12 jam**.
-- Prediksi puncak Jakarta Barat: **+41% volume** (cuaca ekstrim 42mm + event + weekend), butuh 28 armada & 72 bak tambahan — disiagakan **sebelum** kejadian.
+- Prediksi puncak (skenario hujan 42mm + akhir pekan, dihitung live dari model): **Cengkareng 513 t/hari** (+6.9% vs normal); total 42 kecamatan **±9.934 t/hari**. Lima hotspot teratas butuh **131 armada** & **952 bak** tambahan — disiagakan **sebelum** kejadian.
 
 ### ROADMAP 6 BULAN
 - **Bln 1-2 (Pilot):** integrasi OSRM dengan data macet real-time Jakarta Smart City.
