@@ -45,6 +45,28 @@ class OsrmTests(unittest.TestCase):
         self.assertGreater(len(route["path"]), 50,
                            "road-following OSRM route should have many points, not a straight line")
 
+    def test_snap_to_road_returns_raw_and_snapped(self):
+        from app.osrm import snap_to_road
+        r = snap_to_road(-6.221, 106.785)
+        self.assertIn("raw", r)
+        self.assertIn("snapped", r)
+        self.assertIn("source", r)
+        self.assertEqual(r["raw"], {"lat": -6.221, "lng": 106.785})
+        if r["source"] == "SNAPPED_OSRM":
+            from app.osrm import _haversine_km
+            d = _haversine_km((-6.221, 106.785), (r["snapped"]["lat"], r["snapped"]["lng"])) * 1000
+            self.assertLess(d, 200)
+
+    def test_road_route_multi_waypoint_is_road_following(self):
+        from app.osrm import road_route
+        r = road_route([(-6.221, 106.785), (-6.195, 106.802)])
+        self.assertIn("geometry", r)
+        self.assertIn("source", r)
+        if r["source"] == "LIVE_EXTERNAL":
+            self.assertGreater(len(r["geometry"]), 20)
+        else:
+            self.assertEqual(r["source"], "FALLBACK_DEGRADED")
+
 
 if __name__ == "__main__":
     unittest.main()

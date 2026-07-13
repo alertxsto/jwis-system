@@ -64,6 +64,54 @@ def fallback_route(name: str, origin: tuple[float, float], destination: tuple[fl
     }
 
 
+def snap_to_road(lat: float, lng: float, timeout_seconds: float = 6.0) -> dict[str, Any]:
+    """Snap a raw GPS point to the nearest road via OSRM /nearest.
+
+    Returns raw + snapped coordinates and a provenance source. Falls back to the
+    raw point (labeled RAW_GPS_UNSNAPPED) when OSRM is unreachable.
+    """
+    url = f"{OSRM_BASE_URL}/nearest/v1/driving/{lng},{lat}?number=1"
+    raw = {"lat": lat, "lng": lng}
+    try:
+        request = Request(url, headers={"User-Agent": "JWIS-Competition-Prototype/1.0"})
+        with urlopen(request, timeout=timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if payload.get("code") == "Ok" and payload.get("waypoints"):
+            loc = payload["waypoints"][0]["location"]
+            return {"raw": raw, "snapped": {"lat": loc[1], "lng": loc[0]}, "source": "SNAPPED_OSRM"}
+    except Exception:
+        pass
+    return {"raw": raw, "snapped": raw, "source": "RAW_GPS_UNSNAPPED"}
+
+
+def road_route(coords: list[tuple[float, float]], timeout_seconds: float = 8.0) -> dict[str, Any]:
+    """Road-following geometry through ordered (lat,lng) waypoints via OSRM /route.
+
+    Returns geometry [{lat,lng}], distance_km, duration_min, and a provenance
+    source (LIVE_EXTERNAL or FALLBACK_DEGRADED straight line).
+    """
+    if len(coords) < 2:
+        return {"geometry": [{"lat": c[0], "lng": c[1]} for c in coords],
+                "distance_km": 0.0, "duration_min": 0.0, "source": "FALLBACK_DEGRADED"}
+    pts = ";".join(f"{lng},{lat}" for lat, lng in coords)
+    url = f"{OSRM_BASE_URL}/route/v1/driving/{pts}?overview=full&geometries=geojson&steps=false"
+    try:
+        request = Request(url, headers={"User-Agent": "JWIS-Competition-Prototype/1.0"})
+        with urlopen(request, timeout=timeout_seconds) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        if payload.get("code") == "Ok" and payload.get("routes"):
+            route = payload["routes"][0]
+            geom = [{"lat": la, "lng": ln} for ln, la in route["geometry"]["coordinates"]]
+            return {"geometry": geom, "distance_km": round(route["distance"] / 1000, 1),
+                    "duration_min": round(route["duration"] / 60), "source": "LIVE_EXTERNAL"}
+    except Exception:
+        pass
+    km = sum(_haversine_km(coords[i], coords[i + 1]) for i in range(len(coords) - 1))
+    return {"geometry": [{"lat": c[0], "lng": c[1]} for c in coords],
+            "distance_km": round(km, 1), "duration_min": round(km / 45 * 60),
+            "source": "FALLBACK_DEGRADED"}
+
+
 def fetch_osrm_route(
     name: str,
     origin: tuple[float, float],
