@@ -33,6 +33,7 @@ from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
 from app.auth import ROLES, authenticate, has_permission, token_for
+from app.impact import build_impact_report
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
@@ -374,6 +375,11 @@ def ml_suitability() -> dict[str, Any]:
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     }
 
+@app.get("/api/impact")
+def impact_report() -> dict[str, Any]:
+    """Reproducible impact metrics with per-metric provenance and honest labels."""
+    return build_impact_report()
+
 @app.post("/api/ml/predict")
 def ml_predict_district(payload: HybridPredictRequest) -> dict[str, Any]:
     res = predict_waste_hybrid(
@@ -679,15 +685,17 @@ def get_fleet_executive_report() -> JSONResponse:
     extra_trucks = sum(k["trucks_required"] for k in scenario_kecs["top_hotspots"])
     extra_bins = sum(k["disposal_bins_required"] for k in scenario_kecs["top_hotspots"])
 
+    stagger = simulate_staggered_dispatch(32)
+
     report = f"""# LAPORAN EKSEKUTIF JWIS
 Tanggal Cetak: {today_str}
 Sistem: Jakarta Waste Intelligence System (JWIS)
 
 ## 1. PENILAIAN DAMPAK OPERASIONAL (CASE 1)
-Sistem optimalisasi logistik JWIS berhasil meningkatkan efisiensi armada secara signifikan:
-- **Reduksi Waktu Antri TPA:** Waktu tunggu rata-rata di TPA Bantargebang dipangkas sebesar **58.6%** (dari **116 menit** menjadi **48 menit**) menggunakan skema Staggered Dispatch Simulator.
-- **Penghematan Emisi Karbon:** Optimasi rute deviasi T-047 berhasil menghemat **17.58 kg CO2/hari**, setara dengan **527.4 kg CO2/bulan** (penyelamatan setara **25 pohon dewasa**).
-- **Kepatuhan Koridor Rute:** Tingkat kepatuhan rute armada mencapai **80%** (4 dari 5 armada beroperasi dalam koridor hijau terdaftar).
+Sistem optimalisasi logistik JWIS meningkatkan efisiensi armada (angka dari simulasi discrete-event, bukan estimasi tetap):
+- **Reduksi Waktu Antri TPA (simulasi):** waktu tunggu puncak turun **{stagger['queue_reduction_percent']}%** (dari {stagger['baseline_wait_minutes']} menjadi {stagger['optimized_wait_minutes']} menit) via Staggered Dispatch. Sumber: simulasi antrian ter-seed, bukan pengukuran lapangan.
+- **Faktor Emisi (referensi):** estimasi bahan bakar 1.8 L/ton adalah faktor rujukan teknik, bukan penghematan terukur. Penghematan nyata butuh pilot lapangan.
+- **Kepatuhan Koridor Rute:** deteksi deviasi berbasis point-to-polyline (T-047 terdeteksi menyimpang 2.373 m).
 
 ## 2. PREDIKSI VOLUME & KEBUTUHAN SUMBER DAYA (CASE 2)
 Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_kecs['kecamatan_count']} kecamatan Jakarta (skenario hujan ekstrim 42mm + akhir pekan):
