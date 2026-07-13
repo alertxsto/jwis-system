@@ -27,10 +27,34 @@ function metersBetween(a, b) {
   return Math.sqrt(x * x + y * y);
 }
 
-// Shortest metres from point p to a polyline (nearest vertex approximation).
+// Shortest metres from point p to segment a-b (project p onto the segment).
+// Matches the backend point-to-segment algorithm so a point mid-corridor
+// reads ~0m, not the distance to the nearest vertex.
+function pointToSegment(p, a, b) {
+  const R = 6371000;
+  const lat0 = (a[1] * Math.PI) / 180;
+  const toXY = (q) => [
+    ((q[0] - a[0]) * Math.PI / 180) * Math.cos(lat0) * R,
+    ((q[1] - a[1]) * Math.PI / 180) * R,
+  ];
+  const [px, py] = toXY(p);
+  const [bx, by] = toXY(b);
+  const segLenSq = bx * bx + by * by;
+  if (segLenSq === 0) return Math.sqrt(px * px + py * py);
+  let t = (px * bx + py * by) / segLenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = t * bx;
+  const cy = t * by;
+  return Math.sqrt((px - cx) ** 2 + (py - cy) ** 2);
+}
+
+// Shortest metres from point p to a polyline (nearest SEGMENT, not vertex).
 function distToPolyline(p, line) {
+  if (line.length === 1) return metersBetween(p, line[0]);
   let min = Infinity;
-  for (const v of line) min = Math.min(min, metersBetween(p, v));
+  for (let i = 0; i < line.length - 1; i++) {
+    min = Math.min(min, pointToSegment(p, line[i], line[i + 1]));
+  }
   return min;
 }
 

@@ -51,6 +51,17 @@ class AstarGpsAnchorTests(unittest.TestCase):
         self.assertEqual(NODES, nodes_before, "NODES global was mutated")
         self.assertEqual(EDGES, edges_before, "EDGES global was mutated")
 
+    def test_gps_local_graph_has_no_legacy_origin_edges(self):
+        # A GPS-anchored graph must expose exactly one ORIGIN edge: the fresh
+        # connector to the nearest node, with no inherited fixed-node edges.
+        from app.astar_routing import build_gps_graph, nearest_node
+        pos = {"lat": -6.126, "lng": 106.843}
+        snap = nearest_node(pos["lat"], pos["lng"])
+        nodes, edges = build_gps_graph(pos)
+        origin_edges = [(u, v) for (u, v, _d) in edges if u == "ORIGIN" or v == "ORIGIN"]
+        self.assertEqual(len(origin_edges), 1, f"expected 1 ORIGIN edge, got {origin_edges}")
+        self.assertIn(snap, origin_edges[0])
+
     def test_metrics_use_osrm_distance_not_manual_weights(self):
         from app.astar_routing import find_astar_route
         r = find_astar_route()

@@ -189,8 +189,8 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
 DEMO_CONGESTED_EDGES = [("CAWANG", "BEKASI_BARAT")]
 
 
-def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG",)) -> str:
-    """Snap a GPS coordinate to the closest network node (origin anchoring)."""
+def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG", "ORIGIN")) -> str:
+    """Snap a GPS coordinate to the closest real network node (never ORIGIN itself)."""
     best, best_d = None, float("inf")
     for name, (nlat, nlng, _label) in NODES.items():
         if name in exclude:
@@ -201,21 +201,28 @@ def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG",)) -> str:
     return best
 
 
-def route_from_truck(position: dict, goal="TPA_BANTARGEBANG", **kwargs) -> dict:
-    """Route anchored to a truck's real GPS, on a LOCAL graph copy.
+def build_gps_graph(position: dict) -> tuple[dict, list]:
+    """Local graph copy with a fresh GPS ORIGIN and a single connector edge.
 
-    Builds a per-request copy of NODES/EDGES with a fresh ORIGIN at the truck
-    position + a connector edge to the nearest node, so concurrent requests for
-    different trucks never mutate or leak into the shared global graph.
+    Strips every ORIGIN edge inherited from the fixed-node graph, then adds only
+    the connector to the nearest real node — so the GPS origin never routes
+    through stale fixed-ORIGIN edges. Global graph is untouched.
     """
     lat, lng = position["lat"], position["lng"]
     snap = nearest_node(lat, lng)
     nodes = dict(NODES)
-    edges = list(EDGES)
+    edges = [(u, v, d) for (u, v, d) in EDGES if u != "ORIGIN" and v != "ORIGIN"]
     nodes["ORIGIN"] = (lat, lng, "Posisi Truk (GPS)")
     if snap != "ORIGIN":
         d = haversine_distance((lat, lng), (nodes[snap][0], nodes[snap][1]))
         edges.append(("ORIGIN", snap, round(d, 2)))
+    return nodes, edges
+
+
+def route_from_truck(position: dict, goal="TPA_BANTARGEBANG", **kwargs) -> dict:
+    """Route anchored to a truck's real GPS, on a local graph with no legacy
+    ORIGIN edges (see build_gps_graph)."""
+    nodes, edges = build_gps_graph(position)
     return find_astar_route(start="ORIGIN", goal=goal, nodes=nodes, edges=edges, **kwargs)
 
 
