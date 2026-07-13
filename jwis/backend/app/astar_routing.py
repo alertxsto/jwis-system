@@ -8,8 +8,11 @@ automatically (Google-Maps-style live rerouting for waste trucks).
 from __future__ import annotations
 
 import heapq
+from functools import lru_cache
 from math import asin, cos, radians, sin, sqrt
 from typing import Any
+
+from app.osrm import fetch_osrm_route
 
 # Simplified Jakarta -> Bantargebang road network for real-time truck logistics.
 # Each node is an actual intersection / checkpoint (lat, lng, label).
@@ -44,6 +47,17 @@ EDGES = [
     ("ANCOL", "BEKASI_BARAT", 22.0),
 ]
 
+# Per-edge metadata: permit_allowed gates truck-legal corridors; base_traffic is
+# a 1.0 baseline multiplier. A real deployment sources these from DLH permits +
+# live traffic; here they are documented demo constants.
+EDGE_META: dict[tuple[str, str], dict[str, Any]] = {
+    ("ANCOL", "CAWANG"): {"permit_allowed": False},  # not a truck-permitted corridor
+}
+
+
+def _edge_meta(u: str, v: str) -> dict[str, Any]:
+    return EDGE_META.get((u, v)) or EDGE_META.get((v, u)) or {"permit_allowed": True}
+
 
 def haversine_distance(coord1, coord2):
     R = 6371.0  # Earth radius in km
@@ -54,34 +68,61 @@ def haversine_distance(coord1, coord2):
     return 2 * R * asin(sqrt(a))
 
 
-def build_detailed_path(node_sequence):
-    """Subdivide each segment into steps so MapLibre renders smooth polylines."""
-    path_coords = []
+@lru_cache(maxsize=64)
+def edge_geometry(u: str, v: str) -> tuple[tuple, ...]:
+    """Road-following geometry for one edge via OSRM (cached).
+
+    Returns a tuple of {lat,lng}-like tuples. Falls back to the straight-line
+    endpoints (labeled by the caller) when OSRM is unreachable.
+    """
+    a = (NODES[u][0], NODES[u][1])
+    b = (NODES[v][0], NODES[v][1])
+    route = fetch_osrm_route(f"{u}-{v}", a, b, timeout_seconds=6.0)
+    if route.get("source") == "osrm" and route.get("path"):
+        return tuple((p["lat"], p["lng"]) for p in route["path"])
+    return ((a[0], a[1]), (b[0], b[1]))
+
+
+def build_path_from_sequence(node_sequence) -> tuple[list[dict], str]:
+    """Concatenate OSRM edge geometry across the node sequence.
+
+    Returns (path, geometry_source) where geometry_source is "osrm" if every
+    edge resolved through OSRM, else "fallback-straight-line".
+    """
+    path: list[dict] = []
+    source = "osrm"
     for i in range(len(node_sequence) - 1):
-        n1, n2 = node_sequence[i], node_sequence[i + 1]
-        lat1, lng1 = NODES[n1][0], NODES[n1][1]
-        lat2, lng2 = NODES[n2][0], NODES[n2][1]
-        steps = 8
-        for j in range(steps):
-            t = j / steps
-            path_coords.append({
-                "lat": round(lat1 + (lat2 - lat1) * t, 6),
-                "lng": round(lng1 + (lng2 - lng1) * t, 6),
-            })
-    last_node = node_sequence[-1]
-    path_coords.append({"lat": NODES[last_node][0], "lng": NODES[last_node][1]})
-    return path_coords
+        u, v = node_sequence[i], node_sequence[i + 1]
+        geom = edge_geometry(u, v)
+        if len(geom) <= 2:
+            source = "fallback-straight-line"
+        for lat, lng in geom:
+            point = {"lat": round(lat, 6), "lng": round(lng, 6)}
+            if not path or path[-1] != point:
+                path.append(point)
+    return path, source
 
 
-def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG", congested_edges=None):
-    """A* shortest path. Congested edges carry a x5 traffic penalty."""
-    if congested_edges is None:
-        congested_edges = []
+def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
+                     congested_edges=None, blocked_edges=None):
+    """A* shortest path with permit gating, traffic weighting, and OSRM geometry.
+
+    - blocked_edges (permit): never traversed.
+    - congested_edges: x5 traffic penalty on the optimization cost.
+    Returns separated fields: optimization_cost (weighted), physical_distance_km
+    (raw sum), eta_minutes (from distance at truck speed), plus OSRM path geometry.
+    """
+    congested_edges = congested_edges or []
+    blocked_edges = blocked_edges or []
 
     congested_set = set()
     for u, v in congested_edges:
         congested_set.add((u, v))
-        congested_set.add((v, u))  # undirected
+        congested_set.add((v, u))
+    blocked_set = set()
+    for u, v in blocked_edges:
+        blocked_set.add((u, v))
+        blocked_set.add((v, u))
 
     def heuristic(node):
         return haversine_distance(
@@ -94,36 +135,40 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG", congested_edges=No
         adj[u].append((v, d))
         adj[v].append((u, d))
 
-    pq = []
-    heapq.heappush(pq, (heuristic(start), 0.0, start, [start]))
+    pq = [(heuristic(start), 0.0, 0.0, start, [start])]
     visited = {}
 
     while pq:
-        f, g, u, path = heapq.heappop(pq)
+        f, cost, dist_km, u, path = heapq.heappop(pq)
 
         if u == goal:
-            detailed = build_detailed_path(path)
+            detailed, geom_source = build_path_from_sequence(path)
             return {
                 "success": True,
                 "sequence": path,
                 "sequence_labels": [NODES[n][2] for n in path],
                 "path": detailed,
-                "distance_km": round(g, 1),
-                "eta_minutes": max(15, round((g / 45) * 60)),  # avg 45 km/h for trucks
+                "geometry_source": geom_source,
+                "optimization_cost": round(cost, 2),
+                "physical_distance_km": round(dist_km, 1),
+                "distance_km": round(dist_km, 1),
+                "eta_minutes": max(15, round((dist_km / 45) * 60)),
                 "is_diverted": len(congested_edges) > 0,
             }
 
-        if u in visited and visited[u] <= g:
+        if u in visited and visited[u] <= cost:
             continue
-        visited[u] = g
+        visited[u] = cost
 
         for v, dist in adj[u]:
+            if (u, v) in blocked_set or not _edge_meta(u, v)["permit_allowed"]:
+                continue
             multiplier = 5.0 if (u, v) in congested_set else 1.0
-            weight = dist * multiplier
-            g_new = g + weight
-            f_new = g_new + heuristic(v)
-            if v not in visited or visited[v] > g_new:
-                heapq.heappush(pq, (f_new, g_new, v, path + [v]))
+            cost_new = cost + dist * multiplier
+            dist_new = dist_km + dist
+            f_new = cost_new + heuristic(v)
+            if v not in visited or visited[v] > cost_new:
+                heapq.heappush(pq, (f_new, cost_new, dist_new, v, path + [v]))
 
     return {"success": False, "message": "No route found."}
 
