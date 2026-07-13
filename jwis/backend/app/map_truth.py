@@ -9,7 +9,7 @@ Simulated inputs are labeled; nothing here is presented as live telemetry.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, cast
 
 from app.data import ASSIGNED_PATHS, ACTUAL_PATHS
 from app.engine import distance_point_to_polyline_m
@@ -34,8 +34,11 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
     actual_route = road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
 
     # Meter deviation of snapped position vs assigned road geometry (point-to-segment).
-    assigned_line = [(p["lat"], p["lng"]) for p in assigned_route.get("geometry", [])] or \
-        [(la, ln) for la, ln in assigned_pts]
+    geom = cast(list[dict[str, float]], assigned_route.get("geometry") or [])
+    if geom:
+        assigned_line = [(p["lat"], p["lng"]) for p in geom]
+    else:
+        assigned_line = [(la, ln) for la, ln in assigned_pts]
     deviation_m = (distance_point_to_polyline_m((snapped["lat"], snapped["lng"]), assigned_line)
                    if assigned_line else 0.0)
     violated = deviation_m > DEVIATION_THRESHOLD_M
