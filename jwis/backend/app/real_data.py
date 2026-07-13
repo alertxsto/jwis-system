@@ -16,11 +16,101 @@ API never crashes during a demo. Callers should treat an empty return as
 from __future__ import annotations
 
 import csv
+import json
+from datetime import date, datetime, timezone
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 REAL_DIR = Path(__file__).resolve().parents[2] / "data" / "real"
+RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
+
+# Registry of the datasets JWIS actually loads. Each entry states its real
+# source, classification (real / derived / proxy / calibrated_synthetic), and
+# limitations so /api/data/provenance can never silently present a proxy as
+# official operational data.
+_DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
+    {
+        "name": "sipsn_timbulan_2018_2025_dki.csv",
+        "source_url": "https://sampahnasional.kemenlh.go.id/portal-indikatif/data/timbulan-sampah",
+        "as_of": "2025",
+        "granularity": "city-year",
+        "classification": "real",
+        "limitations": "Yearly per-city daily-average timbulan; no daily or per-kecamatan resolution.",
+    },
+    {
+        "name": "bantargebang_hasil_penimbangan.csv",
+        "source_url": "https://data.go.id/dataset/dataset/data-hasil-penimbangan-sampah-masuk-tempat-pengolahan-sampah-terpadu-tpst-bantargebang",
+        "as_of": "2026-04",
+        "granularity": "landfill-month",
+        "classification": "real",
+        "limitations": "Monthly landfill intake totals; inconsistent tonase formats normalized on load.",
+    },
+    {
+        "name": "data_truk_sampah_dki.csv",
+        "source_url": "https://data.go.id/dataset/dataset/data-truk-sampah",
+        "as_of": "2023",
+        "granularity": "fleet-census",
+        "classification": "real",
+        "limitations": "Vehicle counts per wilayah/type; not live telematics.",
+    },
+    {
+        "name": "dki_tps.csv",
+        "source_url": "https://data.go.id/dataset/dataset/data-tempat-penampungan-sampah-sementara-tps-di-provinsi-dki-jakarta",
+        "as_of": "2023",
+        "granularity": "tps-location",
+        "classification": "real",
+        "limitations": "TPS registry; no operational throughput capacity.",
+    },
+    {
+        "name": "timbulan_kecamatan_2023.csv",
+        "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
+        "as_of": "2023",
+        "granularity": "kecamatan-year",
+        "classification": "real",
+        "limitations": "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.",
+    },
+    {
+        "name": "tps_capacity_vs_timbulan_kecamatan.csv",
+        "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
+        "as_of": "2023",
+        "granularity": "kecamatan-year",
+        "classification": "proxy",
+        "limitations": "TPS capacity is a PROXY (not official operational capacity); demand side is real SILIKA.",
+    },
+    {
+        "name": "penduduk_kelurahan_dki.csv",
+        "source_url": "https://data.go.id/dataset/dataset/data-jumlah-penduduk-berdasarkan-usia-per-kelurahan-dki-jakarta",
+        "as_of": "2013",
+        "granularity": "kelurahan-age-gender",
+        "classification": "real",
+        "limitations": "2013 census snapshot; used only as relative population weights.",
+    },
+    {
+        "name": "jakarta_events_2021_2026.csv",
+        "source_url": "https://www.jakartafair.co.id",
+        "as_of": "2026",
+        "granularity": "event",
+        "classification": "real",
+        "limitations": "Officially-scraped event calendar; attendance present only where published.",
+    },
+    {
+        "name": "hari_libur_indonesia_2026.json",
+        "source_url": "https://api-hari-libur.vercel.app/api?year=2026",
+        "as_of": "2026",
+        "granularity": "national-holiday",
+        "classification": "real",
+        "limitations": "2026 holidays; applied by month-day across years for fixed-date approximation.",
+    },
+    {
+        "name": "kelurahan_dki_full_267.geojson",
+        "source_url": "https://github.com/pararawendy/border-indonesia-geojson",
+        "as_of": "2020",
+        "granularity": "kelurahan-polygon",
+        "classification": "real",
+        "limitations": "267 DKI village polygons; administrative boundaries only.",
+    },
+]
 
 # Maps the SIPSN "nama_kabkota" label to the district name used across JWIS.
 _CITY_LABEL_TO_DISTRICT = {
@@ -213,6 +303,95 @@ def load_kecamatan_map() -> list[dict[str, Any]]:
                 "source": "SILIKA DLH 2023 (timbulan) + TPS capacity proxy",
             })
     return out
+
+
+def _count_csv_rows(path: Path) -> int:
+    with path.open(encoding="utf-8-sig") as handle:
+        return max(0, sum(1 for _ in handle) - 1)
+
+
+def _freshness(as_of: str) -> str:
+    year = "".join(ch for ch in as_of[:4] if ch.isdigit())
+    if not year:
+        return "unknown"
+    age = date.today().year - int(year)
+    if age <= 0:
+        return "current"
+    if age <= 2:
+        return "recent"
+    return "stale"
+
+
+def build_provenance_records() -> list[dict[str, Any]]:
+    """Full auditable provenance for every dataset JWIS loads.
+
+    Each record exposes source_url, as_of, granularity, classification,
+    row_count, freshness, and limitations. Only datasets whose file is present
+    are reported, so no phantom/stale manifest path leaks into the API.
+    """
+    records: list[dict[str, Any]] = []
+    for entry in _DATA_SOURCE_REGISTRY:
+        path = REAL_DIR / entry["name"]
+        if not path.exists():
+            continue
+        row_count: int | None
+        if path.suffix == ".csv":
+            row_count = _count_csv_rows(path)
+        elif path.suffix == ".geojson":
+            try:
+                fc = json.loads(path.read_text(encoding="utf-8"))
+                row_count = len(fc.get("features", []))
+            except (ValueError, OSError):
+                row_count = None
+        else:
+            row_count = None
+        records.append({
+            "name": entry["name"],
+            "source_url": entry["source_url"],
+            "as_of": entry["as_of"],
+            "granularity": entry["granularity"],
+            "classification": entry["classification"],
+            "row_count": row_count,
+            "freshness": _freshness(entry["as_of"]),
+            "limitations": entry["limitations"],
+        })
+    return records
+
+
+@lru_cache(maxsize=1)
+def load_kelurahan_heatmap() -> dict[str, Any]:
+    """Heatmap FeatureCollection over all 267 DKI kelurahan polygons.
+
+    Joins each village polygon to its kecamatan's real SILIKA 2023 baseline,
+    splitting the kecamatan total evenly across its member villages. Replaces
+    the 10-polygon fallback. Every feature carries the administrative key and a
+    predicted_tons risk value.
+    """
+    geo_path = REAL_DIR / "kelurahan_dki_full_267.geojson"
+    fc = json.loads(geo_path.read_text(encoding="utf-8"))
+
+    kec_baseline = {k["kecamatan"].strip().upper(): k["baseline_tons_per_day"]
+                    for k in load_kecamatan_map()}
+    villages_per_kec: dict[str, int] = {}
+    for feat in fc.get("features", []):
+        kec = str(feat["properties"].get("sub_district", "")).strip().upper()
+        villages_per_kec[kec] = villages_per_kec.get(kec, 0) + 1
+
+    for feat in fc.get("features", []):
+        props = feat["properties"]
+        kec = str(props.get("sub_district", "")).strip().upper()
+        village = str(props.get("village", "")).strip()
+        base = kec_baseline.get(kec)
+        n = villages_per_kec.get(kec, 0)
+        per_village = round(base / n, 2) if (base is not None and n) else None
+        feat["properties"] = {
+            "kelurahan": village,
+            "kecamatan": props.get("sub_district", ""),
+            "city": props.get("district", ""),
+            "predicted_tons": per_village,
+            "classification": "real_baseline_split_evenly_across_villages",
+        }
+    return fc
 
 
 def data_provenance() -> dict[str, Any]:

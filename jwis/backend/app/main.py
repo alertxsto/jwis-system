@@ -34,7 +34,7 @@ from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
 from app.storage import HistoryStore
 from app.whatsapp import OpenWAClient, build_alert_message
-from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map
+from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
 history_store = HistoryStore()
@@ -92,6 +92,7 @@ def data_provenance_endpoint() -> dict[str, Any]:
     """Transparency: which real government datasets are currently loaded."""
     return {
         "provenance": data_provenance(),
+        "records": build_provenance_records(),
         "city_timbulan": load_city_timbulan(),
     }
 
@@ -205,10 +206,14 @@ def osrm_route() -> dict:
 
 @app.get("/api/geo/kelurahan-heatmap")
 def kelurahan_heatmap() -> JSONResponse:
-    path = Path(__file__).resolve().parents[2] / "data" / "raw" / "jakarta_kelurahan_heatmap.geojson"
-    if not path.exists():
+    """267-kelurahan risk heatmap joined to real SILIKA kecamatan baselines."""
+    try:
+        return JSONResponse(load_kelurahan_heatmap())
+    except (OSError, ValueError):
+        fallback = Path(__file__).resolve().parents[2] / "data" / "raw" / "jakarta_kelurahan_heatmap.geojson"
+        if fallback.exists():
+            return JSONResponse(json.loads(fallback.read_text(encoding="utf-8")))
         raise HTTPException(status_code=404, detail="Kelurahan heatmap GeoJSON has not been generated.")
-    return JSONResponse(json.loads(path.read_text(encoding="utf-8")))
 
 @app.get("/api/weather")
 def weather() -> dict:

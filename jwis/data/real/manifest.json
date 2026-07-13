@@ -1,66 +1,34 @@
 {
-  "created": "2026-07-12",
+  "created": "2026-07-13",
+  "updated": "2026-07-13T02:24:01.603715+00:00",
+  "note": "Rebuilt from files actually present in data/real/. Every entry classified real/proxy with source_url and limitations.",
   "files": [
     {
-      "file": "alat_berat_dlh_2023_2024.html",
-      "bytes": 14566
-    },
-    {
-      "file": "bantargebang_2011_2015.csv",
-      "bytes": 4517,
+      "file": "sipsn_timbulan_2018_2025_dki.csv",
+      "bytes": 1970,
+      "source_url": "https://sampahnasional.kemenlh.go.id/portal-indikatif/data/timbulan-sampah",
+      "as_of": "2025",
+      "granularity": "city-year",
+      "classification": "real",
+      "limitations": "Yearly per-city daily-average timbulan; no daily or per-kecamatan resolution.",
       "columns": [
-        "periode_data",
-        "bulan",
-        "besaran",
-        "jumlah_per_bulan",
-        "jumlah_per_hari"
+        "jml_timbulan_harian",
+        "jml_timbulan_tahun",
+        "nama_kabkota",
+        "nama_provinsi",
+        "periode",
+        "tahun"
       ],
-      "rows": 120
-    },
-    {
-      "file": "bantargebang_2011_2015.xlsx",
-      "bytes": 9537
-    },
-    {
-      "file": "bantargebang_2017.csv",
-      "bytes": 6063,
-      "columns": [
-        "periode_data",
-        "bulan",
-        "instansi_asal_kendaraan",
-        "ritasi",
-        "tonase"
-      ],
-      "rows": 108
-    },
-    {
-      "file": "bantargebang_2018.csv",
-      "bytes": 6067,
-      "columns": [
-        "periode_data",
-        "bulan",
-        "instansi_asal_kendaraan",
-        "ritasi",
-        "tonase",
-        "keterangan"
-      ],
-      "rows": 112
-    },
-    {
-      "file": "bantargebang_2019.csv",
-      "bytes": 7164,
-      "columns": [
-        "periode_data",
-        "instansi_asal_kendaraan",
-        "ritasi",
-        "tonase",
-        "keterangan"
-      ],
-      "rows": 136
+      "rows": 29
     },
     {
       "file": "bantargebang_hasil_penimbangan.csv",
       "bytes": 32791,
+      "source_url": "https://data.go.id/dataset/dataset/data-hasil-penimbangan-sampah-masuk-tempat-pengolahan-sampah-terpadu-tpst-bantargebang",
+      "as_of": "2026-04",
+      "granularity": "landfill-month",
+      "classification": "real",
+      "limitations": "Monthly landfill intake totals; inconsistent tonase formats normalized on load.",
       "columns": [
         "periode_data",
         "instansi_asal_kendaraan",
@@ -70,12 +38,13 @@
       "rows": 465
     },
     {
-      "file": "data_truk_sampah.html",
-      "bytes": 69841
-    },
-    {
-      "file": "data_truk_sampah_data-truk-sampah.csv",
+      "file": "data_truk_sampah_dki.csv",
       "bytes": 16372,
+      "source_url": "https://data.go.id/dataset/dataset/data-truk-sampah",
+      "as_of": "2023",
+      "granularity": "fleet-census",
+      "classification": "real",
+      "limitations": "Vehicle counts per wilayah/type; not live telematics.",
       "columns": [
         "periode_data",
         "wilayah",
@@ -86,12 +55,13 @@
       "rows": 153
     },
     {
-      "file": "data_truk_sampah_data-truk-sampah.xlsx",
-      "bytes": 9815
-    },
-    {
       "file": "dki_tps.csv",
       "bytes": 392221,
+      "source_url": "https://data.go.id/dataset/dataset/data-tempat-penampungan-sampah-sementara-tps-di-provinsi-dki-jakarta",
+      "as_of": "2023",
+      "granularity": "tps-location",
+      "classification": "real",
+      "limitations": "TPS registry; no operational throughput capacity.",
       "columns": [
         "periode_data",
         "wilayah",
@@ -101,39 +71,57 @@
         "jenis_tps",
         "alamat"
       ],
-      "rows": 3518
+      "rows": 3520
     },
     {
-      "file": "dki_tps.xlsx",
-      "bytes": 140680
+      "file": "timbulan_kecamatan_2023.csv",
+      "bytes": 10681,
+      "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
+      "as_of": "2023",
+      "granularity": "kecamatan-year",
+      "classification": "real",
+      "limitations": "Per-kecamatan generation modeled by SILIKA population formula; lat/lng column labels swapped in source.",
+      "columns": [
+        "kode_wilayah",
+        "kota_wilayah",
+        "kecamatan",
+        "penduduk",
+        "timbulan_ton_per_hari",
+        "lat",
+        "lng",
+        "source",
+        "source_url",
+        "quality_note"
+      ],
+      "rows": 42
     },
     {
-      "file": "hari_libur_indonesia_2026.json",
-      "bytes": 1783
+      "file": "tps_capacity_vs_timbulan_kecamatan.csv",
+      "bytes": 4683,
+      "source_url": "https://silika.jakarta.go.id/timbulan_sampah",
+      "as_of": "2023",
+      "granularity": "kecamatan-year",
+      "classification": "proxy",
+      "limitations": "TPS capacity is a PROXY (not official operational capacity); demand side is real SILIKA.",
+      "columns": [
+        "wilayah",
+        "kecamatan",
+        "timbulan_ton_per_hari",
+        "tps_capacity_proxy_ton_per_day",
+        "proxy_gap_ton_per_day",
+        "coverage_ratio_proxy",
+        "quality_note"
+      ],
+      "rows": 42
     },
     {
-      "file": "hbkb_jakarta_page.html",
-      "bytes": 29424
-    },
-    {
-      "file": "jakarta_fair_2026_page.html",
-      "bytes": 185246
-    },
-    {
-      "file": "jiexpo_event_directory_candidate.ics",
-      "bytes": 92436
-    },
-    {
-      "file": "kelurahan_dki_arcgis.geojson",
-      "bytes": 187826
-    },
-    {
-      "file": "penduduk_usia_kelurahan.html",
-      "bytes": 73989
-    },
-    {
-      "file": "penduduk_usia_kelurahan_data-jumlah-penduduk-berdasarkan-usia-per-kelurahan-dki-jakarta.csv",
+      "file": "penduduk_kelurahan_dki.csv",
       "bytes": 874642,
+      "source_url": "https://data.go.id/dataset/dataset/data-jumlah-penduduk-berdasarkan-usia-per-kelurahan-dki-jakarta",
+      "as_of": "2013",
+      "granularity": "kelurahan-age-gender",
+      "classification": "real",
+      "limitations": "2013 census snapshot; used only as relative population weights.",
       "columns": [
         "periode_data",
         "nama_provinsi",
@@ -147,66 +135,45 @@
       "rows": 8544
     },
     {
-      "file": "penduduk_usia_kelurahan_data-jumlah-penduduk-berdasarkan-usia-per-kelurahan-dki-jakarta.xlsx",
-      "bytes": 270927
-    },
-    {
-      "file": "sipsn_timbulan_2018_2025_dki.csv",
-      "bytes": 1970,
+      "file": "jakarta_events_2021_2026.csv",
+      "bytes": 8539,
+      "source_url": "https://www.jakartafair.co.id",
+      "as_of": "2026",
+      "granularity": "event",
+      "classification": "real",
+      "limitations": "Officially-scraped event calendar; attendance present only where published.",
       "columns": [
-        "jml_timbulan_harian",
-        "jml_timbulan_tahun",
-        "nama_kabkota",
-        "nama_provinsi",
-        "periode",
-        "tahun"
+        "tanggal_mulai",
+        "tanggal_selesai",
+        "nama_event",
+        "lokasi",
+        "kota_wilayah",
+        "estimasi_pengunjung",
+        "estimasi_type",
+        "sumber",
+        "source_url",
+        "notes"
       ],
-      "rows": 29
+      "rows": 34
     },
     {
-      "file": "sipsn_timbulan_2025_dki.csv",
-      "bytes": 472,
-      "columns": [
-        "jml_timbulan_harian",
-        "jml_timbulan_tahun",
-        "nama_kabkota",
-        "nama_provinsi",
-        "periode",
-        "tahun"
-      ],
-      "rows": 6
+      "file": "hari_libur_indonesia_2026.json",
+      "bytes": 1783,
+      "source_url": "https://api-hari-libur.vercel.app/api?year=2026",
+      "as_of": "2026",
+      "granularity": "national-holiday",
+      "classification": "real",
+      "limitations": "2026 holidays; applied by month-day across years for fixed-date approximation."
     },
     {
-      "path": "bantargebang_daily_allocated_202212_202604.csv",
-      "description": "Derived daily allocation from real monthly TPST Bantargebang totals; method monthly_total_divided_by_days; not official daily weighing."
-    },
-    {
-      "path": "jakarta_events_2026_scraped_official_clean.csv",
-      "description": "Scrapling/DynamicFetcher official event candidates from Jakarta Fair/JIExpo/GBK pages; no permit crowd estimate."
-    },
-    {
-      "path": "dki_tps_full_address.csv",
-      "description": "DKI TPS dataset with constructed full_address from alamat+kelurahan+kecamatan+wilayah."
-    },
-    {
-      "path": "kelurahan_dki_full_267.geojson",
-      "description": "267 DKI kelurahan polygons extracted from pararawendy Indonesia village border GeoJSON."
+      "file": "kelurahan_dki_full_267.geojson",
+      "bytes": 1017812,
+      "source_url": "https://github.com/pararawendy/border-indonesia-geojson",
+      "as_of": "2020",
+      "granularity": "kelurahan-polygon",
+      "classification": "real",
+      "limitations": "267 DKI village polygons; administrative boundaries only.",
+      "features": 267
     }
-  ],
-  "sources": {
-    "bantargebang_2011_2015": "https://data.go.id/dataset/dataset/data-jumlah-sampah-yang-masuk-di-tpst-bantargebang",
-    "bantargebang_2017": "https://data.go.id/dataset/dataset/data-timbangan-sampah-di-tempat-pembuangan-sampah-terakhir-tpst-bantargebang-tahun-2017",
-    "bantargebang_2018": "https://data.go.id/dataset/dataset/data-timbangan-sampah-di-tempat-pembuangan-sampah-terakhir-tpst-bantargebang-tahun-2018",
-    "bantargebang_2019": "https://data.go.id/dataset/dataset/penimbangan-sampah-di-tpst-bantargebang-tahun-2019",
-    "bantargebang_hasil_penimbangan": "https://data.go.id/dataset/dataset/data-hasil-penimbangan-sampah-masuk-tempat-pengolahan-sampah-terpadu-tpst-bantargebang",
-    "sipsn_timbulan": "https://sampahnasional.kemenlh.go.id/portal-indikatif/data/timbulan-sampah",
-    "dki_tps": "https://data.go.id/dataset/dataset/data-tempat-penampungan-sampah-sementara-tps-di-provinsi-dki-jakarta",
-    "kelurahan_arcgis": "https://services8.arcgis.com/mpSDBlkEzjS62WgX/ArcGIS/rest/services/Batas_Kelurahan_Provinsi_DKI_Jakarta/FeatureServer/0",
-    "hari_libur": "https://api-hari-libur.vercel.app/api?year=2026",
-    "penduduk_kelurahan": "https://data.go.id/dataset/dataset/data-jumlah-penduduk-berdasarkan-usia-per-kelurahan-dki-jakarta",
-    "data_truk_sampah": "https://data.go.id/dataset/dataset/data-truk-sampah",
-    "jakarta_fair": "https://www.jakartafair.co.id",
-    "hbkb": "https://hbkb.jakarta.go.id"
-  },
-  "updated": "2026-07-12T15:59:46.875600"
+  ]
 }
