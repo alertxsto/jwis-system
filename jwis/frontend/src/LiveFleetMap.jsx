@@ -459,10 +459,11 @@ export function LiveFleetMap({ trucks }) {
     <div className="maplibre-shell">
       <div ref={containerRef} className="maplibre-container" />
       <div className="map-legend" aria-label="Map legend">
-        <span><i className="legend-heatmap" /> District waste risk</span>
-        <span><i className="legend-assigned" /> Assigned corridor</span>
-        <span><i className="legend-actual" /> Actual path</span>
-        <span><i className="legend-critical" /> Violation</span>
+        <span><i className="legend-heatmap" /> District waste risk <em className="legend-tag">MODEL</em></span>
+        <span><i className="legend-assigned" /> Assigned corridor <em className="legend-tag">SIM</em></span>
+        <span><i className="legend-actual" /> Actual (clean) <em className="legend-tag">SIM</em></span>
+        <span><i className="legend-critical" /> Violation segment <em className="legend-tag">SIM</em></span>
+        <span><i className="legend-osrm" /> OSRM route <em className="legend-tag">LIVE</em></span>
       </div>
     </div>
   );

@@ -319,9 +319,9 @@ function MapPanel({ trucks }) {
       <div className="panel-title">
         <div>
           <h2>Live Fleet Supervision</h2>
-          <p>Interactive MapLibre tracking with assigned routes, actual movement, and field status popups.</p>
+          <p>MapLibre tracking of assigned corridors, actual movement, and field status. Positions are simulated, not live GPS.</p>
         </div>
-        <StatusPill tone="live"><Radio size={14} /> Live 30s</StatusPill>
+        <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
       </div>
       <LiveFleetMap trucks={trucks} />
     </section>
