@@ -34,6 +34,17 @@ class OsrmTests(unittest.TestCase):
         self.assertGreater(route["eta_minutes"], 0)
         self.assertEqual(len(route["path"]), 3)
 
+    def test_live_osrm_route_is_road_following_or_skips(self):
+        from app.osrm import fetch_osrm_route
+        try:
+            route = fetch_osrm_route("live", (-6.221, 106.785), (-6.195, 106.802), timeout_seconds=8.0)
+        except Exception:
+            self.skipTest("OSRM unreachable")
+        if route["source"] != "osrm":
+            self.skipTest("OSRM returned fallback (network)")
+        self.assertGreater(len(route["path"]), 50,
+                           "road-following OSRM route should have many points, not a straight line")
+
 
 if __name__ == "__main__":
     unittest.main()

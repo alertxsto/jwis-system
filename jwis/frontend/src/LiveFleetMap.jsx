@@ -435,6 +435,39 @@ export function LiveFleetMap({ trucks }) {
       }
     }
 
+    async function renderOsrm() {
+      const map = mapInstance;
+      if (!map) return;
+      try {
+        const response = await fetch(`${API_URL}/routes/osrm`);
+        if (!response.ok) throw new Error("osrm unavailable");
+        const route = await response.json();
+        const coords = (route.path || []).map((p) => [p.lng, p.lat]);
+        if (coords.length < 2) return;
+        const data = {
+          type: "FeatureCollection",
+          features: [{ type: "Feature", properties: { source: route.source }, geometry: { type: "LineString", coordinates: coords } }],
+        };
+        if (!map.getSource("osrm-route")) {
+          map.addSource("osrm-route", { type: "geojson", data });
+          map.addLayer({
+            id: "osrm-route-line",
+            type: "line",
+            source: "osrm-route",
+            paint: {
+              "line-color": "#0891b2",
+              "line-width": 4,
+              "line-opacity": 0.85,
+            },
+          });
+        } else {
+          map.getSource("osrm-route").setData(data);
+        }
+      } catch {
+        // OSRM layer is non-critical
+      }
+    }
+
     let cancelled = false;
     function renderWhenReady() {
       if (cancelled) return;
@@ -448,6 +481,7 @@ export function LiveFleetMap({ trucks }) {
         return;
       }
       renderHeatmap();
+      renderOsrm();
     }
     renderWhenReady();
     return () => {
