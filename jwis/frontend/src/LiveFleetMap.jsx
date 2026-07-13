@@ -468,6 +468,38 @@ export function LiveFleetMap({ trucks }) {
       }
     }
 
+    async function renderTpa() {
+      const map = mapInstance;
+      if (!map) return;
+      try {
+        const response = await fetch(`${API_URL}/tpa/queue-status`);
+        if (!response.ok) throw new Error("tpa unavailable");
+        const q = await response.json();
+        if (q.lat == null || q.lng == null) return;
+        const key = "tpa-marker";
+        if (activeMarkersRef.current[key]) {
+          activeMarkersRef.current[key].marker.remove();
+        }
+        const el = document.createElement("div");
+        el.className = "tpa-marker";
+        el.title = q.facility_name || "TPA";
+        const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
+          `<div class="map-popup"><h4>${q.facility_name || "TPA Bantargebang"}</h4>` +
+          `<p><b>${q.trucks_in_queue}</b> trucks queued</p>` +
+          `<p>Wait: <b>${q.avg_wait_minutes} min</b> (P95 ${q.p95_wait_minutes})</p>` +
+          `<p>${q.weighbridge_status}</p>` +
+          `<p class="popup-src">MODEL OUTPUT · queue simulation</p></div>`
+        );
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([q.lng, q.lat])
+          .setPopup(popup)
+          .addTo(map);
+        activeMarkersRef.current[key] = { marker };
+      } catch {
+        // TPA marker is non-critical
+      }
+    }
+
     let cancelled = false;
     function renderWhenReady() {
       if (cancelled) return;
@@ -482,6 +514,7 @@ export function LiveFleetMap({ trucks }) {
       }
       renderHeatmap();
       renderOsrm();
+      renderTpa();
     }
     renderWhenReady();
     return () => {

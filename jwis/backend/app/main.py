@@ -593,6 +593,9 @@ def get_tpa_queue_status() -> dict[str, Any]:
 
     return {
         "trucks_in_queue": base_trucks,
+        "lat": -6.3728,
+        "lng": 107.0028,
+        "facility_name": "TPST Bantargebang",
         "avg_wait_minutes": wait_time,
         "p95_wait_minutes": sim["p95_wait_minutes"],
         "max_queue": sim["max_queue"],

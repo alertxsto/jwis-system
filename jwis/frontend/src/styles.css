@@ -1857,3 +1857,7 @@ textarea {
 
 .legend-tag{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.04em;padding:1px 4px;margin-left:4px;border-radius:4px;background:#eef2f6;color:#5b6a78;vertical-align:middle;}
 .legend-osrm{display:inline-block;width:14px;height:3px;background:#0891b2;border-radius:2px;vertical-align:middle;}
+
+.tpa-marker{width:26px;height:26px;border-radius:6px;background:#0f4d3b;border:2px solid #fff;box-shadow:0 2px 8px rgba(15,40,32,.35);cursor:pointer;display:grid;place-items:center;}
+.tpa-marker::after{content:'TPA';color:#fff;font-size:8px;font-weight:800;}
+.popup-src{font-size:10px;color:#5b6a78;margin-top:4px;letter-spacing:.03em;}
