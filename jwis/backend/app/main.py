@@ -32,6 +32,7 @@ from app.astar_routing import reroute_payload
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
+from app.auth import ROLES, authenticate, has_permission, token_for
 from app.osrm import fetch_osrm_route
 from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
@@ -44,9 +45,16 @@ history_store = HistoryStore()
 dispatch_center = DispatchCenter()
 TRAFFIC_JAM_ACTIVE = False
 
+import os
+
+_ALLOWED_ORIGINS = os.getenv(
+    "JWIS_ALLOWED_ORIGINS",
+    "http://localhost:5175,http://127.0.0.1:5175,http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in _ALLOWED_ORIGINS if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,6 +97,47 @@ class HybridPredictRequest(BaseModel):
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "healthy", "service": "jwis-backend", "version": "2.5.0"}
+
+@app.get("/api/health/detailed")
+def health_detailed() -> dict[str, Any]:
+    """Dependency-aware health: database, models, source files, weather, OSRM."""
+    from pathlib import Path as _Path
+    models_dir = _Path(__file__).resolve().parents[1] / "data" / "models"
+    prophet_n = len(list(models_dir.glob("prophet_*.joblib"))) if models_dir.exists() else 0
+    xgb_n = len(list(models_dir.glob("xgboost_*.joblib"))) if models_dir.exists() else 0
+    real_dir = _Path(__file__).resolve().parents[2] / "data" / "real"
+    source_files = len(list(real_dir.glob("*.csv"))) + len(list(real_dir.glob("*.geojson"))) if real_dir.exists() else 0
+    db_ok = True
+    try:
+        history_store.list_events(limit=1)
+    except Exception:
+        db_ok = False
+    components = {
+        "database": {"status": "up" if db_ok else "degraded"},
+        "models": {"available": prophet_n == 42 and xgb_n == 42, "prophet": prophet_n, "xgboost": xgb_n},
+        "source_files": {"count": source_files, "status": "up" if source_files >= 8 else "degraded"},
+        "weather": {"status": "external", "note": "Open-Meteo fetched on demand with fallback"},
+        "osrm": {"status": "external", "note": "public OSRM with fallback route"},
+    }
+    degraded = (not db_ok) or prophet_n != 42 or xgb_n != 42 or source_files < 8
+    return {"status": "degraded" if degraded else "healthy", "components": components}
+
+class LoginRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=50)
+    password: str = Field(min_length=1, max_length=200)
+
+@app.post("/api/auth/login")
+def auth_login(payload: LoginRequest) -> dict[str, Any]:
+    """Backend role-aware login; replaces the frontend-only admin gate."""
+    principal = authenticate(payload.username, payload.password)
+    if principal is None:
+        raise HTTPException(status_code=401, detail="Invalid username or password.")
+    return {
+        "username": principal["username"],
+        "role": principal["role"],
+        "permissions": sorted(ROLES[principal["role"]]),
+        "token": token_for(principal),
+    }
 
 @app.get("/api/data/provenance")
 def data_provenance_endpoint() -> dict[str, Any]:

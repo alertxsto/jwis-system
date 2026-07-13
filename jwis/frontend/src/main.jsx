@@ -213,18 +213,28 @@ function StatusPill({ tone, children }) {
 }
 
 function LoginPage({ onLogin }) {
-  const [username, setUsername] = useState("admin");
+  const [username, setUsername] = useState("dispatcher");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  function submit(event) {
+  async function submit(event) {
     event.preventDefault();
-    if (username === "admin" && password === "admin123") {
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      if (!res.ok) throw new Error("bad creds");
+      const principal = await res.json();
       localStorage.setItem("jwis_auth", "true");
+      localStorage.setItem("jwis_role", principal.role);
+      localStorage.setItem("jwis_token", principal.token);
       onLogin();
-      return;
+    } catch {
+      setError("Invalid username or password.");
     }
-    setError("Invalid username or password.");
   }
 
   return (
