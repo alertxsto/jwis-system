@@ -117,7 +117,7 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
   const unlicensedMarkersRef = useRef([]);
   const [playbackTruck, setPlaybackTruck] = useState(null);
   const playbackMarkerRef = useRef(null);
-  const [layers, setLayers] = useState({ heatmap: true, osrm: true, unlicensed: true });
+  const [layers, setLayers] = useState({ heatmap: false, osrm: true, unlicensed: true });
 
 
   useEffect(() => {
@@ -404,12 +404,18 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
           
           let existing = activeMarkersRef.current[key];
 
+          const truth047 = mapTruth[truck.truck_code];
+          const rawStr = truth047 ? `${truth047.raw_gps.lat.toFixed(5)}, ${truth047.raw_gps.lng.toFixed(5)}` : "n/a";
+          const snapStr = truth047 ? `${truth047.snapped_gps.lat.toFixed(5)}, ${truth047.snapped_gps.lng.toFixed(5)}` : "n/a";
+          const snapSrc = truth047?.provenance?.snapped_gps || "RAW_GPS_UNSNAPPED";
           const popupHtml = `
               <div class="map-popup">
                 <strong>${truck.truck_code}</strong>
                 <span>${truck.driver_name} - ${truck.assigned_zone}</span>
                 <p>${isAnomalous ? "Route violation" : truck.is_damaged ? "Fleet damage" : "Normal corridor"}</p>
-                <small>${Math.round(truck.deviation?.distance_meters || 0)} m from assigned path - ${truck.latest_position.speed_kmh} km/h</small>
+                <small>${Math.round(truth047?.deviation_m ?? truck.deviation?.distance_meters ?? 0)} m from assigned road - ${truck.latest_position.speed_kmh} km/h</small>
+                <small>Raw GPS: ${rawStr}</small>
+                <small>Snapped: ${snapStr} (${snapSrc})</small>
                 <small>Updated ${truck.latest_position.updated_seconds_ago ?? "?"}s ago</small>
                 <p class="popup-src">SIMULATION · not live GPS</p>
                 <button class="popup-dispatch" data-truck="${truck.truck_code}">Dispatch ${truck.truck_code}</button>
@@ -724,6 +730,21 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
     set("osrm-route-line", layers.osrm);
   }, [layers, mapInstance]);
 
+  // Auto-fit the viewport to active fleet + TPA once positions are known.
+  const fittedRef = useRef(false);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || fittedRef.current) return;
+    const pts = (trucks || []).filter((t) => t.latest_position)
+      .map((t) => [t.latest_position.lng, t.latest_position.lat]);
+    pts.push([107.0028, -6.3728]); // TPA Bantargebang
+    if (pts.length < 2) return;
+    const lngs = pts.map((p) => p[0]); const lats = pts.map((p) => p[1]);
+    map.fitBounds([[Math.min(...lngs), Math.min(...lats)], [Math.max(...lngs), Math.max(...lats)]],
+      { padding: 60, maxZoom: 12, duration: 600 });
+    fittedRef.current = true;
+  }, [trucks, mapInstance]);
+
   // Trip playback: animate a marker along the selected truck's breadcrumb trail.
   useEffect(() => {
     const map = mapInstance;
@@ -757,13 +778,14 @@ export function LiveFleetMap({ trucks, onSelectTruck }) {
           {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
-      <div className="map-legend" aria-label="Map legend">
+      <details className="map-legend" open aria-label="Map legend">
+        <summary>Legend</summary>
         <span><i className="legend-heatmap" /> District waste risk <em className="legend-tag">MODEL</em></span>
         <span><i className="legend-assigned" /> Assigned corridor <em className="legend-tag">SIM</em></span>
         <span><i className="legend-actual" /> Actual (clean) <em className="legend-tag">SIM</em></span>
         <span><i className="legend-critical" /> Violation segment <em className="legend-tag">SIM</em></span>
         <span><i className="legend-osrm" /> OSRM route <em className="legend-tag">LIVE</em></span>
-      </div>
+      </details>
     </div>
   );
 }
