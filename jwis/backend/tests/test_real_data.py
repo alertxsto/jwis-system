@@ -60,6 +60,21 @@ class TestKelurahanHeatmap(unittest.TestCase):
         self.assertIn("kelurahan", props)
         self.assertIn("predicted_tons", props)
 
+    def test_every_heatmap_feature_has_predicted_tons_key(self):
+        fc = load_kelurahan_heatmap()
+        missing = [f["properties"].get("kelurahan")
+                   for f in fc["features"]
+                   if "predicted_tons" not in f["properties"]]
+        self.assertEqual(missing, [], f"features missing predicted_tons: {missing}")
+
+    def test_null_predicted_tons_are_kept_not_dropped(self):
+        fc = load_kelurahan_heatmap()
+        nulls = [f for f in fc["features"] if f["properties"].get("predicted_tons") is None]
+        # Null-value kelurahan (outside SILIKA 42-kecamatan coverage) must remain
+        # as features so the map renders them as explicit "no data", not dropped.
+        self.assertEqual(len(fc["features"]), 267)
+        self.assertGreater(len(nulls), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
