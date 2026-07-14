@@ -87,6 +87,20 @@ class MainApiTests(unittest.TestCase):
         r = self.client.get("/api/fleet/route-decision?truck_code=GHOST")
         self.assertEqual(r.status_code, 404)
 
+    def test_predictions_kecamatan_localizes_event_impact(self):
+        base_resp = self.client.get("/api/predictions/kecamatan?event_attendance=0")
+        self.assertEqual(base_resp.status_code, 200)
+        base_kecs = {k["slug"]: k["predicted_tons"] for k in base_resp.json()["kecamatan"]}
+        
+        event_resp = self.client.get(
+            "/api/predictions/kecamatan?event_attendance=50000&event_lat=-6.1754&event_lng=106.8272"
+        )
+        self.assertEqual(event_resp.status_code, 200)
+        event_kecs = {k["slug"]: k["predicted_tons"] for k in event_resp.json()["kecamatan"]}
+        
+        self.assertGreater(event_kecs["gambir"], base_kecs["gambir"])
+        self.assertEqual(event_kecs["cengkareng"], base_kecs["cengkareng"])
+
 
 if __name__ == "__main__":
     unittest.main()

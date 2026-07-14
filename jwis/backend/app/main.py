@@ -192,6 +192,8 @@ def predictions_kecamatan(
     is_weekend: bool = False,
     is_holiday: bool = False,
     target_date: date | None = None,
+    event_lat: float | None = Query(None),
+    event_lng: float | None = Query(None),
 ) -> dict[str, Any]:
     """Case 2 temporal-spatial map: per-kecamatan hybrid ML prediction over the
     real 42-kecamatan SILIKA baseline, with facility-readiness recommendation.
@@ -200,14 +202,38 @@ def predictions_kecamatan(
     (crews, man-hours, extra trucks) and a TPS capacity signal.
     """
     kecs = load_kecamatan_map()
+    
+    target_slugs = set()
+    if event_attendance > 0:
+        from fastapi.params import Query as FastAPIQuery
+        elat = -6.2183 if (isinstance(event_lat, FastAPIQuery) or event_lat is None) else event_lat
+        elng = 106.8022 if (isinstance(event_lng, FastAPIQuery) or event_lng is None) else event_lng
+        
+        from app.engine import _haversine_meters
+        closest_kec = None
+        min_dist = float("inf")
+        for k in kecs:
+            klat = k.get("lat")
+            klng = k.get("lng")
+            if klat is not None and klng is not None:
+                dist = _haversine_meters((elat, elng), (klat, klng))
+                if dist <= 3500.0:
+                    target_slugs.add(k["slug"])
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_kec = k
+        if not target_slugs and closest_kec:
+            target_slugs.add(closest_kec["slug"])
+
     features = []
     for k in kecs:
+        current_attendance = event_attendance if k["slug"] in target_slugs else 0
         pred = predict_waste_hybrid(
             kelurahan=k["slug"],
             rainfall_mm=rainfall_mm,
             is_weekend=is_weekend,
             is_holiday=is_holiday,
-            event_attendance=event_attendance,
+            event_attendance=current_attendance,
             target_date=target_date.isoformat() if target_date else None,
         )
         tons = pred["predicted_tons"]
@@ -230,6 +256,7 @@ def predictions_kecamatan(
         "scenario": {
             "rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
             "is_weekend": is_weekend, "is_holiday": is_holiday,
+            "event_lat": event_lat, "event_lng": event_lng,
         },
         "kecamatan_count": len(features),
         "total_predicted_tons": round(total, 1),
