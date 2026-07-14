@@ -1877,3 +1877,147 @@ textarea {
 .map-legend summary::-webkit-details-marker{display:none;}
 @media(min-width:641px){.map-legend[open] summary,.map-legend summary{}.map-legend{max-width:320px;}}
 @media(max-width:640px){.map-legend{max-width:180px;font-size:10px;}.map-legend:not([open]) span{display:none;}}
+
+/* Operations Optimizer UI styling */
+.optimizer-section {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.optimizer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.optimizer-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.optimizer-plan-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.plan-header strong {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+.plan-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.plan-stat-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.plan-stat-item strong {
+  font-size: 14px;
+  color: var(--ink);
+  margin-top: 2px;
+}
+.unmet-reasons-box {
+  background: var(--red-light);
+  border: 1px solid rgba(180, 35, 24, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--red);
+}
+.unmet-reasons-box strong {
+  display: block;
+  margin-bottom: 4px;
+}
+.unmet-reasons-box ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.assign-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 12px 0 8px 0;
+}
+.assignments-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 14px;
+  padding-right: 4px;
+}
+.assign-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.assign-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.assign-info strong {
+  color: var(--ink);
+}
+.assign-info span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.assign-evidence {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.assign-evidence span.ok { color: var(--green); font-weight: 600; }
+.assign-evidence span.warn { color: var(--red); font-weight: 600; }
+.optimizer-success {
+  background: var(--green-light);
+  border: 1px solid rgba(23, 107, 84, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--green-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.plan-status-badge.proposed {
+  background: var(--amber-light);
+  color: var(--amber);
+}
+.plan-status-badge.approved {
+  background: var(--green-light);
+  color: var(--green);
+}

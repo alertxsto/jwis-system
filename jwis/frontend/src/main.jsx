@@ -699,8 +699,20 @@ function ScenarioPanel() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Operations Optimizer State (Case 2 -> Case 1 Bridge)
+  const [plan, setPlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const [optimizerError, setOptimizerError] = useState("");
+
+  const role = localStorage.getItem("jwis_role") || "guest";
+  const token = localStorage.getItem("jwis_token");
+
   async function run() {
     setLoading(true);
+    setPlan(null);
+    setApproved(false);
+    setOptimizerError("");
     try {
       const params = new URLSearchParams({
         rainfall_mm: String(rainfall),
@@ -719,6 +731,61 @@ function ScenarioPanel() {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function generatePlan() {
+    setPlanLoading(true);
+    setApproved(false);
+    setOptimizerError("");
+    try {
+      const params = new URLSearchParams({
+        rainfall_mm: String(rainfall),
+        event_attendance: String(attendance),
+        is_weekend: "true",
+        top_n: "5",
+      });
+      const response = await fetch(`${API_URL}/operations/plan?${params.toString()}`, {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error("Failed to generate plan");
+      const planData = await response.json();
+      setPlan(planData);
+    } catch (err) {
+      setOptimizerError(err.message || "Failed to generate plan.");
+      setPlan(null);
+    } finally {
+      setPlanLoading(false);
+    }
+  }
+
+  async function approvePlan() {
+    if (!plan) return;
+    setPlanLoading(true);
+    setOptimizerError("");
+    try {
+      const response = await fetch(`${API_URL}/operations/${plan.plan_id}/approve`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+      });
+      if (response.status === 401) {
+        throw new Error("Unauthorized - Please log in again.");
+      }
+      if (response.status === 403) {
+        throw new Error(`Role '${role}' lacks permission to approve plans (requires supervisor or administrator).`);
+      }
+      if (!response.ok) {
+        throw new Error("Failed to approve plan");
+      }
+      const approvedData = await response.json();
+      setPlan(approvedData);
+      setApproved(true);
+    } catch (err) {
+      setOptimizerError(err.message || "Failed to approve plan.");
+    } finally {
+      setPlanLoading(false);
+    }
+  }
 
   const top5 = (data?.top_hotspots || []).slice(0, 5);
   const totalTons = data?.total_predicted_tons || 0;
@@ -760,6 +827,104 @@ function ScenarioPanel() {
         <div className="req-chip"><b>{crews}</b><span>field crews (top 5)</span></div>
         <div className="req-chip"><b>{trucks}</b><span>trucks (top 5)</span></div>
         <div className="req-chip"><b>{bins}</b><span>large bins (top 5)</span></div>
+      </div>
+
+      <div className="optimizer-section">
+        <div className="optimizer-head">
+          <h3>Operations Optimizer (Case 2 &rarr; Case 1 Handoff)</h3>
+          <span className="role-badge" style={{ fontSize: "11px", color: "var(--text-muted)" }}>Role: <b>{role}</b></span>
+        </div>
+        
+        {!plan && (
+          <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading}>
+            {planLoading ? "Optimizing..." : "Generate Dispatch Plan (CP-SAT)"}
+          </button>
+        )}
+
+        {optimizerError && (
+          <div className="unmet-reasons-box" style={{ marginTop: "12px" }}>
+            <strong>Error:</strong> {optimizerError}
+          </div>
+        )}
+
+        {plan && (
+          <div className="optimizer-plan-card">
+            <div className="plan-header">
+              <strong>Plan ID: {plan.plan_id}</strong>
+              <span className={`plan-status-badge ${plan.status}`}>
+                {plan.status.toUpperCase()}
+              </span>
+            </div>
+            
+            <div className="plan-stats-grid">
+              <div className="plan-stat-item">
+                <span>Total Demand</span>
+                <strong>{plan.total_demand_tons} tons</strong>
+              </div>
+              <div className="plan-stat-item">
+                <span>Assigned</span>
+                <strong>{plan.total_assigned_tons} tons</strong>
+              </div>
+              <div className="plan-stat-item">
+                <span>Status</span>
+                <strong className={plan.unmet_reasons?.length ? "text-danger" : "text-success"}>
+                  {plan.unmet_reasons?.length ? "Unmet Demand" : "Feasible"}
+                </strong>
+              </div>
+            </div>
+
+            {plan.unmet_reasons?.length > 0 && (
+              <div className="unmet-reasons-box">
+                <strong>Constraint Warnings:</strong>
+                <ul>
+                  {plan.unmet_reasons.map((r, i) => (
+                    <li key={i}>{r.replace(/_/g, ' ')}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="assign-title">Optimizer Assignments:</div>
+            <div className="assignments-container">
+              {plan.assignments.map((a, i) => (
+                <div key={i} className="assign-card">
+                  <div className="assign-info">
+                    <strong>Truck {a.truck_code}</strong>
+                    <span>&rarr; {a.area.replace(/_/g, ' ').toUpperCase()}</span>
+                  </div>
+                  <div className="assign-evidence">
+                    <span>Assigned: <b>{a.assigned_tons}t</b></span>
+                    {a.evidence.permit_compliant ? (
+                      <span className="ok">Permit Compliant</span>
+                    ) : (
+                      <span className="warn">No Permit</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {plan.assignments.length === 0 && (
+                <p className="kec-note" style={{ textAlign: "center", margin: "10px 0" }}>No truck assignments generated.</p>
+              )}
+            </div>
+
+            {plan.status === "proposed" && (
+              <button 
+                className="primary-button approve-dispatch-btn" 
+                onClick={approvePlan} 
+                disabled={planLoading}
+                style={{ width: "100%", marginTop: "8px" }}
+              >
+                {planLoading ? "Approving Plan..." : "Approve & Dispatch Plan"}
+              </button>
+            )}
+
+            {approved && (
+              <div className="optimizer-success">
+                <Check size={16} /> Plan approved. Dispatches generated & pushed to field app!
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
