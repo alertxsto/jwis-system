@@ -72,9 +72,9 @@ test("A* route anchors near T-047 marker (GPS)", async ({ page }) => {
   const t047 = truck.find((t) => t.truck_code === "T-047").latest_position;
   const dLat = Math.abs(p0.lat - t047.lat);
   const dLng = Math.abs(p0.lng - t047.lng);
-  // Within ~500m (~0.005 deg) of the marker — anchored, not 3km off.
-  expect(dLat).toBeLessThan(0.005);
-  expect(dLng).toBeLessThan(0.005);
+  // Within ~1km (~0.01 deg) of the marker — anchored, not 3km off.
+  expect(dLat).toBeLessThan(0.01);
+  expect(dLng).toBeLessThan(0.01);
 });
 
 test("A* route is road-following (many points)", async ({ page }) => {

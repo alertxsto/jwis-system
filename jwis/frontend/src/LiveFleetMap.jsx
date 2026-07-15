@@ -296,7 +296,7 @@ export function LiveFleetMap({
       const assignedData = featureCollection(assignedFeatures);
       const actualData = featureCollection(actualFeatures);
 
-      if (import.meta.env.DEV) {
+      if (typeof window !== "undefined") {
         window.__jwisMapFeatures = {
           actualKinds: actualFeatures.map((f) => f.properties?.kind),
         };

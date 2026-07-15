@@ -10,6 +10,9 @@ Includes advanced DLH Case 1 & Case 2 features:
 """
 from __future__ import annotations
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import json
 from datetime import datetime, date, timedelta
 from pathlib import Path

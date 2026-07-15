@@ -47,10 +47,12 @@ def answer_with_openai_if_configured(question: str, snapshot: dict[str, Any]) ->
             "answer": answer_operational_question(question, snapshot),
         }
 
+    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    url = f"{base_url}/chat/completions"
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
     payload = {
         "model": model,
-        "input": [
+        "messages": [
             {
                 "role": "system",
                 "content": "You are JWIS, a concise operational assistant for DLH Jakarta waste logistics.",
@@ -62,7 +64,7 @@ def answer_with_openai_if_configured(question: str, snapshot: dict[str, Any]) ->
         ],
     }
     request = Request(
-        "https://api.openai.com/v1/responses",
+        url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -72,14 +74,50 @@ def answer_with_openai_if_configured(question: str, snapshot: dict[str, Any]) ->
     )
 
     try:
-        with urlopen(request, timeout=12) as response:
-            data = json.loads(response.read().decode("utf-8"))
+        with urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8")
+        
+        # Robust parsing of stream or raw JSON
+        def parse_body(text: str) -> dict[str, Any]:
+            # Clean up the SSE stream noise
+            text = text.replace("data: [DONE]", "").strip()
+            
+            # Try parsing the whole cleaned text
+            try:
+                return json.loads(text)
+            except Exception:
+                pass
+                
+            # If that fails, look for the JSON object within lines
+            for line in reversed(text.splitlines()):
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    line = line[6:].strip()
+                try:
+                    return json.loads(line)
+                except Exception:
+                    pass
+            raise ValueError("Invalid JSON stream")
+
+        parsed = parse_body(body)
+        
+        # Handle chat.completions format
+        if "choices" in parsed and len(parsed["choices"]) > 0:
+            answer = parsed["choices"][0]["message"]["content"]
+            return {"provider": "openai", "model": model, "answer": answer}
+            
+        # Handle responses format fallback
         text_parts = []
-        for output in data.get("output", []):
+        for output in parsed.get("output", []):
             for content in output.get("content", []):
                 if content.get("type") == "output_text":
                     text_parts.append(content.get("text", ""))
-        return {"provider": "openai", "model": model, "answer": "\n".join(text_parts).strip()}
+        if text_parts:
+            return {"provider": "openai", "model": model, "answer": "\n".join(text_parts).strip()}
+
+        raise ValueError("Unknown JSON format")
     except Exception as error:
         return {
             "provider": "local-fallback",
