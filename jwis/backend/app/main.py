@@ -42,12 +42,12 @@ from app.weather import fetch_jakarta_weather_forecast
 from app.assistant import answer_with_openai_if_configured, build_executive_summary
 from app.storage import HistoryStore
 from app.whatsapp import OpenWAClient, build_alert_message
-from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap
+from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap, load_real_tps_coordinates, load_real_wr_coordinates
+from app.astar_routing import is_traffic_jam_active, set_traffic_jam_active
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
 history_store = HistoryStore()
 dispatch_center = DispatchCenter()
-TRAFFIC_JAM_ACTIVE = False
 
 
 @app.on_event("startup")
@@ -248,6 +248,13 @@ def predictions_kecamatan(
             "disposal_bins_required": pred["disposal_bins_required"],
             "trucks_required": max(1, round(tons / 18)),
             "facility_over_capacity": facility_alert,
+            "prophet_baseline_tons": pred.get("prophet_baseline_tons"),
+            "xgboost_residual": pred.get("xgboost_residual"),
+            "factors": pred.get("factors"),
+            "prediction_interval_p10_p90": pred.get("prediction_interval_p10_p90"),
+            "co2_emissions_kg": pred.get("co2_emissions_kg"),
+            "fuel_consumption_liters": pred.get("fuel_consumption_liters"),
+            "daily_district_suitability": pred.get("daily_district_suitability"),
         })
     features.sort(key=lambda f: f["predicted_tons"], reverse=True)
     total = sum(f["predicted_tons"] for f in features)
@@ -282,7 +289,8 @@ def command_center() -> dict:
 
 @app.get("/api/fleet")
 def fleet() -> list[dict]:
-    return TRUCKS
+    from app.data import get_dynamic_trucks
+    return get_dynamic_trucks()
 
 @app.get("/api/predictions")
 def predictions(
@@ -321,10 +329,26 @@ def osrm_route() -> dict:
     )
 
 @app.get("/api/geo/kelurahan-heatmap")
-def kelurahan_heatmap() -> JSONResponse:
+def kelurahan_heatmap(
+    rainfall_mm: float = Query(0.0, ge=0),
+    event_attendance: int = Query(0, ge=0),
+    is_weekend: bool = False,
+    is_holiday: bool = False,
+    event_lat: float | None = Query(None),
+    event_lng: float | None = Query(None),
+) -> JSONResponse:
     """267-kelurahan risk heatmap joined to real SILIKA kecamatan baselines."""
     try:
-        return JSONResponse(load_kelurahan_heatmap())
+        preds = predictions_kecamatan(
+            rainfall_mm=rainfall_mm,
+            event_attendance=event_attendance,
+            is_weekend=is_weekend,
+            is_holiday=is_holiday,
+            event_lat=event_lat,
+            event_lng=event_lng,
+        )
+        kec_predictions = {k["kecamatan"]: k["predicted_tons"] for k in preds["kecamatan"]}
+        return JSONResponse(load_kelurahan_heatmap(kec_predictions))
     except (OSError, ValueError):
         fallback = Path(__file__).resolve().parents[2] / "data" / "raw" / "jakarta_kelurahan_heatmap.geojson"
         if fallback.exists():
@@ -340,12 +364,16 @@ def assistant_query(payload: AssistantRequest) -> dict:
     snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=fetch_jakarta_weather_forecast())
     result = answer_with_openai_if_configured(payload.question, snapshot)
     
-    # Resilient Indonesian localization check (mandatory for competitive UX)
     if result.get("provider") == "local-fallback":
+        from app.assistant import _top_prediction
+        top = _top_prediction(snapshot)
+        top_district = top.get("district", "Jakarta Barat")
+        top_spike = top.get("spike_percent", 41)
+        tpa_wait = snapshot["kpis"]["tpa_wait_minutes"]
         result["answer"] = (
-            f"Berdasarkan Pusat Komando JWIS saat ini, risiko sampah terbesar diproyeksikan terjadi di daerah Jakarta Barat "
-            f"dengan potensi lonjakan volume mencapai +41% (critical risk). Terdapat {snapshot['kpis']['trucks_with_issues']} armada "
-            f"truk mengalami kendala operasional (termasuk deviasi rute). Antrian TPA Bantargebang saat ini mencapai 116 menit. "
+            f"Berdasarkan Pusat Komando JWIS saat ini, risiko sampah terbesar diproyeksikan terjadi di daerah {top_district} "
+            f"dengan potensi lonjakan volume mencapai +{top_spike}% ({'critical' if top_spike >= 30 else 'high' if top_spike >= 20 else 'watch' if top_spike >= 10 else 'normal'} risk). Terdapat {snapshot['kpis']['trucks_with_issues']} armada "
+            f"truk mengalami kendala operasional (termasuk deviasi rute). Antrian TPA Bantargebang saat ini mencapai {tpa_wait} menit. "
             f"Rekomendasi tindakan segera: Kirimkan instruksi pemulihan rute, tunda keberangkatan armada non-prioritas, "
             f"dan siagakan kru cadangan di zona berisiko tinggi."
         )
@@ -358,13 +386,19 @@ def executive_summary() -> dict:
     snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=fetch_jakarta_weather_forecast())
     summary = build_executive_summary(snapshot)
     
-    # Format a professional executive summary in Indonesian (DLH official style)
+    from app.assistant import _top_prediction
+    top = _top_prediction(snapshot)
+    top_district = top.get("district", "Jakarta Barat")
+    top_spike = top.get("spike_percent", 41)
+    extra_trucks = top.get("recommended_extra_trucks", 28)
+    extra_crews = top.get("recommended_extra_crews", 14)
+    tpa_wait = snapshot["kpis"]["tpa_wait_minutes"]
     summary_id = (
         f"JWIS mendeteksi {snapshot['kpis']['trucks_with_issues']} kendala operasional di lapangan. "
-        f"Proyeksi peningkatan volume sampah puncak sebesar 41% terjadi di Jakarta Barat, didorong curah hujan ekstrim (42mm) "
-        f"dan event keramaian terdaftar (CFD/Konser), yang membutuhkan 28 armada truk tambahan. "
-        f"Antrian di Bantargebang saat ini kritis (116 menit). Direkomendasikan implementasi staggered dispatch "
-        f"untuk mereduksi beban TPA dan pengerahan 14 tim kru tambahan ke kelurahan terdampak genangan."
+        f"Proyeksi peningkatan volume sampah puncak sebesar {top_spike}% terjadi di {top_district}, didorong curah hujan/event, "
+        f"yang membutuhkan {extra_trucks} armada truk tambahan. "
+        f"Antrian di Bantargebang saat ini mencapai {tpa_wait} menit. Direkomendasikan implementasi staggered dispatch "
+        f"untuk mereduksi beban TPA dan pengerahan {extra_crews} tim kru tambahan ke kelurahan terdampak."
     )
     
     history_store.record_event("executive_summary", {"summary": summary})
@@ -641,8 +675,8 @@ def get_tpa_queue_status() -> dict[str, Any]:
 
     return {
         "trucks_in_queue": base_trucks,
-        "lat": -6.3728,
-        "lng": 107.0028,
+        "lat": -6.3310,
+        "lng": 106.9910,
         "facility_name": "TPST Bantargebang",
         "avg_wait_minutes": wait_time,
         "p95_wait_minutes": sim["p95_wait_minutes"],
@@ -719,37 +753,36 @@ def get_events_permits() -> list[dict[str, Any]]:
 
 @app.get("/api/fleet/astar-reroute")
 def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
-    global TRAFFIC_JAM_ACTIVE
     truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
     if truck is None:
         raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
     origin = None
     if truck.get("latest_position"):
         origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
-    return reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
+    return reroute_payload(is_traffic_jam_active(), origin_position=origin)
 
 @app.get("/api/fleet/route-decision")
 def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
     """One payload unifying every Case-1 route signal for a truck: OSRM ETA/
     distance, vehicle damage status, TPA queue, traffic, and permit — so a
     dispatcher sees a single decision, not five disconnected panels."""
-    global TRAFFIC_JAM_ACTIVE
     truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
     if truck is None:
         raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
     origin = None
     if truck.get("latest_position"):
         origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
-    route = reroute_payload(TRAFFIC_JAM_ACTIVE, origin_position=origin)
+    jam_active = is_traffic_jam_active()
+    route = reroute_payload(jam_active, origin_position=origin)
     active = route["active_route"]
-    queue = simulate_queue(32 if TRAFFIC_JAM_ACTIVE else 14, weighbridges=2, service_rate_per_hour=30.0, seed=42)
+    queue = simulate_queue(32 if jam_active else 14, weighbridges=2, service_rate_per_hour=30.0, seed=42)
     vehicle_status = "DAMAGED" if truck.get("is_damaged") else ("DEVIATION" if truck["deviation"]["violated"] else "OK")
     recs = []
     if truck.get("is_damaged"):
         recs.append("Vehicle damaged — assign backup capacity.")
     if truck["deviation"]["violated"]:
         recs.append("Off assigned corridor — redirect to recommended route.")
-    if TRAFFIC_JAM_ACTIVE:
+    if jam_active:
         recs.append("Active-route congestion — A* diversion applied.")
     if queue["mean_wait_minutes"] > 45:
         recs.append("TPA queue high — stagger arrival.")
@@ -761,7 +794,7 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
         "vehicle_status": vehicle_status,
         "tpa_queue": {"wait_minutes": queue["mean_wait_minutes"], "p95": queue["p95_wait_minutes"],
                       "source": "MODEL OUTPUT"},
-        "traffic": {"jam_active": TRAFFIC_JAM_ACTIVE, "source": "SIMULATED CONGESTION"},
+        "traffic": {"jam_active": jam_active, "source": "SIMULATED CONGESTION"},
         "permit": {"source": active.get("permit_source", "SIMULATED PERMIT CONSTRAINT")},
         "recommendation": recs or ["Normal operation; no intervention needed."],
     }
@@ -775,7 +808,7 @@ def fleet_map_truth() -> dict[str, Any]:
 def unlicensed_collectors() -> dict[str, Any]:
     """Detect observed vehicles operating outside the DLH registry (Case 1 illegal activity)."""
     observed = [
-        {"plate": "B 1234 CD", "lat": -6.1490, "lng": 106.8700},
+        {"plate": "B 9876 XX", "lat": -6.1670, "lng": 106.7630},
         {"plate": "Z 8842 KX", "lat": -6.1602, "lng": 106.8351},
         {"plate": "F 5521 QN", "lat": -6.2410, "lng": 106.9012},
     ]
@@ -805,11 +838,10 @@ def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
 
 @app.post("/api/fleet/astar-simulate-jam")
 def post_astar_simulate_jam(active: bool) -> dict[str, Any]:
-    global TRAFFIC_JAM_ACTIVE
-    TRAFFIC_JAM_ACTIVE = active
+    set_traffic_jam_active(active)
     return {
         "status": "success",
-        "traffic_jam_active": TRAFFIC_JAM_ACTIVE,
+        "traffic_jam_active": is_traffic_jam_active(),
         "message": "Traffic jam state toggled successfully."
     }
 
@@ -862,3 +894,57 @@ Hasil prediksi spasial-temporal model Hybrid Prophet + XGBoost untuk {scenario_k
 3. Siagakan tim sapu bersih cadangan di Kelurahan Kebon Jeruk dan Tebet.
 """
     return JSONResponse({"report": report})
+
+
+@app.get("/api/geo/tps-coordinates")
+def get_tps_coordinates() -> dict[str, Any]:
+    """Returns all 1,081 official TPS locations as a GeoJSON FeatureCollection."""
+    tps_list = load_real_tps_coordinates()
+    features = []
+    for t in tps_list:
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [t["lng"], t["lat"]]
+            },
+            "properties": {
+                "name": t["name"],
+                "kecamatan": t["kecamatan"],
+                "kelurahan": t["kelurahan"]
+            }
+        })
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "source": "Official SILIKA 2023 coordinates",
+        "total": len(features)
+    }
+
+
+@app.get("/api/geo/wr-coordinates")
+def get_wr_coordinates() -> dict[str, Any]:
+    """Returns all 7,884 official Wajib Retribusi locations as a GeoJSON FeatureCollection."""
+    wr_list = load_real_wr_coordinates()
+    features = []
+    for w in wr_list:
+        features.append({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [w["lng"], w["lat"]]
+            },
+            "properties": {
+                "name": w["name"],
+                "type": w["jns"],
+                "address": w["almt"],
+                "kecamatan": w["kec"],
+                "kelurahan": w["kel"]
+            }
+        })
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+        "source": "Official SILIKA Wajib Retribusi 2023 coordinates",
+        "total": len(features)
+    }

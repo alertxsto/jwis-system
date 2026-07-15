@@ -463,6 +463,7 @@ function KecamatanMapPanel() {
   const [attendance, setAttendance] = useState(0);
   const [weekend, setWeekend] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedSlug, setSelectedSlug] = useState(null);
 
   async function load() {
     setLoading(true);
@@ -494,6 +495,8 @@ function KecamatanMapPanel() {
     unknown: "#64748b",
   };
 
+  const selectedKec = rows.find((r) => r.slug === selectedSlug);
+
   return (
     <section className="panel wide">
       <div className="panel-title">
@@ -523,9 +526,77 @@ function KecamatanMapPanel() {
         </button>
       </div>
 
+      {selectedKec && (
+        <div className="kec-details-panel">
+          <div className="kec-details-panel-title">
+            <div>
+              <h3>Detail Analisis: {selectedKec.kecamatan} ({selectedKec.city})</h3>
+              <p>Model: Prophet + XGBoost Hybrid ({selectedKec.model_available ? "Active" : "Unavailable"})</p>
+            </div>
+            <button className="text-button" onClick={() => setSelectedSlug(null)}>Tutup</button>
+          </div>
+          
+          <div className="kec-details-grid">
+            <div className="kec-details-section">
+              <h4>Komponen Prediksi (Tonase)</h4>
+              <ul className="kec-details-list">
+                <li className="kec-details-item">
+                  <span>Baseline Musiman (Prophet):</span>
+                  <b>{selectedKec.prophet_baseline_tons ? `${selectedKec.prophet_baseline_tons.toLocaleString("id-ID")} ton` : "…"}</b>
+                </li>
+                <li className="kec-details-item">
+                  <span>Koreksi Dinamis (XGBoost):</span>
+                  <b style={{ color: selectedKec.xgboost_residual > 0 ? "#ea580c" : "#64748b" }}>
+                    {selectedKec.xgboost_residual > 0 ? `+${selectedKec.xgboost_residual.toLocaleString("id-ID")}` : (selectedKec.xgboost_residual || 0)} ton
+                  </b>
+                </li>
+                <li className="kec-details-item-total">
+                  <span>Total Prediksi Harian:</span>
+                  <span>{selectedKec.predicted_tons ? `${selectedKec.predicted_tons.toLocaleString("id-ID")} ton` : "…"}</span>
+                </li>
+              </ul>
+            </div>
+            
+            <div className="kec-details-section">
+              <h4>Uncertainty & Jejak Karbon</h4>
+              <ul className="kec-details-list">
+                <li className="kec-details-item">
+                  <span>Rentang Keyakinan (P10-P90):</span>
+                  <b>{selectedKec.prediction_interval_p10_p90 ? `${selectedKec.prediction_interval_p10_p90[0].toLocaleString("id-ID")} - ${selectedKec.prediction_interval_p10_p90[1].toLocaleString("id-ID")} ton` : "…"}</b>
+                </li>
+                <li className="kec-details-item">
+                  <span>Konsumsi Solar Armada:</span>
+                  <b>{selectedKec.fuel_consumption_liters ? `${selectedKec.fuel_consumption_liters.toLocaleString("id-ID")} Liter` : "…"}</b>
+                </li>
+                <li className="kec-details-item">
+                  <span>Jejak Karbon (CO2):</span>
+                  <b>{selectedKec.co2_emissions_kg ? `${selectedKec.co2_emissions_kg.toLocaleString("id-ID")} kg` : "…"}</b>
+                </li>
+              </ul>
+            </div>
+          </div>
+          
+          {selectedKec.factors && selectedKec.factors.length > 0 && (
+            <div className="kec-details-drivers">
+              <h4>Faktor Driver Lonjakan</h4>
+              {selectedKec.factors.map((f, i) => (
+                <div key={i} className="kec-driver-item">
+                  <span className="kec-driver-bullet">•</span>
+                  <span>{f}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="kec-list">
         {rows.slice(0, 12).map((k) => (
-          <article className="kec-row" key={k.slug}>
+          <article 
+            className={`kec-row${selectedSlug === k.slug ? " active" : ""}`} 
+            key={k.slug}
+            onClick={() => setSelectedSlug(selectedSlug === k.slug ? null : k.slug)}
+          >
             <div className="kec-head">
               <strong>{k.kecamatan}</strong>
               <span>{k.city}</span>
@@ -1894,42 +1965,44 @@ function CommandCenter({ onLogout }) {
                 playbackTruck={playbackTruck}
                 onBreadcrumbsLoaded={setPlaybackOptions}
               />
-              <div className="map-footer-panels">
-                <div className="panel map-controls-card">
-                  <div className="panel-title">
-                    <h2>Map Controls</h2>
-                  </div>
-                  <div className="map-controls-grid">
-                    <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
-                    <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
-                    <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> TPS</label>
-                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Wajib Retribusi</label>
-                  </div>
-                  <div className="playback-select-wrap">
-                    <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
-                      <option value="">Trip playback…</option>
-                      {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
+            </div>
+          )}
+          mapFooter={(
+            <div className="map-footer-panels">
+              <div className="panel map-controls-card">
+                <div className="panel-title">
+                  <h2>Map Controls</h2>
                 </div>
-                
-                <div className="panel map-legend-card">
-                  <div className="panel-title">
-                    <h2>Legend</h2>
-                  </div>
-                  <details className="map-legend" open aria-label="Map legend">
-                    <summary style={{ display: "none" }}>Legend</summary>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Wajib Retribusi <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> District waste risk <em className="legend-tag">MODEL</em></span>
-                    <span><i className="legend-assigned" style={{ display: "inline-block" }} /> Assigned corridor <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> Actual (clean) <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> Violation segment <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> OSRM route <em className="legend-tag">LIVE</em></span>
-                    <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
-                    <span><span className="legend-icon-unlicensed" /> Unlicensed Collector <em className="legend-tag">SIM</em></span>
-                  </details>
+                <div className="map-controls-grid">
+                  <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
+                  <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
+                  <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> TPS</label>
+                  <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Wajib Retribusi</label>
                 </div>
+                <div className="playback-select-wrap">
+                  <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
+                    <option value="">Trip playback…</option>
+                    {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="panel map-legend-card">
+                <div className="panel-title">
+                  <h2>Legend</h2>
+                </div>
+                <details className="map-legend" open aria-label="Map legend">
+                  <summary style={{ display: "none" }}>Legend</summary>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Wajib Retribusi <em className="legend-tag">REAL</em></span>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> District waste risk <em className="legend-tag">MODEL</em></span>
+                  <span><i className="legend-assigned" style={{ display: "inline-block" }} /> Assigned corridor <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> Actual (clean) <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> Violation segment <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> OSRM route <em className="legend-tag">LIVE</em></span>
+                  <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
+                  <span><span className="legend-icon-unlicensed" /> Unlicensed Collector <em className="legend-tag">SIM</em></span>
+                </details>
               </div>
             </div>
           )}
