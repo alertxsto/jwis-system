@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import FieldApp from "./field/FieldApp.jsx";
 import { AppShell } from "./layout/AppShell.jsx";
-import { MetricStrip } from "./ui/MetricStrip.jsx";
+import { FleetOperations } from "./workspaces/FleetOperations.jsx";
 import {
   Activity,
   AlertTriangle,
@@ -1571,40 +1571,37 @@ function CommandCenter({ onLogout }) {
 
   return (
     <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout}>
-      <MetricStrip metrics={[
-        { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
-        { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
-        { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
-        { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
-      ]} />
-
-      <section className="main-grid">
-        {activeWorkspace === "fleet" && (
-          <>
-            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
-              <RouteEvidencePanel route={snapshot.osrm_route} />
-              <TpaQueuePanel />
-              <StaggerSimulatorPanel />
-              <CarbonPanel />
+      {activeWorkspace === "fleet" && (
+        <FleetOperations
+          metrics={[
+            { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
+            { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
+            { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
+            { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
+          ]}
+          map={(
+            <div id="map-panel" className="map-anchor">
+              <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={(code, dispatch) => {
+                setFilterTruck(code);
+                if (dispatch) {
+                  const el = document.getElementById("history-panel");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }
+              }} />
             </div>
-            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <div id="map-panel" className="map-anchor">
-                <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={(code, dispatch) => {
-                  setFilterTruck(code);
-                  if (dispatch) {
-                    const el = document.getElementById("history-panel");
-                    if (el) el.scrollIntoView({ behavior: "smooth" });
-                  }
-                }} />
-              </div>
-              <AStarReroutingPanel />
-              <FleetTable trucks={snapshot.trucks} />
-              <FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />
-            </div>
-          </>
-        )}
+          )}
+          alerts={<AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />}
+          routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
+          rerouting={<AStarReroutingPanel />}
+          queue={<><TpaQueuePanel /><StaggerSimulatorPanel /></>}
+          fleetTable={<FleetTable trucks={snapshot.trucks} />}
+          history={<FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />}
+          carbon={<CarbonPanel />}
+        />
+      )}
 
+      {activeWorkspace !== "fleet" && (
+        <section className="main-grid">
         {activeWorkspace === "forecast" && (
           <>
             <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -1645,6 +1642,7 @@ function CommandCenter({ onLogout }) {
           </>
         )}
       </section>
+      )}
       {toast && <div className="toast"><Check size={16} /> {toast}</div>}
     </AppShell>
   );

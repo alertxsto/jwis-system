@@ -1,1 +1,98 @@
-/* Workspace styles are introduced in Task 2. */
+.fleet-workspace {
+  min-width: 0;
+}
+
+.workspace-canvas:has(.fleet-workspace) {
+  width: min(1500px, calc(100% - 32px));
+}
+
+.fleet-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  min-height: 560px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  overflow: hidden;
+  background: var(--ui-surface);
+}
+
+.fleet-map-stage {
+  position: relative;
+  min-width: 0;
+  min-height: 560px;
+  border-right: 1px solid var(--ui-border);
+}
+
+.fleet-map-stage .map-anchor,
+.fleet-map-stage .map-panel {
+  height: 100%;
+}
+
+.fleet-map-stage .map-panel {
+  grid-column: auto;
+  min-height: 560px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.fleet-map-stage .maplibre-shell,
+.fleet-map-stage .maplibre-container {
+  height: 100%;
+  min-height: 560px;
+  border-radius: 0;
+}
+
+.fleet-inspector {
+  min-width: 0;
+  overflow: auto;
+  background: var(--ui-surface);
+}
+
+.fleet-inspector .panel {
+  grid-column: auto;
+  border: 0;
+  border-bottom: 1px solid var(--ui-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.fleet-inspector .panel:last-child {
+  border-bottom: 0;
+}
+
+.workspace-tabs {
+  display: flex;
+  gap: 2px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.workspace-tab {
+  min-height: 42px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--ui-muted);
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-tab:hover {
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+}
+
+.workspace-tab[aria-selected="true"] {
+  color: var(--ui-accent);
+  border-bottom-color: var(--ui-accent);
+}
+
+.fleet-detail-surface {
+  margin-top: 16px;
+}
+
+.fleet-detail-surface .panel {
+  width: 100%;
+}

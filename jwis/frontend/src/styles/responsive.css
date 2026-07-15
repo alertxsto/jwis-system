@@ -1,1 +1,24 @@
-/* Responsive styles are introduced in Task 2. */
+@media (max-width: 980px) {
+  .fleet-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fleet-map-stage {
+    border-right: 0;
+    border-bottom: 1px solid var(--ui-border);
+  }
+
+  .fleet-inspector {
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .workspace-tabs {
+    overflow-x: auto;
+  }
+
+  .workspace-tab {
+    flex: 0 0 auto;
+  }
+}
