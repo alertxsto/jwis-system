@@ -112,3 +112,9 @@ test("field app has no mobile overflow and all workflow controls meet minimum to
     await expectMinimumTouchTarget(control);
   }
 });
+
+test("field brand remains a minimum touch target at tablet width", async ({ page }) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await page.goto("/field");
+  await expectMinimumTouchTarget(page.getByRole("link", { name: "Return to JWIS command center" }));
+});

@@ -194,6 +194,63 @@ Result: PASS. Vite transformed `1593` modules and completed in `14.87s`. The exi
 - `frontend/e2e/dashboard-shell.spec.js`: covers focus management, all named shell targets, and indigo focus styling.
 - `frontend/e2e/field-workflow.spec.js`: covers differing microseconds within one millisecond and all field workflow controls.
 
+## Second Review Fixes
+
+The second Task 6 review fixes were implemented after commit `6d9aeb13e40a80c4c3dfde67060117e4d703fb96` as another separate TDD cycle.
+
+### Second Review RED
+
+Command:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js e2e/field-workflow.spec.js --workers=1 -g "operable|legacy stylesheet|tablet width|traps focus"
+```
+
+Result: `4 failed`.
+
+- The menu/X toggle was inside the inert `.app-shell` while the drawer was open.
+- `legacy.css` still contained its `:focus-visible` block and `rgba(23, 107, 84, 0.25)` green outline source.
+- The field-brand link rendered 36px high at a 768px viewport because its 44px rule only applied through 560px.
+- The modal regression confirmed the inert boundary needed restructuring while retaining the existing focus trap and background focus prevention.
+
+### Second Review GREEN
+
+Focused command:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js e2e/field-workflow.spec.js --workers=1 -g "operable|legacy stylesheet|tablet width|traps focus"
+```
+
+Result: `4 passed (5.7s)`.
+
+The toggle is now a sibling of the inert application surface, remains above the drawer/backdrop, exposes dynamic Open/Close labeling with `aria-expanded`, closes through a real pointer click, and restores its own focus. The drawer still focuses navigation on open and traps Tab. The backdrop remains a separate `Dismiss workspace navigation` path.
+
+### Second Review Verification
+
+Complete focused specs:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js e2e/field-workflow.spec.js --workers=1
+```
+
+Result: `14 passed (16.3s)`.
+
+Production build:
+
+```powershell
+npm run build
+```
+
+Result: PASS. Vite transformed `1593` modules and completed in `12.53s`. The existing non-failing large-chunk advisory remains.
+
+### Second Review Scope
+
+- `frontend/src/layout/AppShell.jsx`: moves the mobile toggle outside the inert main surface and restores true toggle semantics.
+- `frontend/src/styles/responsive.css`: positions the toggle above the modal layers and applies the field-brand 44px target across the full `max-width: 860px` mobile breakpoint.
+- `frontend/src/styles/legacy.css`: removes the legacy green focus declaration at its source.
+- `frontend/e2e/dashboard-shell.spec.js`: verifies operable X closure, retained modal behavior, and absence of a legacy green focus source.
+- `frontend/e2e/field-workflow.spec.js`: verifies the field-brand target at 768px.
+
 ## Concerns
 
 1. The production bundle passes but Vite reports large chunks (`html2pdf` about 985 kB and the main bundle about 1.35 MB before gzip). Code splitting is outside Task 6.

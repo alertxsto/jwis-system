@@ -51,11 +51,12 @@ test("desktop and mobile have no document-level horizontal overflow", async ({ p
 test("mobile shell collapses navigation and preserves workspace access", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   const trigger = page.getByRole("button", { name: "Open workspace navigation" });
+  const toggle = page.locator(".mobile-nav-trigger");
 
   await expect(trigger).toBeVisible();
-  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await trigger.click();
-  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByTestId("workspace-navigation")).toBeVisible();
 });
 
@@ -81,11 +82,27 @@ test("mobile navigation traps focus, blocks background focus, and restores the t
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
   await trigger.click();
-  await page.getByRole("button", { name: "Close workspace navigation" }).click({ position: { x: 340, y: 100 } });
+  await page.getByRole("button", { name: "Dismiss workspace navigation" }).click({ position: { x: 340, y: 100 } });
   await expect(trigger).toBeFocused();
   await trigger.click();
   await nav.getByRole("button", { name: "Waste Forecast" }).click();
   await expect(trigger).toBeFocused();
+});
+
+test("mobile menu toggle remains operable while the drawer is open", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const toggle = page.locator(".mobile-nav-trigger");
+
+  await expect(page.getByRole("button", { name: "Open workspace navigation" })).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(await toggle.evaluate((element) => Boolean(element.closest("[inert]")))).toBe(false);
+  await expect(toggle).toHaveAttribute("aria-label", "Close workspace navigation");
+
+  await toggle.click({ timeout: 3000 });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toHaveAttribute("aria-label", "Open workspace navigation");
+  await expect(toggle).toBeFocused();
 });
 
 test("mobile shell controls meet minimum touch targets", async ({ page }) => {
@@ -117,4 +134,10 @@ test("primary controls use indigo focus without a legacy outline", async ({ page
   expect(focusStyle.outlineStyle).toBe("none");
   expect(focusStyle.outlineWidth).toBe("0px");
   expect(focusStyle.shadow).toContain("99, 102, 232");
+});
+
+test("legacy stylesheet contains no green focus source", async ({ page }) => {
+  const legacyCss = await page.evaluate(async () => (await fetch("/src/styles/legacy.css")).text());
+  expect(legacyCss).not.toContain(":focus-visible");
+  expect(legacyCss).not.toContain("rgba(23, 107, 84, 0.25)");
 });

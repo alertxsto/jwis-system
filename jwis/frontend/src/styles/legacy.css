@@ -60,11 +60,6 @@ input, select, textarea {
   -webkit-tap-highlight-color: transparent;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  outline: 3px solid rgba(23, 107, 84, 0.25);
-  outline-offset: 2px;
-}
-
 .login-shell {
   min-height: 100dvh;
   display: grid;

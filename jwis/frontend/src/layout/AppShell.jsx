@@ -88,20 +88,26 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         <div className="side-system-state"><Activity size={15} /><span>System status</span><StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge></div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}><LogOut size={17} />Logout</button>
       </aside>
-      {mobileNavMode && mobileNavOpen && <button className="mobile-nav-backdrop" type="button" tabIndex={-1} aria-label="Close workspace navigation" onClick={() => closeMobileNav()} />}
+      {mobileNavMode && mobileNavOpen && <button className="mobile-nav-backdrop" type="button" tabIndex={-1} aria-label="Dismiss workspace navigation" onClick={() => closeMobileNav()} />}
+      <button
+        ref={mobileNavTriggerRef}
+        className="icon-button mobile-nav-trigger"
+        type="button"
+        aria-label={mobileNavOpen ? "Close workspace navigation" : "Open workspace navigation"}
+        aria-controls="workspace-navigation"
+        aria-expanded={mobileNavOpen}
+        onClick={() => {
+          if (mobileNavOpen) closeMobileNav();
+          else {
+            setMobileNavMode(true);
+            setMobileNavOpen(true);
+          }
+        }}
+      >
+        {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
+      </button>
       <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
-          <button
-            ref={mobileNavTriggerRef}
-            className="icon-button mobile-nav-trigger"
-            type="button"
-            aria-label="Open workspace navigation"
-            aria-controls="workspace-navigation"
-            aria-expanded={mobileNavOpen}
-            onClick={() => { setMobileNavMode(true); setMobileNavOpen(true); }}
-          >
-            {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
-          </button>
           <div className="breadcrumb"><span>JWIS</span><span>/</span><strong>{current.label}</strong></div>
           <div className="top-actions"><StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge><a className="ghost-button" href="/field"><Truck size={16} />Field app</a><button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center"><RefreshCcw size={17} /></button></div>
         </header>
