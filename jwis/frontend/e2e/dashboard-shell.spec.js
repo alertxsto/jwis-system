@@ -40,3 +40,21 @@ test("desktop and mobile have no document-level horizontal overflow", async ({ p
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
   }
 });
+
+test("mobile shell collapses navigation and preserves workspace access", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const trigger = page.getByRole("button", { name: "Open workspace navigation" });
+
+  await expect(trigger).toBeVisible();
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByTestId("workspace-navigation")).toBeVisible();
+});
+
+test("primary controls expose visible focus", async ({ page }) => {
+  const refresh = page.getByRole("button", { name: "Refresh command center" });
+  await refresh.focus();
+  const shadow = await refresh.evaluate((element) => getComputedStyle(element).boxShadow);
+  expect(shadow).not.toBe("none");
+});

@@ -244,62 +244,73 @@ function LoginPage({ onLogin }) {
 
   return (
     <main className="login-shell">
-      <section className="login-card" aria-labelledby="login-title">
-        <div className="login-brand">
-          <span><ShieldCheck size={22} /></span>
-          <div>
-            <p className="eyebrow">DLH Command Access</p>
-            <h1 id="login-title">JWIS Control Center</h1>
+      <section className="login-surface" aria-labelledby="login-title">
+        <div className="login-card">
+          <div className="login-brand">
+            <span><ShieldCheck size={22} /></span>
+            <div>
+              <p className="login-kicker">DLH Command Access</p>
+              <h1 id="login-title">JWIS Control Center</h1>
+            </div>
+          </div>
+          <p className="login-copy">
+            Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.
+          </p>
+          <form className="login-form" onSubmit={submit}>
+            <label htmlFor="username">Username</label>
+            <div className="input-shell">
+              <User size={18} />
+              <input
+                id="username"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                autoComplete="username"
+              />
+            </div>
+            <label htmlFor="password">Password</label>
+            <div className="input-shell">
+              <Lock size={18} />
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                autoComplete="current-password"
+                placeholder="Enter password"
+              />
+            </div>
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <button className="primary-button login-submit" type="submit">
+              <Lock size={16} /> Sign in
+            </button>
+          </form>
+          <div className="login-demo-note">
+            <strong>Demo roles</strong>
+            <span>dispatcher / supervisor / auditor · password &lt;role&gt;-demo-pass</span>
           </div>
         </div>
-        <p className="login-copy">
-          Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.
-        </p>
-        <form className="login-form" onSubmit={submit}>
-          <label htmlFor="username">Username</label>
-          <div className="input-shell">
-            <User size={18} />
-            <input
-              id="username"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              autoComplete="username"
-            />
+        <aside className="login-proof" aria-label="JWIS operating scope">
+          <div className="login-proof-intro">
+            <span className="brand-mark"><Route size={19} /></span>
+            <div>
+              <strong>Jakarta Waste Intelligence System</strong>
+              <p>Operational access for DLH command personnel.</p>
+            </div>
           </div>
-          <label htmlFor="password">Password</label>
-          <div className="input-shell">
-            <Lock size={18} />
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              autoComplete="current-password"
-              placeholder="Enter password"
-            />
+          <div className="login-proof-metrics">
+            <div>
+              <span className="metric-label">Queue model</span>
+              <strong>Discrete event</strong>
+              <p>Simulated landfill waiting-time operations.</p>
+            </div>
+            <div>
+              <span className="metric-label">Coverage</span>
+              <strong>Case 1 + 2</strong>
+              <p>Fleet supervision and resource planning.</p>
+            </div>
           </div>
-          {error && <p className="form-error" role="alert">{error}</p>}
-          <button className="primary-button login-submit" type="submit">
-            <Lock size={16} /> Sign in
-          </button>
-        </form>
-        <div className="login-demo-note">
-          <strong>Demo roles</strong>
-          <span>dispatcher / supervisor / auditor · password &lt;role&gt;-demo-pass</span>
-        </div>
+        </aside>
       </section>
-      <aside className="login-proof">
-        <div>
-          <span className="metric-label">Queue (simulated)</span>
-          <strong>discrete-event</strong>
-          <p>landfill waiting-time reduction from seeded simulation.</p>
-        </div>
-        <div>
-          <span className="metric-label">Coverage</span>
-          <strong>Case 1 + 2</strong>
-          <p>fleet supervision, route compliance, forecasting, and resource planning.</p>
-        </div>
-      </aside>
     </main>
   );
 }

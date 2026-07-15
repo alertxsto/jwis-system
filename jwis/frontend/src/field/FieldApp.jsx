@@ -1,11 +1,28 @@
-import React, { useEffect, useState } from "react";
-import { Truck, Send, Check, X, ShieldCheck, ChevronRight } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Check, Route, Send, ShieldCheck, Truck, X } from "lucide-react";
 import { readOutbox, enqueue, flushOutbox } from "./OfflineOutbox.js";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
 
 function StatusPill({ tone, children }) {
   return <span className={`pill ${tone}`}>{children}</span>;
+}
+
+function newestPendingDispatch(dispatches) {
+  return dispatches
+    .filter((dispatch) => (
+      dispatch?.field_status === "PENDING"
+      && typeof dispatch.id === "string"
+      && typeof dispatch.instruction === "string"
+      && dispatch.instruction.trim().length > 0
+      && Number.isFinite(Date.parse(dispatch.created_at))
+    ))
+    .reduce((newest, dispatch) => {
+      if (!newest) return dispatch;
+      const timeDifference = Date.parse(dispatch.created_at) - Date.parse(newest.created_at);
+      if (timeDifference !== 0) return timeDifference > 0 ? dispatch : newest;
+      return dispatch.id.localeCompare(newest.id) > 0 ? dispatch : newest;
+    }, null);
 }
 
 export default function FieldApp() {
@@ -75,22 +92,29 @@ export default function FieldApp() {
     };
   }, [truckCode]);
 
-  const activeDispatch = dispatches[0];
+  const activeDispatch = useMemo(() => newestPendingDispatch(dispatches), [dispatches]);
 
   return (
     <main className="field-shell" data-testid="field-app">
-      <section className="field-card">
+      <header className="field-app-header">
+        <a className="field-brand" href="/" aria-label="Return to JWIS command center">
+          <span className="field-brand-mark"><Route size={19} /></span>
+          <span><strong>JWIS</strong><small>Field operations</small></span>
+        </a>
+        <StatusPill tone={online ? "live" : "warning"}>
+          <span data-testid="conn-status">{online ? "Online" : "Offline"}</span>
+        </StatusPill>
+      </header>
+      <section className="field-card" aria-labelledby="field-truck-title">
         <div className="field-head">
           <div>
-            <p className="eyebrow">JWIS Field Worker</p>
-            <h1>{truckCode}</h1>
+            <p className="field-kicker">Assigned vehicle</p>
+            <h1 id="field-truck-title">{truckCode}</h1>
           </div>
-          <StatusPill tone={online ? "live" : "warning"}>
-            <span data-testid="conn-status">{online ? "Online" : "Offline"}</span>
-          </StatusPill>
+          <span className="field-duty-label"><Truck size={16} /> On duty</span>
         </div>
         {queued > 0 && (
-          <div className="field-status" style={{ background: "#fef3c7" }}>
+          <div className="field-status field-queue-status">
             <span data-testid="queued-count">{queued} action(s) queued offline</span>
             <button className="primary-button" onClick={syncNow} disabled={!online}>Sync now</button>
           </div>
@@ -115,7 +139,9 @@ export default function FieldApp() {
                 <p>{activeDispatch.instruction}</p>
               </div>
             </div>
+            <label className="field-label" htmlFor="incident-reason">Incident reason</label>
             <input
+              id="incident-reason"
               className="field-input"
               data-testid="incident-reason"
               placeholder="Incident reason (if reporting an issue)"
@@ -146,7 +172,7 @@ export default function FieldApp() {
           </div>
         )}
 
-        <a className="back-link" href="/"><ChevronRight size={16} /> Return to command center</a>
+        <a className="back-link" href="/"><ArrowLeft size={16} /> Return to command center</a>
       </section>
     </main>
   );
