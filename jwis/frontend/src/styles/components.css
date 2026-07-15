@@ -1,3 +1,242 @@
+.form-error {
+  margin: 0 0 6px;
+  color: var(--ui-danger);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.input-shell {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+}
+
+.input-shell svg {
+  flex-shrink: 0;
+  color: var(--ui-muted);
+}
+
+.input-shell input {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink);
+}
+
+.primary-button,
+.ghost-button,
+.danger-button,
+.icon-button {
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.primary-button,
+.danger-button {
+  width: 100%;
+  padding: 0 14px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.primary-button {
+  background: var(--ui-primary);
+}
+
+.primary-button:hover {
+  background: var(--ui-primary-hover);
+}
+
+.danger-button {
+  background: var(--ui-danger);
+}
+
+.ghost-button {
+  padding: 0 14px;
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.icon-button {
+  width: 40px;
+  background: var(--ui-ink);
+  color: #ffffff;
+}
+
+.main-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.panel {
+  grid-column: span 4;
+  min-width: 0;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.panel.wide {
+  grid-column: span 8;
+}
+
+.panel.map-panel,
+.map-anchor {
+  grid-column: span 12;
+}
+
+.map-anchor .map-panel {
+  height: 100%;
+}
+
+.panel-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.panel-title h2 {
+  margin: 0 0 3px;
+  font-weight: 600;
+}
+
+.panel-title p {
+  margin: 0;
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.panel-title svg {
+  flex-shrink: 0;
+  color: var(--ui-accent);
+}
+
+.pill {
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: var(--ui-radius-control);
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pill.success {
+  color: var(--ui-success);
+  background: #eaf7f0;
+}
+
+.pill.warning {
+  color: var(--ui-warning);
+  background: #fff8e8;
+}
+
+.pill.danger {
+  color: var(--ui-danger);
+  background: #fff0f0;
+}
+
+.pill.live {
+  color: var(--ui-info);
+  background: #edf8fb;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+th,
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+th {
+  color: var(--ui-muted);
+  background: #f5f5ff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+td {
+  background: #ffffff;
+  font-size: 13px;
+}
+
+tbody tr:nth-child(even) td {
+  background: #fbfbff;
+}
+
+tbody tr:hover td {
+  background: #f5f5ff;
+}
+
+tr:last-child td {
+  border-bottom: 0;
+}
+
+td b,
+td span {
+  display: block;
+}
+
+td span {
+  margin-top: 2px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ui-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+textarea {
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  resize: vertical;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+}
+
 .status-badge {
   min-height: 24px;
   padding: 0 8px;
@@ -306,7 +545,7 @@ textarea:focus-visible {
 
 .professional-shell th {
   color: var(--ui-muted);
-  background: #f8f8fc;
+  background: #f5f5ff;
   font-size: 12px;
   font-weight: 600;
 }
@@ -571,6 +810,7 @@ textarea:focus-visible {
   padding: 24px;
   border: 1px solid #e8eaf0;
   border-radius: 8px;
+  background: #ffffff;
   box-shadow: none;
 }
 
@@ -688,4 +928,13 @@ textarea:focus-visible {
 .field-shell .back-link {
   color: var(--ui-accent-foreground);
   font-size: 13px;
+}
+
+.field-shell .back-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  font-weight: 700;
 }

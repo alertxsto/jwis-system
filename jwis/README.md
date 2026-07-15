@@ -107,12 +107,14 @@ Backend tests:
 
 ```powershell
 cd ".\backend"
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe -m unittest discover -s tests
+$env:PYTHONPATH='.'
+python -m unittest discover -s tests -v
 ```
 
-Frontend build:
+Frontend build and complete headless UI suite:
 
 ```powershell
 cd ".\frontend"
 npm run build
+npx playwright test --workers=1
 ```

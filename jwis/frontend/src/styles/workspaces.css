@@ -329,6 +329,17 @@
   text-align: center;
 }
 
+.optimizer-error,
+.event-simulate-button {
+  margin-top: 12px;
+}
+
+.table-empty-state {
+  padding: 20px;
+  color: var(--ui-muted);
+  text-align: center;
+}
+
 .decision-evidence > .summary-panel {
   width: 100%;
   padding: 0;

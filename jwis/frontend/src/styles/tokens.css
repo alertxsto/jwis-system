@@ -1,6 +1,6 @@
 :root {
-  --ui-primary: #176b54;
-  --ui-primary-hover: #125743;
+  --ui-primary: #6366e8;
+  --ui-primary-hover: #5558d9;
   --ui-accent: #6366e8;
   --ui-accent-foreground: #4d4ab0;
   --ui-accent-soft: #eef0ff;
@@ -17,7 +17,7 @@
   --ui-info: #117f9b;
   --ui-radius: 8px;
   --ui-radius-control: 6px;
-  --ui-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --ui-shadow: none;
   --ui-sidebar-width: 248px;
   --ui-topbar-height: 72px;
   --ui-focus: 0 0 0 3px rgba(99, 102, 232, 0.24);
@@ -27,4 +27,27 @@
   --z-modal: 50;
   --z-toast: 60;
   --z-tooltip: 70;
+
+  /* Feature-level aliases retained while legacy modules are decomposed. */
+  --green: var(--ui-success);
+  --green-light: #eaf7f0;
+  --green-dark: #126247;
+  --red: var(--ui-danger);
+  --red-light: #fff0f0;
+  --amber: var(--ui-warning);
+  --amber-light: #fff8e8;
+  --purple: var(--ui-accent);
+  --purple-light: var(--ui-accent-soft);
+  --bg: var(--ui-canvas);
+  --surface: var(--ui-surface);
+  --surface-soft: var(--ui-surface-muted);
+  --ink: var(--ui-ink);
+  --text: #26323d;
+  --text-muted: var(--ui-muted);
+  --border: var(--ui-border);
+  --border-strong: var(--ui-border-strong);
+  --radius: var(--ui-radius);
+  --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --shadow: none;
+  --shadow-hover: none;
 }

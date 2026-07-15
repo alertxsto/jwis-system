@@ -35,10 +35,11 @@ test("dashboard exposes the professional design token contract", async ({ page }
     return {
       primary: css.getPropertyValue("--ui-primary").trim(),
       accent: css.getPropertyValue("--ui-accent").trim(),
+      success: css.getPropertyValue("--ui-success").trim(),
       radius: css.getPropertyValue("--ui-radius").trim(),
     };
   });
-  expect(tokens).toEqual({ primary: "#176b54", accent: "#6366e8", radius: "8px" });
+  expect(tokens).toEqual({ primary: "#6366e8", accent: "#6366e8", success: "#177a57", radius: "8px" });
 });
 
 test("desktop and mobile have no document-level horizontal overflow", async ({ page }) => {
@@ -163,4 +164,123 @@ test("legacy stylesheet contains no green focus source", async ({ page }) => {
   const legacyCss = await page.evaluate(async () => (await fetch("/src/styles/legacy.css")).text());
   expect(legacyCss).not.toContain(":focus-visible");
   expect(legacyCss).not.toContain("rgba(23, 107, 84, 0.25)");
+});
+
+test("dashboard has no nested operational panels or inline layout composition", async ({ page }) => {
+  for (const name of ["Fleet Operations", "Waste Forecast", "Integrated Planning"]) {
+    await page.getByRole("button", { name }).click();
+    expect(await page.locator(".panel .panel").count()).toBe(0);
+    const inlineLayouts = await page.locator("[style]").evaluateAll((elements) => elements
+      .filter((element) => ["gridColumn", "marginTop", "textAlign", "padding"].some((property) => element.style[property]))
+      .map((element) => element.getAttribute("style")));
+    expect(inlineLayouts).toEqual([]);
+  }
+});
+
+test("dashboard emits no runtime errors during workspace navigation", async ({ page }) => {
+  const errors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+
+  for (const name of ["Waste Forecast", "Integrated Planning", "Fleet Operations"]) {
+    await page.getByRole("button", { name }).click();
+  }
+
+  expect(errors).toEqual([]);
+});
+
+test("desktop shell and operational surfaces match the professional reference system", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const shell = await page.evaluate(() => {
+    const read = (selector) => {
+      const element = document.querySelector(selector);
+      const style = getComputedStyle(element);
+      const box = element.getBoundingClientRect();
+      return {
+        width: box.width,
+        height: box.height,
+        background: style.backgroundColor,
+        borderWidth: style.borderBottomWidth,
+        radius: Number.parseFloat(style.borderRadius),
+        shadow: style.boxShadow,
+      };
+    };
+
+    return {
+      sidebar: read(".side-rail"),
+      topbar: read(".topbar"),
+      canvas: read(".workspace-canvas"),
+      panel: read(".panel"),
+      activeNav: getComputedStyle(document.querySelector('.nav-tab-btn[aria-current="page"]')).backgroundColor,
+      primary: getComputedStyle(document.querySelector(".professional-shell .primary-button")).backgroundColor,
+    };
+  });
+
+  expect(shell.sidebar.width).toBeCloseTo(248, 0);
+  expect(shell.sidebar.background).toBe("rgb(255, 255, 255)");
+  expect(shell.topbar.height).toBeCloseTo(72, 0);
+  expect(shell.topbar.background).toBe("rgb(255, 255, 255)");
+  expect(shell.topbar.borderWidth).toBe("1px");
+  expect(shell.canvas.background).toBe("rgb(255, 255, 255)");
+  expect(shell.panel.radius).toBeLessThanOrEqual(8);
+  expect(shell.panel.shadow).toBe("none");
+  expect(shell.activeNav).toBe("rgb(229, 230, 255)");
+  expect(shell.primary).toBe("rgb(99, 102, 232)");
+
+  const metricGeometry = await page.locator(".metric-strip").evaluate((strip) => {
+    const cells = [...strip.querySelectorAll(":scope > .metric-cell")];
+    const first = cells[0].getBoundingClientRect();
+    const second = cells[1].getBoundingClientRect();
+    const style = getComputedStyle(strip);
+    return {
+      gap: second.left - first.right,
+      radius: Number.parseFloat(style.borderRadius),
+      shadow: style.boxShadow,
+    };
+  });
+  expect(metricGeometry).toEqual({ gap: 0, radius: 8, shadow: "none" });
+
+  await page.getByRole("tab", { name: "Trip history" }).click();
+  const header = page.getByTestId("fleet-history-surface").locator("table thead th").first();
+  await expect(header).toBeVisible();
+  const headerStyle = await header.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      background: style.backgroundColor,
+      height: element.getBoundingClientRect().height,
+      fontSize: style.fontSize,
+    };
+  });
+  expect(headerStyle.background).toBe("rgb(245, 245, 255)");
+  expect(headerStyle.height).toBeLessThanOrEqual(40);
+  expect(headerStyle.fontSize).toBe("12px");
+});
+
+test("login and field surfaces share the indigo compact visual system", async ({ page }) => {
+  await page.evaluate(() => localStorage.removeItem("jwis_auth"));
+  await page.goto("/");
+
+  const login = await page.locator(".login-surface").evaluate((surface) => {
+    const surfaceStyle = getComputedStyle(surface);
+    const buttonStyle = getComputedStyle(surface.querySelector(".primary-button"));
+    return {
+      radius: Number.parseFloat(surfaceStyle.borderRadius),
+      shadow: surfaceStyle.boxShadow,
+      buttonBackground: buttonStyle.backgroundColor,
+    };
+  });
+  expect(login).toEqual({ radius: 8, shadow: "none", buttonBackground: "rgb(99, 102, 232)" });
+
+  await page.goto("/field");
+  const field = await page.locator(".field-card").evaluate((card) => {
+    const style = getComputedStyle(card);
+    return {
+      radius: Number.parseFloat(style.borderRadius),
+      shadow: style.boxShadow,
+      background: style.backgroundColor,
+    };
+  });
+  expect(field).toEqual({ radius: 8, shadow: "none", background: "rgb(255, 255, 255)" });
 });

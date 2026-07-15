@@ -142,6 +142,21 @@
     border-top: 1px solid #e8eaf0;
     border-left: 0;
   }
+
+  .route-evidence-grid,
+  .scenario-panel .control-row,
+  .tpa-status-grid,
+  .event-body {
+    grid-template-columns: 1fr;
+  }
+
+  .carbon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .weather-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
@@ -276,6 +291,25 @@
 
   .field-shell .field-actions {
     grid-template-columns: 1fr;
+  }
+
+  .weather-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .alert-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .astar-stats,
+  .stagger-compare {
+    flex-direction: column;
+  }
+
+  .toast {
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
   }
 }
 

@@ -909,7 +909,7 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
         )}
 
         {optimizerError && (
-          <div className="unmet-reasons-box" style={{ marginTop: "12px" }}>
+          <div className="unmet-reasons-box optimizer-error">
             <strong>Error:</strong> {optimizerError}
           </div>
         )}
@@ -970,7 +970,7 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
                 </div>
               ))}
               {plan.assignments.length === 0 && (
-                <p className="kec-note" style={{ textAlign: "center", margin: "10px 0" }}>No truck assignments generated.</p>
+                <p className="kec-note optimizer-empty">No truck assignments generated.</p>
               )}
             </div>
 
@@ -1112,7 +1112,7 @@ function CrowdEventsPanel({ onSimulateEvent }) {
               </div>
             </div>
             {onSimulateEvent && (
-              <button className="primary-button" style={{ marginTop: "12px", width: "100%" }} onClick={() => onSimulateEvent(ev)}>
+              <button className="primary-button event-simulate-button" onClick={() => onSimulateEvent(ev)}>
                 <Zap size={14} /> Simulate event in Optimizer
               </button>
             )}
@@ -1539,7 +1539,7 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
           </thead>
           <tbody>
             {history.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: "center", color: "#98a2b3", padding: "20px" }}>No trip history for this filter.</td></tr>
+              <tr><td className="table-empty-state" colSpan={7}>No trip history for this filter.</td></tr>
             ) : (
               history.map((trip) => (
                 <tr key={`${trip.truck_code}-${trip.date}`}>

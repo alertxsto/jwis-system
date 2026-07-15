@@ -1,3 +1,5 @@
+@import url("https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5/index.css");
+@import url("https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5/index.css");
 @import "./styles/tokens.css";
 @import "./styles/base.css";
 @import "./styles/legacy.css";
