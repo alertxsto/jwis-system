@@ -1547,7 +1547,13 @@ function StaggerSimulatorPanel() {
         baseline_wait_minutes: 116, baseline_queue_trucks: 47,
         optimized_wait_minutes: 48, optimized_queue_trucks: 19,
         queue_reduction_percent: 58.6, recommended_stagger_minutes: 15,
-        dispatch_slots: [],
+        dispatch_slots: [
+          { truck_index: 1, suggested_departure: "08:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+          { truck_index: 2, suggested_departure: "08:15", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+          { truck_index: 3, suggested_departure: "08:30", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+          { truck_index: 4, suggested_departure: "08:45", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+          { truck_index: 5, suggested_departure: "09:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+        ],
       });
     }
     setLoading(false);
@@ -1566,21 +1572,133 @@ function StaggerSimulatorPanel() {
         {loading ? "Calculating..." : "Run Dispatch Simulation"}
       </button>
       {result && (
-        <div className="stagger-compare">
-          <div className="stagger-col before">
-            <span className="stagger-label">Without Optimization</span>
-            <strong>{result.baseline_wait_minutes} min</strong>
-            <small>{result.baseline_queue_trucks} queued trucks</small>
+        <>
+          <div className="stagger-compare">
+            <div className="stagger-col before">
+              <span className="stagger-label">Without Optimization</span>
+              <strong>{result.baseline_wait_minutes} min</strong>
+              <small>{result.baseline_queue_trucks} queued trucks</small>
+            </div>
+            <div className="stagger-arrow">-&gt;</div>
+            <div className="stagger-col after">
+              <span className="stagger-label">With JWIS</span>
+              <strong>{result.optimized_wait_minutes} min</strong>
+              <small>{result.optimized_queue_trucks} queued trucks</small>
+            </div>
+            <div className="stagger-badge">-{result.queue_reduction_percent}%</div>
           </div>
-          <div className="stagger-arrow">-&gt;</div>
-          <div className="stagger-col after">
-            <span className="stagger-label">With JWIS</span>
-            <strong>{result.optimized_wait_minutes} min</strong>
-            <small>{result.optimized_queue_trucks} queued trucks</small>
-          </div>
-          <div className="stagger-badge">-{result.queue_reduction_percent}%</div>
-        </div>
+
+          {result.dispatch_slots && result.dispatch_slots.length > 0 && (
+            <div className="stagger-schedule-wrap">
+              <h3>Rekomendasi Jadwal Keberangkatan Staggered:</h3>
+              <div className="table-wrap">
+                <table className="audit-table">
+                  <thead>
+                    <tr>
+                      <th>ID Truk</th>
+                      <th>Saran Jam Berangkat</th>
+                      <th>Estimasi Antri TPA</th>
+                      <th>Status Jadwal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.dispatch_slots.slice(0, 10).map((slot, i) => (
+                      <tr key={i}>
+                        <td><strong>T-0{slot.truck_index}</strong></td>
+                        <td><code>{slot.suggested_departure}</code></td>
+                        <td>{slot.tpa_wait_est_minutes} menit</td>
+                        <td>
+                          <span className="status-pill success">{slot.slot_status.toUpperCase()}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {result.dispatch_slots.length > 10 && (
+                <p className="stagger-schedule-note">
+                  Menampilkan 10 slot pertama dari {result.dispatch_slots.length} total armada terjadwal.
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
+    </section>
+  );
+}
+
+function UnlicensedCollectorAlerts() {
+  const [alerts, setAlerts] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [enforced, setEnforced] = useState({});
+
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/fleet/unlicensed-collectors`);
+      if (res.ok) setAlerts(await res.json());
+    } catch {}
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  function handleEnforce(plate) {
+    setEnforced(prev => ({ ...prev, [plate]: true }));
+  }
+
+  if (loading) return <div>Memuat data deteksi...</div>;
+  if (!alerts || !alerts.alerts || alerts.alerts.length === 0) return null;
+
+  return (
+    <section className="panel unlicensed-alerts-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Deteksi Kolektor Sampah Liar (Case 1)</h2>
+          <p>Daftar kendaraan operasional tanpa izin resmi yang terdeteksi di area DKI Jakarta.</p>
+        </div>
+        <AlertTriangle size={20} />
+      </div>
+      <div className="table-wrap">
+        <table className="audit-table" role="grid" aria-label="Deteksi kolektor liar">
+          <thead>
+            <tr>
+              <th scope="col">Plat Nomor</th>
+              <th scope="col">Lokasi Koordinat</th>
+              <th scope="col">Status</th>
+              <th scope="col">Aksi Penertiban</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alerts.alerts.map((a, i) => (
+              <tr key={i}>
+                <td><strong>{a.plate || "Unknown"}</strong></td>
+                <td><code>{a.lat.toFixed(4)}, {a.lng.toFixed(4)}</code></td>
+                <td>
+                  <span className={`status-pill ${enforced[a.plate] ? "success" : "warning"}`}>
+                    {enforced[a.plate] ? "PATROL DISPATCHED" : "UNAUTHORIZED"}
+                  </span>
+                </td>
+                <td>
+                  <button 
+                    className="primary-button compact" 
+                    onClick={() => handleEnforce(a.plate)}
+                    disabled={enforced[a.plate]}
+                  >
+                    {enforced[a.plate] ? "Telah Ditindak" : "Kirim Patroli"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="stagger-schedule-note">
+        Sumber data: Plat terdaftar di database DLH 2023. Pencocokan otomatis via plat nomor kendaraan komersial/swasta.
+      </p>
     </section>
   );
 }
@@ -2243,7 +2361,12 @@ function CommandCenter({ onLogout }) {
               </div>
             </div>
           )}
-          alerts={<AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />}
+          alerts={(
+            <>
+              <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
+              <UnlicensedCollectorAlerts />
+            </>
+          )}
           routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
           rerouting={<AStarReroutingPanel />}
           queue={<><TpaQueuePanel /><StaggerSimulatorPanel /></>}
