@@ -1,8 +1,8 @@
 import React from "react";
 
-export function SegmentedControl({ label, value, options, onChange }) {
+export function SegmentedControl({ label, describedBy, value, options, onChange }) {
   return (
-    <div className="segmented-control" role="group" aria-label={label}>
+    <div className="segmented-control" role="group" aria-label={label} aria-describedby={describedBy}>
       {options.map((option) => (
         <button
           key={option.value}

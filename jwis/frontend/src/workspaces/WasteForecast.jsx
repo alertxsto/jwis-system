@@ -27,12 +27,18 @@ export function WasteForecast({
           <h1>Waste Forecast</h1>
           <p>Forecast demand and inspect the operating conditions behind the projected spike.</p>
         </div>
-        <SegmentedControl
-          label="Forecast horizon"
-          value={horizon}
-          options={horizonOptions}
-          onChange={setHorizon}
-        />
+        <div className="forecast-horizon-control">
+          <SegmentedControl
+            label="Forecast horizon"
+            describedBy="forecast-horizon-source-limit"
+            value={horizon}
+            options={horizonOptions}
+            onChange={setHorizon}
+          />
+          <p id="forecast-horizon-source-limit" className="forecast-source-limit">
+            Source currently provides a 7-day forecast.
+          </p>
+        </div>
       </div>
 
       <MetricStrip metrics={metrics} />

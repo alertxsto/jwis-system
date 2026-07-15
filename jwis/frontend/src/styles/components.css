@@ -117,6 +117,12 @@
   box-shadow: var(--ui-shadow);
 }
 
+.segmented-control button:disabled {
+  color: #4f5d6b;
+  background: #e9edf2;
+  cursor: not-allowed;
+}
+
 @media (max-width: 860px) {
   .metric-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -91,6 +91,13 @@ test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
   await expect(page.getByTestId("forecast-primary-analysis")).toBeVisible();
   await expect(page.getByTestId("forecast-driver-rail")).toHaveAttribute("aria-label", "Forecast drivers");
   await expect(page.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
+  const sourceLimit = page.locator("#forecast-horizon-source-limit");
+  await expect(sourceLimit).toHaveText("Source currently provides a 7-day forecast.");
+  await expect(sourceLimit).toBeVisible();
+  await expect(page.getByRole("group", { name: "Forecast horizon" })).toHaveAttribute(
+    "aria-describedby",
+    "forecast-horizon-source-limit",
+  );
   for (const label of ["14 days", "30 days"]) {
     const horizon = page.getByRole("button", { name: label });
     await expect(horizon).toBeDisabled();
