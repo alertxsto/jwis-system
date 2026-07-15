@@ -889,7 +889,6 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
       <div className="optimizer-section">
         <div className="optimizer-head">
           <h3>Operations Optimizer (Case 2 &rarr; Case 1 Handoff)</h3>
-          <span className="role-badge" style={{ fontSize: "11px", color: "var(--text-muted)" }}>Role: <b>{role}</b></span>
         </div>
         
         {!plan && (

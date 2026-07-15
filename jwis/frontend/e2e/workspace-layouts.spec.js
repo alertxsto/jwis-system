@@ -13,7 +13,7 @@ async function stubPlanningPrediction(page) {
   });
 }
 
-test.beforeEach(async ({ page }) => {
+async function stubFleetCarbon(page) {
   await page.route("**/api/fleet/carbon", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -26,6 +26,9 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
+}
+
+test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -56,6 +59,9 @@ test("dispatching a truck opens filtered Trip history", async ({ page }) => {
 });
 
 test("fleet detail tabs reveal Queue, Route evidence, and Carbon impact surfaces", async ({ page }) => {
+  await stubFleetCarbon(page);
+  await page.reload({ waitUntil: "domcontentloaded" });
+
   for (const [label, surface] of [
     ["TPA queue", "fleet-queue-surface"],
     ["Route evidence", "fleet-evidence-surface"],
@@ -147,9 +153,49 @@ test("Integrated Planning presents an ordered decision flow", async ({ page }) =
   await page.getByRole("button", { name: "Integrated Planning" }).click();
   const workspace = page.getByTestId("planning-workspace");
   await expect(workspace).toBeVisible();
-  await expect(workspace.getByRole("heading", { name: "Scenario inputs" })).toBeVisible();
-  await expect(workspace.getByRole("heading", { name: "Recommended plan" })).toBeVisible();
-  await expect(workspace.getByRole("heading", { name: "Evidence and approval" })).toBeVisible();
+  for (const heading of ["Scenario inputs", "Recommended plan", "Evidence and approval"]) {
+    await expect(workspace.getByRole("heading", { name: heading, exact: true })).toHaveCount(1);
+  }
+
+  const stageHeadings = workspace.locator(":scope > .decision-stage > .decision-stage-header h2");
+  await expect(stageHeadings).toHaveCount(3);
+  expect(await stageHeadings.allTextContents()).toEqual([
+    "Scenario inputs",
+    "Recommended plan",
+    "Evidence and approval",
+  ]);
+  await expect(workspace.locator(".panel .panel")).toHaveCount(0);
+  await expect(workspace.getByText("Decision authority", { exact: true })).toHaveCount(1);
+  await expect(workspace.locator(".role-badge")).toHaveCount(1);
+
+  const workspaceFrame = await workspace.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      borderTopWidth: styles.borderTopWidth,
+      borderRadius: styles.borderRadius,
+      boxShadow: styles.boxShadow,
+    };
+  });
+  expect(workspaceFrame).toEqual({
+    backgroundColor: "rgba(0, 0, 0, 0)",
+    borderTopWidth: "0px",
+    borderRadius: "0px",
+    boxShadow: "none",
+  });
+
+  const markerContrast = await workspace.locator(".decision-stage-marker").first().evaluate((element) => {
+    const luminance = (color) => {
+      const channels = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map((channel) => Number(channel) / 255);
+      const linear = channels.map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+      return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+    };
+    const styles = getComputedStyle(element);
+    const foreground = luminance(styles.color);
+    const background = luminance(styles.backgroundColor);
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  });
+  expect(markerContrast).toBeGreaterThanOrEqual(4.5);
 });
 
 test("Integrated Planning keeps approval unavailable when constraints are unmet", async ({ page }) => {
@@ -205,5 +251,27 @@ test("Integrated Planning exposes approval for a ready plan without duplicate op
 
   await expect(page.getByText("Ready for approval", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve & Dispatch Plan" })).toBeVisible();
+  const planGroup = page.locator(".planning-workspace .optimizer-plan-card");
+  await expect(planGroup).toBeVisible();
+  const planGroupFrame = await planGroup.evaluate((element) => {
+    const styles = getComputedStyle(element);
+    return {
+      backgroundColor: styles.backgroundColor,
+      borderTopWidth: styles.borderTopWidth,
+      borderRadius: styles.borderRadius,
+      boxShadow: styles.boxShadow,
+    };
+  });
+  expect(planGroupFrame).toEqual({
+    backgroundColor: "rgba(0, 0, 0, 0)",
+    borderTopWidth: "0px",
+    borderRadius: "0px",
+    boxShadow: "none",
+  });
+  const statusRadius = await page.locator(".planning-workspace .plan-status-badge").evaluate((element) => (
+    Number.parseFloat(getComputedStyle(element).borderRadius)
+  ));
+  expect(statusRadius).toBeGreaterThanOrEqual(6);
+  expect(statusRadius).toBeLessThanOrEqual(8);
   expect(optimizerRequests).toBe(1);
 });

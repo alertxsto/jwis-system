@@ -210,17 +210,13 @@
   display: grid;
   grid-template-columns: minmax(250px, 0.85fr) minmax(340px, 1.15fr) minmax(280px, 0.95fr);
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: var(--ui-surface);
-  box-shadow: var(--ui-shadow);
 }
 
 .decision-stage {
   min-width: 0;
   padding: 20px;
   border-left: 1px solid var(--ui-border);
+  background: var(--ui-surface);
 }
 
 .decision-stage:first-child {
@@ -244,7 +240,7 @@
   display: inline-grid;
   place-items: center;
   border-radius: 50%;
-  color: var(--ui-accent-foreground);
+  color: #ffffff;
   background: var(--ui-accent);
   font-size: 12px;
   font-weight: 800;
@@ -306,6 +302,22 @@
 
 .planning-workspace .optimizer-plan-card {
   margin-top: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.planning-workspace .plan-header {
+  padding: 10px;
+  border-top: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-surface-muted);
+}
+
+.planning-workspace .plan-status-badge {
+  border-radius: var(--ui-radius-control);
 }
 
 .planning-workspace .assign-card {
@@ -321,7 +333,7 @@
   width: 100%;
   padding: 0;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--ui-radius);
   box-shadow: none;
 }
 
