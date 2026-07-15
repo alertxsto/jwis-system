@@ -1,0 +1,29 @@
+:root {
+  --ui-primary: #176b54;
+  --ui-primary-hover: #125743;
+  --ui-accent: #6366e8;
+  --ui-accent-soft: #eef0ff;
+  --ui-canvas: #f7f8fb;
+  --ui-surface: #ffffff;
+  --ui-surface-muted: #f3f5f8;
+  --ui-border: #e3e7ee;
+  --ui-border-strong: #cbd3df;
+  --ui-ink: #17202a;
+  --ui-muted: #657180;
+  --ui-success: #177a57;
+  --ui-warning: #a46108;
+  --ui-danger: #bd2c2c;
+  --ui-info: #117f9b;
+  --ui-radius: 8px;
+  --ui-radius-control: 6px;
+  --ui-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --ui-sidebar-width: 248px;
+  --ui-topbar-height: 72px;
+  --ui-focus: 0 0 0 3px rgba(99, 102, 232, 0.24);
+  --z-dropdown: 20;
+  --z-sticky: 30;
+  --z-modal-backdrop: 40;
+  --z-modal: 50;
+  --z-toast: 60;
+  --z-tooltip: 70;
+}

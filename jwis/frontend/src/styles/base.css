@@ -1,0 +1,11 @@
+* { box-sizing: border-box; }
+html { color: var(--ui-ink); background: var(--ui-canvas); font-family: Geist, Inter, "Segoe UI", sans-serif; letter-spacing: 0; }
+body { margin: 0; min-width: 320px; background: var(--ui-canvas); color: var(--ui-ink); }
+button, input, select, textarea { font: inherit; letter-spacing: 0; }
+button, a, input, select, textarea { outline: none; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  box-shadow: var(--ui-focus);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
