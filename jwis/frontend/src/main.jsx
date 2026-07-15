@@ -1575,7 +1575,7 @@ function CommandCenter({ onLogout }) {
         { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
         { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
         { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
-        { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "accent" },
+        { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
       ]} />
 
       <section className="main-grid">

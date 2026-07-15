@@ -12,6 +12,14 @@ test("app shell provides three operational workspaces", async ({ page }) => {
   await expect(nav.getByRole("button", { name: "Fleet Operations" })).toHaveAttribute("aria-current", "page");
   await expect(nav.getByRole("button", { name: "Waste Forecast" })).toBeVisible();
   await expect(nav.getByRole("button", { name: "Integrated Planning" })).toBeVisible();
+
+  for (const label of ["Waste Forecast", "Integrated Planning", "Fleet Operations"]) {
+    const workspace = nav.getByRole("button", { name: label });
+    await workspace.click();
+    await expect(workspace).toHaveAttribute("aria-current", "page");
+    await expect(page.locator(".app-shell")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refresh command center" })).toBeVisible();
+  }
 });
 
 test("dashboard exposes the professional design token contract", async ({ page }) => {

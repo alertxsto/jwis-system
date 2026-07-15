@@ -4,7 +4,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--ui-radius-control);
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
@@ -82,10 +82,6 @@
 
 .metric-warning strong {
   color: var(--ui-warning);
-}
-
-.metric-accent strong {
-  color: var(--ui-accent);
 }
 
 @media (max-width: 860px) {
