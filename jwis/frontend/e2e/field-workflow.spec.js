@@ -2,6 +2,13 @@ import { test, expect, request } from "@playwright/test";
 
 const API = "http://127.0.0.1:8001/api";
 
+async function expectMinimumTouchTarget(locator) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+}
+
 // Manager dispatches an instruction -> field worker sees the newest pending item and confirms it.
 test("newest manager dispatch flows to field app and is confirmed", async ({ page }) => {
   const api = await request.newContext();
@@ -31,6 +38,34 @@ test("newest manager dispatch flows to field app and is confirmed", async ({ pag
   await expect(page.getByTestId("field-status")).toContainText("Instruction accepted", { timeout: 10000 });
 });
 
+test("same-millisecond dispatches preserve ISO microsecond ordering", async ({ page }) => {
+  await page.route(`${API}/dispatch/T-047`, async (route) => {
+    await route.fulfill({
+      json: [
+        {
+          id: "z-older",
+          truck_code: "T-047",
+          instruction: "Older microsecond instruction",
+          field_status: "PENDING",
+          created_at: "2026-07-15T10:00:00.123456+00:00",
+        },
+        {
+          id: "a-newer",
+          truck_code: "T-047",
+          instruction: "Newest microsecond instruction",
+          field_status: "PENDING",
+          created_at: "2026-07-15T10:00:00.123789+00:00",
+        },
+      ],
+    });
+  });
+
+  await page.goto("/field");
+  const active = page.getByTestId("active-dispatch");
+  await expect(active).toContainText("Newest microsecond instruction");
+  await expect(active).not.toContainText("Older microsecond instruction");
+});
+
 // Offline confirmation is queued, then synced when connectivity returns.
 test("offline confirmation queues and syncs", async ({ page, context }) => {
   const api = await request.newContext();
@@ -52,7 +87,7 @@ test("offline confirmation queues and syncs", async ({ page, context }) => {
   await page.waitForTimeout(1500);
 });
 
-test("field app has no mobile overflow and minimum touch targets", async ({ page }) => {
+test("field app has no mobile overflow and all workflow controls meet minimum touch targets", async ({ page }) => {
   const api = await request.newContext();
   await api.post(`${API}/dispatch`, {
     data: { truck_code: "T-112", instruction: "E2E mobile touch target", manager_id: "e2e" },
@@ -62,12 +97,18 @@ test("field app has no mobile overflow and minimum touch targets", async ({ page
   await page.goto("/field");
   await page.getByTestId("truck-select").selectOption("T-112");
 
-  const readyControls = page.locator('[data-testid="btn-ready"]');
-  await expect(readyControls).toHaveCount(1);
-  await expect(readyControls.first()).toBeVisible({ timeout: 10000 });
+  const ready = page.getByTestId("btn-ready");
+  await expect(ready).toBeVisible({ timeout: 10000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2)).toBe(true);
 
-  for (const control of await readyControls.all()) {
-    expect((await control.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  for (const control of [
+    page.getByTestId("truck-select"),
+    page.getByTestId("incident-reason"),
+    ready,
+    page.getByTestId("btn-issue"),
+    page.getByRole("link", { name: "Return to JWIS command center" }),
+    page.getByRole("link", { name: "Return to command center" }),
+  ]) {
+    await expectMinimumTouchTarget(control);
   }
 });

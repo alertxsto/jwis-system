@@ -166,6 +166,15 @@
   display: none;
 }
 
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 0;
+  box-shadow: var(--ui-focus);
+}
+
 .professional-shell,
 .professional-shell .app-shell,
 .professional-shell .workspace-canvas {
@@ -244,6 +253,7 @@
   background: #ffffff;
 }
 
+.professional-shell .ghost-button:focus-visible,
 .professional-shell .icon-button:focus-visible {
   box-shadow: var(--ui-focus);
 }

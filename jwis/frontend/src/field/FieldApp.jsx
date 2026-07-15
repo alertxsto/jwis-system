@@ -8,20 +8,40 @@ function StatusPill({ tone, children }) {
   return <span className={`pill ${tone}`}>{children}</span>;
 }
 
+function isoTimestampMicros(value) {
+  if (typeof value !== "string") return null;
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|([+-])(\d{2}):(\d{2}))$/);
+  if (!match || !Number.isFinite(Date.parse(value))) return null;
+
+  const [, year, month, day, hour, minute, second, fraction = "", , offsetSign, offsetHour = "0", offsetMinute = "0"] = match;
+  const localMilliseconds = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
+  const offsetDirection = offsetSign === "-" ? -1 : 1;
+  const offsetMinutes = offsetSign ? offsetDirection * (Number(offsetHour) * 60 + Number(offsetMinute)) : 0;
+  const utcMilliseconds = localMilliseconds - offsetMinutes * 60_000;
+  return BigInt(utcMilliseconds) * 1_000n + BigInt(fraction.padEnd(6, "0") || "0");
+}
+
 function newestPendingDispatch(dispatches) {
   return dispatches
-    .filter((dispatch) => (
-      dispatch?.field_status === "PENDING"
+    .map((dispatch) => ({ dispatch, timestamp: isoTimestampMicros(dispatch?.created_at) }))
+    .filter(({ dispatch, timestamp }) => (
+      timestamp !== null
+      && dispatch?.field_status === "PENDING"
       && typeof dispatch.id === "string"
       && typeof dispatch.instruction === "string"
       && dispatch.instruction.trim().length > 0
-      && Number.isFinite(Date.parse(dispatch.created_at))
     ))
-    .reduce((newest, dispatch) => {
-      if (!newest) return dispatch;
-      const timeDifference = Date.parse(dispatch.created_at) - Date.parse(newest.created_at);
-      if (timeDifference !== 0) return timeDifference > 0 ? dispatch : newest;
-      return dispatch.id.localeCompare(newest.id) > 0 ? dispatch : newest;
+    .reduce((newest, candidate) => {
+      if (!newest) return candidate;
+      if (candidate.timestamp !== newest.timestamp) return candidate.timestamp > newest.timestamp ? candidate : newest;
+      return candidate.dispatch.id.localeCompare(newest.dispatch.id) > 0 ? candidate : newest;
     }, null);
 }
 
@@ -92,7 +112,7 @@ export default function FieldApp() {
     };
   }, [truckCode]);
 
-  const activeDispatch = useMemo(() => newestPendingDispatch(dispatches), [dispatches]);
+  const activeDispatch = useMemo(() => newestPendingDispatch(dispatches)?.dispatch, [dispatches]);
 
   return (
     <main className="field-shell" data-testid="field-app">

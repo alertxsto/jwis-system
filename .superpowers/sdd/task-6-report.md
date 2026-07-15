@@ -13,7 +13,7 @@ The defect was in frontend selection, not the backend contract.
 1. `GET /api/dispatch/{truck_code}` returns pending dispatches ordered by `created_at ASC`.
 2. Each response item includes an ISO `created_at`, `id`, `instruction`, and `field_status`.
 3. `FieldApp` rendered `dispatches[0]`, so it always chose the oldest pending record. A newly posted E2E instruction could therefore be hidden behind an older optimizer instruction.
-4. `FieldApp` now filters for valid `PENDING` records with a non-empty instruction and parseable `created_at`, selects the greatest timestamp, and breaks timestamp ties by `id` for deterministic behavior.
+4. `FieldApp` now filters for valid `PENDING` records with a non-empty instruction, converts canonical ISO timestamps to integer microseconds without losing fractional precision, selects the greatest instant, and breaks ties by `id` only when the full timestamps are equal.
 
 No backend file or contract was changed.
 
@@ -122,11 +122,77 @@ Build output retained the non-failing advisory that the `html2pdf` and main Java
 
 ## Self-Review
 
-- Accessibility: mobile navigation has a semantic button, stable accessible name, `aria-expanded`, `aria-controls`, inert/hidden closed state, backdrop close, and Escape close with focus restoration.
-- Responsiveness: dashboard and field app have no document-level overflow at 375px; FieldApp action controls render at least 44px high; the map stage remains at least 440px high on narrow screens.
+- Accessibility: mobile navigation has a semantic button, stable accessible name, `aria-expanded`, `aria-controls`, inert/hidden closed state, modal semantics, focus entry and trapping, inert background content, backdrop/Escape/workspace close, and trigger focus restoration.
+- Responsiveness: dashboard and field app have no document-level overflow at 375px; mobile navigation, logout, field links, refresh, selects, inputs, and field actions render at least 44px in both dimensions; the map stage remains at least 440px high on narrow screens.
 - Visual consistency: primary interaction and active navigation use indigo; green remains limited to semantic success/compliance; surfaces are white/light with `#e8eaf0` dividers and almost no shadows.
 - Scope: only the seven implementation/test files above are intended for the Task 6 commit. Backend files, `LiveFleetMap.jsx`, generated cache data, and unrelated docs remain unstaged.
 - Diff hygiene: scoped `git diff --check` passed. Repository-wide `git diff --check` still reports pre-existing trailing whitespace in dirty backend files, which this task does not own.
+
+## Review Fixes
+
+The Task 6 review fixes were implemented after commit `c2b130f6568b41f15dfa9cb7a87abcad0eba224a` as a separate TDD cycle.
+
+### Review RED
+
+Command:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js e2e/field-workflow.spec.js --workers=1 -g "same-millisecond|traps focus|minimum touch|indigo focus"
+```
+
+Result: `5 failed`.
+
+- Same-millisecond dispatches selected `z-older` because `Date.parse` reduced both six-digit fractional timestamps to the same millisecond and invoked the `id` tie-breaker.
+- Opening the drawer left focus on the trigger rather than moving it into navigation.
+- Shell controls still rendered at 40px and the field-brand link rendered at 36px.
+- The refresh button retained the legacy solid green focus outline.
+- The broader FieldApp target test exposed controls beyond `btn-ready`.
+
+### Review GREEN
+
+Individual regression evidence:
+
+- Microsecond ordering: `1 passed`.
+- Modal focus entry/trap/background/restore: `1 passed`.
+- Dashboard and FieldApp touch targets: `2 passed`.
+- Indigo focus without legacy outline: `1 passed`.
+
+Combined review regression command:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js e2e/field-workflow.spec.js --workers=1 -g "same-millisecond|traps focus|minimum touch|indigo focus"
+```
+
+Result: `5 passed (6.6s)`.
+
+### Review Full Verification
+
+The first full run reached `21 passed, 1 failed`. The only failure was the test clicking the center of the full-screen backdrop, a point intentionally covered by the 248px drawer. The test was corrected to click the visible right-side backdrop area; the focused modal regression then passed in `3.0s`.
+
+Final required one-worker command:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js e2e/field-workflow.spec.js e2e/map-workflow.spec.js --workers=1
+```
+
+Result: `22 passed (74.6s)`. The final map-truth test took `27.0s` and completed within its timeout; no test process hung.
+
+Final production build:
+
+```powershell
+npm run build
+```
+
+Result: PASS. Vite transformed `1593` modules and completed in `14.87s`. The existing non-failing large-chunk advisory remains.
+
+### Review Fix Scope
+
+- `frontend/src/field/FieldApp.jsx`: preserves ISO microseconds using integer-microsecond comparison and uses `id` only for equal instants.
+- `frontend/src/layout/AppShell.jsx`: implements modal focus entry, Tab trapping, inert background state, and focus restoration for applicable close paths.
+- `frontend/src/styles/components.css`: removes the legacy green outline and standardizes indigo focus treatment.
+- `frontend/src/styles/responsive.css`: enforces 44px mobile targets for navigation, logout, field link, refresh, and field-brand access.
+- `frontend/e2e/dashboard-shell.spec.js`: covers focus management, all named shell targets, and indigo focus styling.
+- `frontend/e2e/field-workflow.spec.js`: covers differing microseconds within one millisecond and all field workflow controls.
 
 ## Concerns
 

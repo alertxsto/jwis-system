@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Activity, BarChart3, LogOut, Menu, RefreshCcw, Route, Truck, Workflow, X } from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
 
@@ -13,6 +13,12 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileNavMode, setMobileNavMode] = useState(() => window.matchMedia("(max-width: 860px)").matches);
   const mobileNavTriggerRef = useRef(null);
+  const sideRailRef = useRef(null);
+
+  const closeMobileNav = useCallback((restoreFocus = true) => {
+    setMobileNavOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => mobileNavTriggerRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 860px)");
@@ -20,33 +26,59 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       setMobileNavMode(event.matches);
       if (!event.matches) setMobileNavOpen(false);
     };
+    const updateFromViewport = () => updateMobileNavMode(mediaQuery);
     mediaQuery.addEventListener("change", updateMobileNavMode);
-    return () => mediaQuery.removeEventListener("change", updateMobileNavMode);
+    window.addEventListener("resize", updateFromViewport);
+    return () => {
+      mediaQuery.removeEventListener("change", updateMobileNavMode);
+      window.removeEventListener("resize", updateFromViewport);
+    };
   }, []);
 
   useEffect(() => {
     if (!mobileNavOpen) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key !== "Escape") return;
-      setMobileNavOpen(false);
-      mobileNavTriggerRef.current?.focus();
+    const drawer = sideRailRef.current;
+    const focusable = Array.from(drawer?.querySelectorAll("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") || []);
+    const focusDrawer = requestAnimationFrame(() => focusable[0]?.focus());
+    const manageModalFocus = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMobileNav();
+        return;
+      }
+      if (event.key !== "Tab" || focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !drawer.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [mobileNavOpen]);
+    window.addEventListener("keydown", manageModalFocus);
+    return () => {
+      cancelAnimationFrame(focusDrawer);
+      window.removeEventListener("keydown", manageModalFocus);
+    };
+  }, [closeMobileNav, mobileNavOpen]);
 
   function selectWorkspace(id) {
     onWorkspaceChange(id);
-    setMobileNavOpen(false);
+    closeMobileNav();
   }
 
   return (
     <div className="dashboard-frame professional-shell">
       <aside
+        ref={sideRailRef}
         className={`side-rail ${mobileNavOpen ? "mobile-nav-open" : ""}`}
         aria-label="JWIS navigation"
+        aria-modal={mobileNavOpen ? "true" : undefined}
         aria-hidden={mobileNavMode && !mobileNavOpen ? true : undefined}
-        inert={mobileNavMode && !mobileNavOpen ? true : undefined}
+        inert={mobileNavMode && !mobileNavOpen ? "true" : undefined}
+        role={mobileNavOpen ? "dialog" : undefined}
       >
         <div className="side-brand"><span className="brand-mark"><Route size={19} /></span><div><strong>JWIS</strong><small>DLH Command</small></div></div>
         <p className="nav-section-label">Operations</p>
@@ -56,8 +88,8 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         <div className="side-system-state"><Activity size={15} /><span>System status</span><StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge></div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}><LogOut size={17} />Logout</button>
       </aside>
-      {mobileNavMode && mobileNavOpen && <button className="mobile-nav-backdrop" type="button" aria-label="Close workspace navigation" onClick={() => setMobileNavOpen(false)} />}
-      <main className="app-shell" id="overview">
+      {mobileNavMode && mobileNavOpen && <button className="mobile-nav-backdrop" type="button" tabIndex={-1} aria-label="Close workspace navigation" onClick={() => closeMobileNav()} />}
+      <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
           <button
             ref={mobileNavTriggerRef}
@@ -66,7 +98,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
             aria-label="Open workspace navigation"
             aria-controls="workspace-navigation"
             aria-expanded={mobileNavOpen}
-            onClick={() => setMobileNavOpen((open) => !open)}
+            onClick={() => { setMobileNavMode(true); setMobileNavOpen(true); }}
           >
             {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
           </button>

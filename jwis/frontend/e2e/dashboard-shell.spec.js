@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
 
+async function expectMinimumTouchTarget(locator) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box.width).toBeGreaterThanOrEqual(44);
+  expect(box.height).toBeGreaterThanOrEqual(44);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
@@ -52,9 +59,62 @@ test("mobile shell collapses navigation and preserves workspace access", async (
   await expect(page.getByTestId("workspace-navigation")).toBeVisible();
 });
 
-test("primary controls expose visible focus", async ({ page }) => {
+test("mobile navigation traps focus, blocks background focus, and restores the trigger", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const trigger = page.getByRole("button", { name: "Open workspace navigation" });
+  const nav = page.getByTestId("workspace-navigation");
+  const firstWorkspace = nav.getByRole("button", { name: "Fleet Operations" });
+  const logout = page.getByRole("button", { name: "Logout" });
+  const refresh = page.getByRole("button", { name: "Refresh command center" });
+
+  await trigger.click();
+  await expect(firstWorkspace).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(logout).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(firstWorkspace).toBeFocused();
+
+  await expect(page.locator(".app-shell")).toHaveAttribute("inert", "");
+  await refresh.evaluate((element) => element.focus());
+  await expect(refresh).not.toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await page.getByRole("button", { name: "Close workspace navigation" }).click({ position: { x: 340, y: 100 } });
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await nav.getByRole("button", { name: "Waste Forecast" }).click();
+  await expect(trigger).toBeFocused();
+});
+
+test("mobile shell controls meet minimum touch targets", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const trigger = page.getByRole("button", { name: "Open workspace navigation" });
+
+  await expectMinimumTouchTarget(trigger);
+  await expectMinimumTouchTarget(page.getByRole("link", { name: "Field app" }));
+  await expectMinimumTouchTarget(page.getByRole("button", { name: "Refresh command center" }));
+  await trigger.click();
+
+  for (const control of await page.getByTestId("workspace-navigation").getByRole("button").all()) {
+    await expectMinimumTouchTarget(control);
+  }
+  await expectMinimumTouchTarget(page.getByRole("button", { name: "Logout" }));
+});
+
+test("primary controls use indigo focus without a legacy outline", async ({ page }) => {
   const refresh = page.getByRole("button", { name: "Refresh command center" });
   await refresh.focus();
-  const shadow = await refresh.evaluate((element) => getComputedStyle(element).boxShadow);
-  expect(shadow).not.toBe("none");
+  const focusStyle = await refresh.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      shadow: style.boxShadow,
+    };
+  });
+  expect(focusStyle.outlineStyle).toBe("none");
+  expect(focusStyle.outlineWidth).toBe("0px");
+  expect(focusStyle.shadow).toContain("99, 102, 232");
 });

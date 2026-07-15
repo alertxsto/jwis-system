@@ -61,6 +61,7 @@
   .professional-shell .nav-tab-btn,
   .professional-shell .side-logout {
     width: 100%;
+    min-height: 44px;
   }
 
   .professional-shell .side-system-state {
@@ -72,10 +73,16 @@
     margin-left: 0;
   }
 
-  .mobile-nav-trigger {
+  .professional-shell .mobile-nav-trigger {
     display: inline-flex;
     flex: 0 0 44px;
     width: 44px;
+    min-height: 44px;
+  }
+
+  .professional-shell .top-actions .ghost-button,
+  .professional-shell .top-actions .icon-button {
+    min-width: 44px;
     min-height: 44px;
   }
 
@@ -234,6 +241,10 @@
   .field-app-header {
     min-height: 64px;
     margin-bottom: 12px;
+  }
+
+  .field-brand {
+    min-height: 44px;
   }
 
   .field-shell .field-card {
