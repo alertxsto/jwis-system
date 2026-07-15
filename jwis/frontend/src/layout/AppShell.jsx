@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, LogOut, Menu, RefreshCcw, Route, Truck, Workflow, X } from "lucide-react";
+import { Activity, BarChart3, LogOut, Menu, RefreshCcw, Route, Truck, Workflow, X, Eye, Shield, MessageCircle, BookOpen, HelpCircle } from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
 
 const items = [
-  { id: "fleet", label: "Fleet Operations", icon: Truck },
-  { id: "forecast", label: "Waste Forecast", icon: BarChart3 },
-  { id: "planning", label: "Integrated Planning", icon: Workflow },
+  { id: "fleet", label: "Fleet Operations", icon: Truck, section: "Operations" },
+  { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
+  { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
+  { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
+  { id: "weighbridge", label: "weighbridge Logs", icon: Workflow, section: "Logistics" },
+  { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
+  { id: "iot", label: "IoT Bin Sensors", icon: Activity, section: "Admin" },
+  { id: "audit", label: "Data & ML Audit", icon: Shield, section: "Admin" },
 ];
 
 export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, children }) {
@@ -83,9 +88,32 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         <div className="side-brand"><span className="brand-mark"><Route size={19} /></span><div><strong>JWIS</strong><small>DLH Command</small></div></div>
         <p className="nav-section-label">Operations</p>
         <nav className="side-nav" id="workspace-navigation" data-testid="workspace-navigation">
-          {items.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}><Icon size={17} />{label}</button>)}
+          {items.filter(item => item.section === "Operations").map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}>
+              <Icon size={17} />{label}
+            </button>
+          ))}
         </nav>
-        <div className="side-system-state"><Activity size={15} /><span>System status</span><StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge></div>
+
+        <p className="nav-section-label">Logistics (Case 1)</p>
+        <nav className="side-nav">
+          {items.filter(item => item.section === "Logistics").map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}>
+              <Icon size={17} />{label}
+            </button>
+          ))}
+        </nav>
+
+        <p className="nav-section-label">Admin (Case 2)</p>
+        <nav className="side-nav">
+          {items.filter(item => item.section === "Admin").map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}>
+              <Icon size={17} />{label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="side-system-state mt-24"><Activity size={15} /><span>System status</span><StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge></div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}><LogOut size={17} />Logout</button>
       </aside>
       {mobileNavMode && mobileNavOpen && <button className="mobile-nav-backdrop" type="button" tabIndex={-1} aria-label="Dismiss workspace navigation" onClick={() => closeMobileNav()} />}
