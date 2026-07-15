@@ -1,6 +1,31 @@
 import { test, expect } from "@playwright/test";
 
+async function stubPlanningPrediction(page) {
+  await page.route("**/api/predictions/kecamatan?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        total_predicted_tons: 24,
+        kecamatan_count: 42,
+        top_hotspots: [],
+      }),
+    });
+  });
+}
+
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/fleet/carbon", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        total_fleet_distance_km: 216.9,
+        total_co2_emitted_kg: 206.06,
+        carbon_saved_today_kg: 17.58,
+        fuel_saved_equivalent_liters: 6.5,
+        compliance_rate_percent: 86,
+      }),
+    });
+  });
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -116,4 +141,69 @@ test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
     await expect(horizon).toBeDisabled();
     await expect(horizon).toHaveAttribute("title", "Unavailable: source provides 7 days");
   }
+});
+
+test("Integrated Planning presents an ordered decision flow", async ({ page }) => {
+  await page.getByRole("button", { name: "Integrated Planning" }).click();
+  const workspace = page.getByTestId("planning-workspace");
+  await expect(workspace).toBeVisible();
+  await expect(workspace.getByRole("heading", { name: "Scenario inputs" })).toBeVisible();
+  await expect(workspace.getByRole("heading", { name: "Recommended plan" })).toBeVisible();
+  await expect(workspace.getByRole("heading", { name: "Evidence and approval" })).toBeVisible();
+});
+
+test("Integrated Planning keeps approval unavailable when constraints are unmet", async ({ page }) => {
+  await stubPlanningPrediction(page);
+  await page.route("**/api/operations/plan?**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        plan_id: "PLAN-BLOCKED",
+        status: "proposed",
+        assignments: [],
+        unmet_reasons: ["insufficient_capacity:tebet"],
+        total_demand_tons: 24,
+        total_assigned_tons: 0,
+        scenario: { rainfall_mm: 42, event_attendance: 85000, is_weekend: true },
+      }),
+    });
+  });
+
+  await page.getByRole("button", { name: "Integrated Planning" }).click();
+  await page.getByRole("button", { name: "Generate Dispatch Plan (CP-SAT)" }).click();
+
+  await expect(page.getByText("1 constraints unmet", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve & Dispatch Plan" })).toHaveCount(0);
+});
+
+test("Integrated Planning exposes approval for a ready plan without duplicate optimizer requests", async ({ page }) => {
+  await stubPlanningPrediction(page);
+  let optimizerRequests = 0;
+  await page.route("**/api/operations/plan?**", async (route) => {
+    optimizerRequests += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        plan_id: "PLAN-READY",
+        status: "proposed",
+        assignments: [{
+          truck_code: "T-001",
+          area: "tebet",
+          assigned_tons: 24,
+          evidence: { capacity_tons: 24, permit_compliant: true },
+        }],
+        unmet_reasons: [],
+        total_demand_tons: 24,
+        total_assigned_tons: 24,
+        scenario: { rainfall_mm: 42, event_attendance: 85000, is_weekend: true },
+      }),
+    });
+  });
+
+  await page.getByRole("button", { name: "Integrated Planning" }).click();
+  await page.getByRole("button", { name: "Generate Dispatch Plan (CP-SAT)" }).click();
+
+  await expect(page.getByText("Ready for approval", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve & Dispatch Plan" })).toBeVisible();
+  expect(optimizerRequests).toBe(1);
 });

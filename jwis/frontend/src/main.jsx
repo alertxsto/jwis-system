@@ -4,6 +4,7 @@ import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import FieldApp from "./field/FieldApp.jsx";
 import { AppShell } from "./layout/AppShell.jsx";
 import { FleetOperations } from "./workspaces/FleetOperations.jsx";
+import { IntegratedPlanning } from "./workspaces/IntegratedPlanning.jsx";
 import { WasteForecast } from "./workspaces/WasteForecast.jsx";
 import {
   Activity,
@@ -702,7 +703,45 @@ function AssistantPanel() {
   );
 }
 
-function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng }) {
+function ScenarioPanel({ mode, children }) {
+  return <div className={`scenario-panel scenario-${mode}`}>{children}</div>;
+}
+
+function PlanningApproval({ plan, planLoading, approved, approvePlan, role }) {
+  const unmetCount = plan?.unmet_reasons?.length || 0;
+
+  return (
+    <div className="planning-approval">
+      <div className="planning-approval-head">
+        <strong>Decision authority</strong>
+        <span className="role-badge">Role: <b>{role}</b></span>
+      </div>
+      {!plan && <p className="planning-approval-note">Generate a dispatch plan to review approval evidence.</p>}
+      {plan && (
+        <dl className="approval-evidence-list">
+          <div><dt>Plan</dt><dd>{plan.plan_id}</dd></div>
+          <div><dt>Assigned demand</dt><dd>{plan.total_assigned_tons} / {plan.total_demand_tons} tons</dd></div>
+          <div><dt>Permit evidence</dt><dd>{plan.assignments.filter((assignment) => assignment.evidence.permit_compliant).length} compliant assignments</dd></div>
+        </dl>
+      )}
+      {plan?.status === "proposed" && unmetCount === 0 && (
+        <button className="primary-button approve-dispatch-btn" onClick={approvePlan} disabled={planLoading}>
+          {planLoading ? "Approving Plan..." : "Approve & Dispatch Plan"}
+        </button>
+      )}
+      {plan?.status === "proposed" && unmetCount > 0 && (
+        <p className="planning-approval-note planning-approval-blocked">Approval remains unavailable until every constraint warning is resolved.</p>
+      )}
+      {approved && (
+        <div className="optimizer-success">
+          <Check size={16} /> Plan approved. Dispatches generated & pushed to field app!
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng, summary, queue }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -806,7 +845,11 @@ function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, event
   const bins = top5.reduce((s, k) => s + (k.disposal_bins_required || 0), 0);
 
   return (
-    <section className="panel scenario-panel">
+    <IntegratedPlanning
+      summary={<ExecutiveSummary summary={summary} queue={queue} />}
+      scenario={{
+        inputs: (
+          <ScenarioPanel mode="inputs">
       <div className="panel-title">
         <div>
           <h2>Event Scenario Simulator (Case 2)</h2>
@@ -839,7 +882,10 @@ function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, event
         <div className="req-chip"><b>{trucks}</b><span>trucks (top 5)</span></div>
         <div className="req-chip"><b>{bins}</b><span>large bins (top 5)</span></div>
       </div>
-
+          </ScenarioPanel>
+        ),
+        recommendation: (
+          <ScenarioPanel mode="recommendation">
       <div className="optimizer-section">
         <div className="optimizer-head">
           <h3>Operations Optimizer (Case 2 &rarr; Case 1 Handoff)</h3>
@@ -918,26 +964,23 @@ function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, event
               )}
             </div>
 
-            {plan.status === "proposed" && (
-              <button 
-                className="primary-button approve-dispatch-btn" 
-                onClick={approvePlan} 
-                disabled={planLoading}
-                style={{ width: "100%", marginTop: "8px" }}
-              >
-                {planLoading ? "Approving Plan..." : "Approve & Dispatch Plan"}
-              </button>
-            )}
-
-            {approved && (
-              <div className="optimizer-success">
-                <Check size={16} /> Plan approved. Dispatches generated & pushed to field app!
-              </div>
-            )}
           </div>
         )}
       </div>
-    </section>
+          </ScenarioPanel>
+        ),
+      }}
+      evidence={(
+        <PlanningApproval
+          plan={plan}
+          planLoading={planLoading}
+          approved={approved}
+          approvePlan={approvePlan}
+          role={role}
+        />
+      )}
+      unmetCount={plan?.unmet_reasons?.length || 0}
+    />
   );
 }
 
@@ -1646,21 +1689,16 @@ function CommandCenter({ onLogout }) {
         )}
 
         {activeWorkspace === "planning" && (
-          <>
-            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <ExecutiveSummary summary={snapshot.executive_summary} queue={snapshot.tpa_queue} />
-            </div>
-            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <ScenarioPanel
-                attendance={attendance}
-                setAttendance={setAttendance}
-                rainfall={rainfall}
-                setRainfall={setRainfall}
-                eventLat={eventLat}
-                eventLng={eventLng}
-              />
-            </div>
-          </>
+          <PlanningDecisionFlow
+            attendance={attendance}
+            setAttendance={setAttendance}
+            rainfall={rainfall}
+            setRainfall={setRainfall}
+            eventLat={eventLat}
+            eventLng={eventLng}
+            summary={snapshot.executive_summary}
+            queue={snapshot.tpa_queue}
+          />
         )}
       </section>
       )}
