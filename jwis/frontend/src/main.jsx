@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import FieldApp from "./field/FieldApp.jsx";
+import { AppShell } from "./layout/AppShell.jsx";
+import { MetricStrip } from "./ui/MetricStrip.jsx";
 import {
   Activity,
   AlertTriangle,
@@ -313,7 +315,7 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
   );
 }
 
-function MapPanel({ trucks, onSelectTruck }) {
+function MapPanel({ trucks, attendance, rainfall, onSelectTruck }) {
   return (
     <section className="panel map-panel">
       <div className="panel-title">
@@ -323,7 +325,7 @@ function MapPanel({ trucks, onSelectTruck }) {
         </div>
         <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
       </div>
-      <LiveFleetMap trucks={trucks} onSelectTruck={onSelectTruck} />
+      <LiveFleetMap trucks={trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={onSelectTruck} />
     </section>
   );
 }
@@ -693,9 +695,7 @@ function AssistantPanel() {
   );
 }
 
-function ScenarioPanel() {
-  const [attendance, setAttendance] = useState(85000);
-  const [rainfall, setRainfall] = useState(42);
+function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -719,6 +719,8 @@ function ScenarioPanel() {
         event_attendance: String(attendance),
         is_weekend: "true",
       });
+      if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
+      if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
       const res = await fetch(`${API_URL}/predictions/kecamatan?${params.toString()}`);
       if (res.ok) setData(await res.json());
     } catch {
@@ -730,7 +732,7 @@ function ScenarioPanel() {
   useEffect(() => {
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attendance, rainfall, eventLat, eventLng]);
 
   async function generatePlan() {
     setPlanLoading(true);
@@ -743,6 +745,8 @@ function ScenarioPanel() {
         is_weekend: "true",
         top_n: "5",
       });
+      if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
+      if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
       const response = await fetch(`${API_URL}/operations/plan?${params.toString()}`, {
         method: "POST",
       });
@@ -997,7 +1001,7 @@ function TpaQueuePanel() {
 }
 
 
-function CrowdEventsPanel() {
+function CrowdEventsPanel({ onSimulateEvent }) {
   const [events, setEvents] = useState([]);
 
   async function fetchEvents() {
@@ -1047,6 +1051,11 @@ function CrowdEventsPanel() {
                 <strong>{ev.large_bins_required} unit</strong>
               </div>
             </div>
+            {onSimulateEvent && (
+              <button className="primary-button" style={{ marginTop: "12px", width: "100%" }} onClick={() => onSimulateEvent(ev)}>
+                <Zap size={14} /> Simulate event in Optimizer
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -1503,6 +1512,12 @@ function CommandCenter({ onLogout }) {
   const { snapshot, online, refresh } = useSnapshot();
   const [toast, setToast] = useState("");
   const [filterTruck, setFilterTruck] = useState("ALL");
+  const [activeWorkspace, setActiveWorkspace] = useState("fleet");
+
+  const [attendance, setAttendance] = useState(85000);
+  const [rainfall, setRainfall] = useState(42);
+  const [eventLat, setEventLat] = useState(null);
+  const [eventLng, setEventLng] = useState(null);
 
   function handleVoiceCommand(cmd) {
     if (cmd.type === "refresh") refresh();
@@ -1555,74 +1570,83 @@ function CommandCenter({ onLogout }) {
   }
 
   return (
-    <div className="dashboard-frame">
-      <aside className="side-rail" aria-label="JWIS navigation">
-        <div className="side-brand">
-          <span><ShieldCheck size={22} /></span>
-          <div>
-            <strong>JWIS</strong>
-            <small>DLH Command</small>
-          </div>
-        </div>
-        <nav className="side-nav">
-          <a href="#overview"><Activity size={17} /> Overview</a>
-          <a href="#map-panel"><MapPinned size={17} /> Fleet map</a>
-          <a href="#history-panel"><History size={17} /> History</a>
-          <a href="#carbon-panel"><Leaf size={17} /> Carbon</a>
-        </nav>
-        <button className="side-logout" onClick={onLogout}>
-          <LogOut size={17} /> Logout
-        </button>
-      </aside>
-      <main className="app-shell" id="overview">
-      <header className="topbar">
-        <div>
-          <h1>Jakarta Waste Intelligence System</h1>
-          <p className="topbar-subtitle">Professional command dashboard for predictive waste logistics, route compliance, and field dispatch.</p>
-        </div>
-        <div className="top-actions">
-          <StatusPill tone={online ? "success" : "warning"}>{online ? "API connected" : "offline demo"}</StatusPill>
-          <a className="ghost-button" href="/field"><Truck size={16} /> Field app</a>
-          <button className="icon-button" onClick={refresh} aria-label="Refresh command center"><RefreshCcw size={18} /></button>
-        </div>
-      </header>
-
-      <section className="kpi-grid">
-        <KpiCard icon={Truck} label="Active Trucks" value={snapshot.kpis.active_trucks} helper="live fleet in operation" />
-        <KpiCard icon={AlertTriangle} label="Operational Issues" value={snapshot.kpis.trucks_with_issues} helper="deviation or damage" tone="danger" />
-        <KpiCard icon={ClipboardList} label="Landfill Queue" value={`${snapshot.kpis.tpa_wait_minutes}m`} helper={`${snapshot.kpis.tpa_queue_trucks} trucks waiting`} tone="warning" />
-        <KpiCard icon={Activity} label="Largest Waste Spike" value={`+${snapshot.kpis.predicted_spike_percent}%`} helper="next 7 days" tone="purple" />
-      </section>
+    <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout}>
+      <MetricStrip metrics={[
+        { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
+        { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
+        { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
+        { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "accent" },
+      ]} />
 
       <section className="main-grid">
-        <div id="map-panel" className="map-anchor"><MapPanel trucks={snapshot.trucks} onSelectTruck={(code, dispatch) => {
-          setFilterTruck(code);
-          if (dispatch) {
-            const el = document.getElementById("history-panel");
-            if (el) el.scrollIntoView({ behavior: "smooth" });
-          }
-        }} /></div>
-        <FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />
-        <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
-        <RouteEvidencePanel route={snapshot.osrm_route} />
-        <CarbonPanel />
-        <PredictionPanel predictions={snapshot.critical_predictions} />
-        <KecamatanMapPanel />
-        <WeatherPanel weather={snapshot.weather} />
-        <VoicePanel onCommand={handleVoiceCommand} />
-        <AssistantPanel />
-        <ScenarioPanel />
-        <StaggerSimulatorPanel />
-        <AStarReroutingPanel />
-        <TpaQueuePanel />
-        <CrowdEventsPanel />
-        <ReportActions />
-        <ExecutiveSummary summary={snapshot.executive_summary} queue={snapshot.tpa_queue} />
-        <FleetTable trucks={snapshot.trucks} />
+        {activeWorkspace === "fleet" && (
+          <>
+            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
+              <RouteEvidencePanel route={snapshot.osrm_route} />
+              <TpaQueuePanel />
+              <StaggerSimulatorPanel />
+              <CarbonPanel />
+            </div>
+            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <div id="map-panel" className="map-anchor">
+                <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={(code, dispatch) => {
+                  setFilterTruck(code);
+                  if (dispatch) {
+                    const el = document.getElementById("history-panel");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }
+                }} />
+              </div>
+              <AStarReroutingPanel />
+              <FleetTable trucks={snapshot.trucks} />
+              <FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />
+            </div>
+          </>
+        )}
+
+        {activeWorkspace === "forecast" && (
+          <>
+            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <WeatherPanel weather={snapshot.weather} />
+              <CrowdEventsPanel onSimulateEvent={(ev) => {
+                setAttendance(ev.expected_attendance);
+                setRainfall(10);
+                setEventLat(ev.lat);
+                setEventLng(ev.lng);
+                setActiveWorkspace("planning");
+              }} />
+              <AssistantPanel />
+              <VoicePanel onCommand={handleVoiceCommand} />
+            </div>
+            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <KecamatanMapPanel />
+              <PredictionPanel predictions={snapshot.critical_predictions} />
+              <ReportActions />
+            </div>
+          </>
+        )}
+
+        {activeWorkspace === "planning" && (
+          <>
+            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <ExecutiveSummary summary={snapshot.executive_summary} queue={snapshot.tpa_queue} />
+            </div>
+            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
+              <ScenarioPanel
+                attendance={attendance}
+                setAttendance={setAttendance}
+                rainfall={rainfall}
+                setRainfall={setRainfall}
+                eventLat={eventLat}
+                eventLng={eventLng}
+              />
+            </div>
+          </>
+        )}
       </section>
       {toast && <div className="toast"><Check size={16} /> {toast}</div>}
-      </main>
-    </div>
+    </AppShell>
   );
 }
 

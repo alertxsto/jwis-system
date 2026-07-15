@@ -1,1 +1,119 @@
-/* Shared component styles are introduced in Task 2. */
+.status-badge {
+  min-height: 24px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.status-success {
+  color: var(--ui-success);
+  border-color: #b9e2d1;
+  background: #eaf7f0;
+}
+
+.status-warning {
+  color: var(--ui-warning);
+  border-color: #ecd5a4;
+  background: #fff8e8;
+}
+
+.status-danger {
+  color: var(--ui-danger);
+  border-color: #efc1c1;
+  background: #fff0f0;
+}
+
+.metric-strip {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+.metric-cell {
+  min-width: 0;
+  min-height: 104px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-left: 1px solid var(--ui-border);
+}
+
+.metric-cell:first-child {
+  border-left: 0;
+}
+
+.metric-cell span,
+.metric-cell small {
+  color: var(--ui-muted);
+}
+
+.metric-cell span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric-cell strong {
+  margin: 4px 0;
+  color: var(--ui-ink);
+  font-size: 24px;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-cell small {
+  font-size: 12px;
+}
+
+.metric-danger strong {
+  color: var(--ui-danger);
+}
+
+.metric-warning strong {
+  color: var(--ui-warning);
+}
+
+.metric-accent strong {
+  color: var(--ui-accent);
+}
+
+@media (max-width: 860px) {
+  .metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric-cell:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .metric-cell:nth-child(n + 3) {
+    border-top: 1px solid var(--ui-border);
+  }
+}
+
+@media (max-width: 560px) {
+  .metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-cell {
+    min-height: 86px;
+    border-top: 1px solid var(--ui-border);
+    border-left: 0;
+  }
+
+  .metric-cell:first-child {
+    border-top: 0;
+  }
+}

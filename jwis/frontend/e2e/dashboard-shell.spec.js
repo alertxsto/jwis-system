@@ -6,6 +6,14 @@ test.beforeEach(async ({ page }) => {
   await page.reload({ waitUntil: "domcontentloaded" });
 });
 
+test("app shell provides three operational workspaces", async ({ page }) => {
+  const nav = page.getByTestId("workspace-navigation");
+  await expect(nav).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Fleet Operations" })).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("button", { name: "Waste Forecast" })).toBeVisible();
+  await expect(nav.getByRole("button", { name: "Integrated Planning" })).toBeVisible();
+});
+
 test("dashboard exposes the professional design token contract", async ({ page }) => {
   const tokens = await page.locator("html").evaluate((el) => {
     const css = getComputedStyle(el);
