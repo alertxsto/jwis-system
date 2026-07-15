@@ -251,6 +251,42 @@ Result: PASS. Vite transformed `1593` modules and completed in `12.53s`. The exi
 - `frontend/e2e/dashboard-shell.spec.js`: verifies operable X closure, retained modal behavior, and absence of a legacy green focus source.
 - `frontend/e2e/field-workflow.spec.js`: verifies the field-brand target at 768px.
 
+## Final Re-review Coverage
+
+The final re-review requested regression coverage only. No production implementation files changed.
+
+### Drawer Accessibility Semantics
+
+Added a focused dashboard-shell regression that verifies the mobile drawer is `aria-hidden` and `inert` when closed, exposes `role="dialog"` and `aria-modal="true"` when open, removes the closed-state attributes while open, and restores them after the visible toggle closes the drawer.
+
+The first focused run failed before testing the contract because the shared `beforeEach` loaded at Playwright's default desktop viewport and the test resized before the shell's media-query effect subscribed. The test setup was corrected to reload after selecting the mobile viewport; no implementation change was required.
+
+Final command:
+
+```powershell
+npx playwright test e2e/dashboard-shell.spec.js --workers=1 -g "closed-state accessibility semantics"
+```
+
+Result: `1 passed (1.6s)`; test body completed in `919ms`.
+
+### 860px Touch Boundary
+
+Added a focused FieldApp regression at exactly `860px` that verifies the field-brand link, truck selector, incident selector, ready action, issue action, and command-center return link all have bounding boxes of at least `44px` in both dimensions.
+
+Command:
+
+```powershell
+npx playwright test e2e/field-workflow.spec.js --workers=1 -g "860px boundary"
+```
+
+Result: `1 passed (2.8s)`; test body completed in `1.5s`.
+
+### Final Re-review Scope
+
+- `frontend/e2e/dashboard-shell.spec.js`: adds explicit closed/open/closed drawer accessibility semantics coverage.
+- `frontend/e2e/field-workflow.spec.js`: adds exact `860px` field-brand and workflow-control touch-target coverage.
+- `.superpowers/sdd/task-6-report.md`: records the final review evidence and test-only scope.
+
 ## Concerns
 
 1. The production bundle passes but Vite reports large chunks (`html2pdf` about 985 kB and the main bundle about 1.35 MB before gzip). Code splitting is outside Task 6.

@@ -105,6 +105,29 @@ test("mobile menu toggle remains operable while the drawer is open", async ({ pa
   await expect(toggle).toBeFocused();
 });
 
+test("mobile drawer exposes modal and closed-state accessibility semantics", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const drawer = page.locator(".side-rail");
+  const toggle = page.locator(".mobile-nav-trigger");
+
+  await expect(drawer).toHaveAttribute("aria-hidden", "true");
+  await expect(drawer).toHaveAttribute("inert", "");
+  await expect(drawer).not.toHaveAttribute("role", "dialog");
+  await expect(drawer).not.toHaveAttribute("aria-modal", "true");
+
+  await toggle.click();
+  await expect(drawer).toHaveAttribute("role", "dialog");
+  await expect(drawer).toHaveAttribute("aria-modal", "true");
+  await expect(drawer).not.toHaveAttribute("aria-hidden", "true");
+  await expect(drawer).not.toHaveAttribute("inert", "");
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(drawer).toHaveAttribute("aria-hidden", "true");
+  await expect(drawer).toHaveAttribute("inert", "");
+});
+
 test("mobile shell controls meet minimum touch targets", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   const trigger = page.getByRole("button", { name: "Open workspace navigation" });

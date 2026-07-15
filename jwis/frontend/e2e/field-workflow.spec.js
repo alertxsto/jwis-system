@@ -118,3 +118,19 @@ test("field brand remains a minimum touch target at tablet width", async ({ page
   await page.goto("/field");
   await expectMinimumTouchTarget(page.getByRole("link", { name: "Return to JWIS command center" }));
 });
+
+test("field brand and workflow controls meet minimum touch targets at the 860px boundary", async ({ page }) => {
+  await page.setViewportSize({ width: 860, height: 1024 });
+  await page.goto("/field");
+
+  for (const control of [
+    page.getByRole("link", { name: "Return to JWIS command center" }),
+    page.getByTestId("truck-select"),
+    page.getByTestId("incident-reason"),
+    page.getByTestId("btn-ready"),
+    page.getByTestId("btn-issue"),
+    page.getByRole("link", { name: "Return to command center" }),
+  ]) {
+    await expectMinimumTouchTarget(control);
+  }
+});
