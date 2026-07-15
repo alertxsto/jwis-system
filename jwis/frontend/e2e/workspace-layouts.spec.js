@@ -90,7 +90,20 @@ test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
   await expect(page.getByTestId("forecast-workspace")).toBeVisible();
   await expect(page.getByTestId("forecast-primary-analysis")).toBeVisible();
   await expect(page.getByTestId("forecast-driver-rail")).toHaveAttribute("aria-label", "Forecast drivers");
-  await expect(page.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
+  const selectedHorizon = page.getByRole("button", { name: "7 days" });
+  await expect(selectedHorizon).toHaveAttribute("aria-pressed", "true");
+  const selectedHorizonContrast = await selectedHorizon.evaluate((element) => {
+    const luminance = (color) => {
+      const channels = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map((channel) => Number(channel) / 255);
+      const linear = channels.map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
+      return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+    };
+    const styles = getComputedStyle(element);
+    const foreground = luminance(styles.color);
+    const background = luminance(styles.backgroundColor);
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  });
+  expect(selectedHorizonContrast).toBeGreaterThanOrEqual(4.5);
   const sourceLimit = page.locator("#forecast-horizon-source-limit");
   await expect(sourceLimit).toHaveText("Source currently provides a 7-day forecast.");
   await expect(sourceLimit).toBeVisible();
