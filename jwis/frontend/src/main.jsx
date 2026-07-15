@@ -611,6 +611,34 @@ function KecamatanMapPanel() {
                 </li>
               </ul>
             </div>
+
+            <div className="kec-details-section">
+              <h4>Kebutuhan Operasional & Fasilitas</h4>
+              <ul className="kec-details-list">
+                <li className="kec-details-item">
+                  <span>Armada Truk Pengangkut:</span>
+                  <b>{selectedKec.trucks_required} unit</b>
+                </li>
+                <li className="kec-details-item">
+                  <span>Kru Lapangan Dibutuhkan:</span>
+                  <b>{selectedKec.crews_required} orang</b>
+                </li>
+                <li className="kec-details-item">
+                  <span>Total Jam Kerja (Man-Hours):</span>
+                  <b>{selectedKec.man_hours_required} jam</b>
+                </li>
+                <li className="kec-details-item">
+                  <span>Kebutuhan Bin Sampah Besar:</span>
+                  <b>{selectedKec.disposal_bins_required || 0} unit</b>
+                </li>
+                <li className="kec-details-item-total">
+                  <span>Status TPS:</span>
+                  <span className={selectedKec.facility_over_capacity ? "status-overcapacity" : "status-normal"}>
+                    {selectedKec.facility_over_capacity ? "⚠ OVER-CAPACITY" : "NORMAL (OK)"}
+                  </span>
+                </li>
+              </ul>
+            </div>
           </div>
           
           {selectedKec.factors && selectedKec.factors.length > 0 && (
@@ -2357,6 +2385,7 @@ function CommandCenter({ onLogout }) {
                   <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> OSRM route <em className="legend-tag">LIVE</em></span>
                   <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
                   <span><span className="legend-icon-unlicensed" /> Unlicensed Collector <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> Crowd Event <em className="legend-tag">SIM</em></span>
                 </details>
               </div>
             </div>
