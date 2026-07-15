@@ -84,3 +84,11 @@ test("mobile Fleet map stage keeps its minimum height without horizontal overflo
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(hasHorizontalOverflow).toBe(false);
 });
+
+test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
+  await page.getByRole("button", { name: "Waste Forecast" }).click();
+  await expect(page.getByTestId("forecast-workspace")).toBeVisible();
+  await expect(page.getByTestId("forecast-primary-analysis")).toBeVisible();
+  await expect(page.getByTestId("forecast-driver-rail")).toBeVisible();
+  await expect(page.getByRole("button", { name: "7 days" })).toHaveAttribute("aria-pressed", "true");
+});

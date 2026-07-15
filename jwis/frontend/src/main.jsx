@@ -4,6 +4,7 @@ import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import FieldApp from "./field/FieldApp.jsx";
 import { AppShell } from "./layout/AppShell.jsx";
 import { FleetOperations } from "./workspaces/FleetOperations.jsx";
+import { WasteForecast } from "./workspaces/WasteForecast.jsx";
 import {
   Activity,
   AlertTriangle,
@@ -1621,25 +1622,27 @@ function CommandCenter({ onLogout }) {
       {activeWorkspace !== "fleet" && (
         <section className="main-grid">
         {activeWorkspace === "forecast" && (
-          <>
-            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <WeatherPanel weather={snapshot.weather} />
-              <CrowdEventsPanel onSimulateEvent={(ev) => {
-                setAttendance(ev.expected_attendance);
-                setRainfall(10);
-                setEventLat(ev.lat);
-                setEventLng(ev.lng);
-                setActiveWorkspace("planning");
-              }} />
-              <AssistantPanel />
-              <VoicePanel onCommand={handleVoiceCommand} />
-            </div>
-            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
-              <KecamatanMapPanel />
-              <PredictionPanel predictions={snapshot.critical_predictions} />
-              <ReportActions />
-            </div>
-          </>
+          <WasteForecast
+            metrics={[
+              { label: "Largest forecast spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
+              { label: "High-risk districts", value: snapshot.critical_predictions.length, helper: "capacity reinforcement needed", tone: "danger" },
+              { label: "Peak rainfall", value: `${Math.round(Math.max(...snapshot.weather.forecast.map((day) => day.rainfall_mm)))} mm`, helper: "forecast driver", tone: "warning" },
+              { label: "Planning status", value: "Ready", helper: "scenario handoff enabled" },
+            ]}
+            forecast={<PredictionPanel predictions={snapshot.critical_predictions} />}
+            weather={<WeatherPanel weather={snapshot.weather} />}
+            events={<CrowdEventsPanel onSimulateEvent={(ev) => {
+              setAttendance(ev.expected_attendance);
+              setRainfall(10);
+              setEventLat(ev.lat);
+              setEventLng(ev.lng);
+              setActiveWorkspace("planning");
+            }} />}
+            districts={<KecamatanMapPanel />}
+            assistant={<AssistantPanel />}
+            voice={<VoicePanel onCommand={handleVoiceCommand} />}
+            reportActions={<ReportActions />}
+          />
         )}
 
         {activeWorkspace === "planning" && (
