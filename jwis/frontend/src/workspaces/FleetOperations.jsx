@@ -14,6 +14,7 @@ export function FleetOperations({
   onDetailTabChange,
   metrics,
   map,
+  mapFooter,
   alerts,
   routeEvidence,
   rerouting,
@@ -62,6 +63,8 @@ export function FleetOperations({
           {rerouting}
         </aside>
       </div>
+
+      {mapFooter}
 
       <div className="workspace-tabs" role="tablist" aria-label="Fleet details">
         {detailTabs.map((tab, index) => (
