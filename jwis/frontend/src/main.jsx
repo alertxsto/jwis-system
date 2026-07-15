@@ -571,7 +571,7 @@ function WeatherPanel({ weather }) {
   );
 }
 
-function FleetTable({ trucks }) {
+function FleetTable({ trucks, onOpenTripHistory }) {
   return (
     <section className="panel wide">
       <div className="panel-title">
@@ -590,6 +590,7 @@ function FleetTable({ trucks }) {
               <th>Status</th>
               <th>Speed</th>
               <th>Deviation</th>
+              <th>History</th>
             </tr>
           </thead>
           <tbody>
@@ -609,6 +610,11 @@ function FleetTable({ trucks }) {
                 </td>
                 <td>{truck.latest_position?.speed_kmh} km/h</td>
                 <td>{Math.round(truck.deviation?.distance_meters || 0)} m</td>
+                <td>
+                  <button className="ghost-button" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)}>
+                    Trip history
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -1513,11 +1519,27 @@ function CommandCenter({ onLogout }) {
   const [toast, setToast] = useState("");
   const [filterTruck, setFilterTruck] = useState("ALL");
   const [activeWorkspace, setActiveWorkspace] = useState("fleet");
+  const [fleetDetailTab, setFleetDetailTab] = useState("fleet");
+  const [historyScrollRequest, setHistoryScrollRequest] = useState(0);
 
   const [attendance, setAttendance] = useState(85000);
   const [rainfall, setRainfall] = useState(42);
   const [eventLat, setEventLat] = useState(null);
   const [eventLng, setEventLng] = useState(null);
+
+  useEffect(() => {
+    if (!historyScrollRequest || fleetDetailTab !== "history") return;
+    const el = document.getElementById("history-panel");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  }, [fleetDetailTab, historyScrollRequest]);
+
+  function selectFleetTruck(code, openTripHistory = false) {
+    setFilterTruck(code);
+    if (openTripHistory) {
+      setFleetDetailTab("history");
+      setHistoryScrollRequest((request) => request + 1);
+    }
+  }
 
   function handleVoiceCommand(cmd) {
     if (cmd.type === "refresh") refresh();
@@ -1573,6 +1595,8 @@ function CommandCenter({ onLogout }) {
     <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout}>
       {activeWorkspace === "fleet" && (
         <FleetOperations
+          detailTab={fleetDetailTab}
+          onDetailTabChange={setFleetDetailTab}
           metrics={[
             { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
             { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
@@ -1581,20 +1605,14 @@ function CommandCenter({ onLogout }) {
           ]}
           map={(
             <div id="map-panel" className="map-anchor">
-              <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={(code, dispatch) => {
-                setFilterTruck(code);
-                if (dispatch) {
-                  const el = document.getElementById("history-panel");
-                  if (el) el.scrollIntoView({ behavior: "smooth" });
-                }
-              }} />
+              <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={selectFleetTruck} />
             </div>
           )}
           alerts={<AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />}
           routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
           rerouting={<AStarReroutingPanel />}
           queue={<><TpaQueuePanel /><StaggerSimulatorPanel /></>}
-          fleetTable={<FleetTable trucks={snapshot.trucks} />}
+          fleetTable={<FleetTable trucks={snapshot.trucks} onOpenTripHistory={(code) => selectFleetTruck(code, true)} />}
           history={<FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />}
           carbon={<CarbonPanel />}
         />
