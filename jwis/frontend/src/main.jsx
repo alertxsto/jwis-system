@@ -464,6 +464,9 @@ function KecamatanMapPanel() {
   const [weekend, setWeekend] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedSlug, setSelectedSlug] = useState(null);
+  const [search, setSearch] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -495,6 +498,13 @@ function KecamatanMapPanel() {
     unknown: "#64748b",
   };
 
+  const filteredRows = rows.filter((k) => {
+    const matchesSearch = k.kecamatan.toLowerCase().includes(search.toLowerCase());
+    const matchesCity = cityFilter ? k.city === cityFilter : true;
+    return matchesSearch && matchesCity;
+  });
+
+  const displayedRows = showAll ? filteredRows : filteredRows.slice(0, 12);
   const selectedKec = rows.find((r) => r.slug === selectedSlug);
 
   return (
@@ -524,6 +534,30 @@ function KecamatanMapPanel() {
         <button className="primary-button" onClick={load} disabled={loading}>
           {loading ? "Menghitung…" : "Prediksi ulang"}
         </button>
+      </div>
+
+      <div className="forecast-filter-bar">
+        <input 
+          type="text" 
+          placeholder="Cari kecamatan..." 
+          value={search} 
+          onChange={(e) => setSearch(e.target.value)} 
+          className="search-input" 
+          aria-label="Cari kecamatan"
+        />
+        <select 
+          value={cityFilter} 
+          onChange={(e) => setCityFilter(e.target.value)} 
+          className="city-select" 
+          aria-label="Filter kota"
+        >
+          <option value="">Semua Kota</option>
+          <option value="Jakarta Pusat">Jakarta Pusat</option>
+          <option value="Jakarta Barat">Jakarta Barat</option>
+          <option value="Jakarta Selatan">Jakarta Selatan</option>
+          <option value="Jakarta Timur">Jakarta Timur</option>
+          <option value="Jakarta Utara">Jakarta Utara</option>
+        </select>
       </div>
 
       {selectedKec && (
@@ -591,7 +625,7 @@ function KecamatanMapPanel() {
       )}
 
       <div className="kec-list">
-        {rows.slice(0, 12).map((k) => (
+        {displayedRows.map((k) => (
           <article 
             className={`kec-row${selectedSlug === k.slug ? " active" : ""}`} 
             key={k.slug}
@@ -614,6 +648,15 @@ function KecamatanMapPanel() {
           </article>
         ))}
       </div>
+
+      {filteredRows.length > 12 && (
+        <button 
+          className="text-button show-more-btn" 
+          onClick={() => setShowAll(!showAll)}
+        >
+          {showAll ? "Tampilkan Lebih Sedikit (Top 12)" : `Tampilkan Semua (${filteredRows.length} Kecamatan)`}
+        </button>
+      )}
       <p className="kec-note">
         Menampilkan 12 hotspot teratas dari {rows.length} kecamatan. Baseline & lokasi = SILIKA DLH 2023 (real);
         resolusi harian = calibrated-synthetic anchored to real data.

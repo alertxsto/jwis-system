@@ -1318,4 +1318,35 @@ input[type="range"]::-webkit-slider-thumb:hover {
   font-weight: bold;
 }
 
+.forecast-filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.search-input {
+  flex: 1;
+  min-width: 150px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: #fff;
+}
+.city-select {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  background: #fff;
+}
+.show-more-btn {
+  margin-top: 12px;
+  width: 100%;
+  text-align: center;
+  font-weight: bold;
+}
+
+
 
