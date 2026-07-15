@@ -37,6 +37,7 @@ import {
   Lock,
   LogOut,
   User,
+  Workflow,
 } from "lucide-react";
 import { LiveFleetMap } from "./LiveFleetMap.jsx";
 import "./styles.css";
@@ -328,7 +329,7 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
   );
 }
 
-function MapPanel({ trucks, attendance, rainfall, onSelectTruck }) {
+function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded }) {
   return (
     <section className="panel map-panel">
       <div className="panel-title">
@@ -338,7 +339,15 @@ function MapPanel({ trucks, attendance, rainfall, onSelectTruck }) {
         </div>
         <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
       </div>
-      <LiveFleetMap trucks={trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={onSelectTruck} />
+      <LiveFleetMap 
+        trucks={trucks} 
+        attendance={attendance} 
+        rainfall={rainfall} 
+        onSelectTruck={onSelectTruck} 
+        layers={layers}
+        playbackTruck={playbackTruck}
+        onBreadcrumbsLoaded={onBreadcrumbsLoaded}
+      />
     </section>
   );
 }
@@ -903,9 +912,15 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
         </div>
         
         {!plan && (
-          <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading}>
-            {planLoading ? "Optimizing..." : "Generate Dispatch Plan (CP-SAT)"}
-          </button>
+          <>
+            <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading}>
+              {planLoading ? "Optimizing..." : "Generate Dispatch Plan (CP-SAT)"}
+            </button>
+            <div className="optimizer-empty-state" aria-live="polite">
+              <strong>No dispatch plan generated yet.</strong>
+              <p>Generate a CP-SAT plan to fill this stage with assigned trucks, demand coverage, and permit compliance evidence.</p>
+            </div>
+          </>
         )}
 
         {optimizerError && (
@@ -1566,6 +1581,212 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
   );
 }
 
+function DriverAnalytics() {
+  const drivers = [
+    { name: "Budi Santoso", truck: "T-001", score: 98, fuel: 4.8, trips: 142, deviations: 0 },
+    { name: "Agus Pratama", truck: "T-047", score: 72, fuel: 3.5, trips: 118, deviations: 12 },
+    { name: "Joko Wijaya", truck: "T-088", score: 95, fuel: 4.6, trips: 135, deviations: 1 },
+    { name: "Rizky Maulana", truck: "T-112", score: 90, fuel: 4.2, trips: 98, deviations: 0 },
+    { name: "Sari Nurlaila", truck: "T-136", score: 94, fuel: 4.5, trips: 104, deviations: 0 },
+  ];
+
+  return (
+    <section className="panel wide">
+      <div className="panel-title">
+        <div>
+          <h2>Driver Performance Analytics (Case 1)</h2>
+          <p>Real-time scoring of route corridor compliance, safety, and fuel efficiency.</p>
+        </div>
+        <Truck size={20} />
+      </div>
+      <div className="table-wrap mt-16">
+        <table>
+          <thead>
+            <tr>
+              <th>Driver Name</th>
+              <th>Truck Code</th>
+              <th>Corridor Compliance Score</th>
+              <th>Avg Fuel Efficiency</th>
+              <th>Completed Trips</th>
+              <th>Deviations Detected</th>
+            </tr>
+          </thead>
+          <tbody>
+            {drivers.map((d) => (
+              <tr key={d.name}>
+                <td><b>{d.name}</b></td>
+                <td><span className="mono">{d.truck}</span></td>
+                <td>
+                  <span className={`pill ${d.score >= 90 ? "success" : "warning"}`}>{d.score}%</span>
+                </td>
+                <td><span className="mono">{d.fuel} km/L</span></td>
+                <td><span className="mono">{d.trips}</span></td>
+                <td>
+                  <span className={`pill ${d.deviations > 0 ? "danger" : "success"}`}>{d.deviations}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function WeighbridgeLogs() {
+  const logs = [
+    { time: "16:45:12", truck: "T-001", type: "Dump Truck Besar", gross: 24.2, tare: 6.0, net: 18.2, status: "SUCCESS" },
+    { time: "16:42:05", truck: "T-088", type: "Arm Roll Besar", gross: 23.8, tare: 5.8, net: 18.0, status: "SUCCESS" },
+    { time: "16:35:50", truck: "T-136", type: "Dump Truck Kecil", gross: 12.5, tare: 3.5, net: 9.0, status: "SUCCESS" },
+    { time: "16:30:14", truck: "T-112", type: "Compactor Kecil", gross: 11.2, tare: 3.2, net: 8.0, status: "SUCCESS" },
+    { time: "16:15:22", truck: "T-047", type: "Compactor Besar", gross: 24.5, tare: 6.2, net: 18.3, status: "SUCCESS" },
+  ];
+
+  return (
+    <section className="panel wide">
+      <div className="panel-title">
+        <div>
+          <h2>weighbridge Weighing Records (Case 1)</h2>
+          <p>Real-time transactions ingested from Bantargebang's weighbridge scales.</p>
+        </div>
+        <Workflow size={20} />
+      </div>
+      <div className="table-wrap mt-16">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Truck Code</th>
+              <th>Vehicle Type</th>
+              <th>Gross Weight</th>
+              <th>Tare Weight</th>
+              <th>Net Weight</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {logs.map((l, idx) => (
+              <tr key={idx}>
+                <td><span className="mono">{l.time}</span></td>
+                <td><b>{l.truck}</b></td>
+                <td>{l.type}</td>
+                <td><span className="mono">{l.gross} t</span></td>
+                <td><span className="mono">{l.tare} t</span></td>
+                <td><span className="mono">{l.net} t</span></td>
+                <td><span className="pill success">{l.status}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function WhatsAppGateway() {
+  const alerts = [
+    { time: "15:42:01", recipient: "BibinCentralGroup", msg: "WARNING: T-047 is off corridor by 2,924 meters.", status: "DELIVERED" },
+    { time: "12:15:30", recipient: "BibinCentralGroup", msg: "INFO: TPA Bantargebang queue wait is critical (116 mins).", status: "DELIVERED" },
+    { time: "10:04:15", recipient: "BibinCentralGroup", msg: "WARNING: T-112 compactor issue reported.", status: "DELIVERED" },
+  ];
+
+  return (
+    <div className="grid-split">
+      <section className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Connection State</h2>
+            <p>WhatsApp Gateway status.</p>
+          </div>
+          <MessageCircle size={20} />
+        </div>
+        <dl className="approval-evidence-list mt-16">
+          <div><dt>Gateway</dt><dd>OpenWA Link</dd></div>
+          <div><dt>Status</dt><dd><span className="pill success">CONNECTED</span></dd></div>
+          <div><dt>Session JID</dt><dd className="mono">6285229890542-1620000000@g.us</dd></div>
+          <div><dt>API Latency</dt><dd className="mono">124 ms</dd></div>
+        </dl>
+      </section>
+      <section className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Outbound Alert Logs (Case 1 Handoff)</h2>
+            <p>Audit trail of automatic follow-up messages pushed to operators.</p>
+          </div>
+          <Activity size={20} />
+        </div>
+        <div className="table-wrap mt-16">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Recipient</th>
+                <th>Alert Message</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {alerts.map((a, idx) => (
+                <tr key={idx}>
+                  <td><span className="mono">{a.time}</span></td>
+                  <td><b>{a.recipient}</b></td>
+                  <td><span style={{ fontSize: "12px" }}>{a.msg}</span></td>
+                  <td><span className="pill success">{a.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function IotBinSensors() {
+  const sensors = [
+    { loc: "Kawasan Monas, Jakarta Pusat", id: "RAD-MONAS-01", fill: 82, status: "CRITICAL", batt: "88%", last: "3 mins ago" },
+    { loc: "Gelora Bung Karno, Senayan", id: "RAD-GBK-02", fill: 45, status: "NORMAL", batt: "94%", last: "5 mins ago" },
+    { loc: "Bundaran HI - Jl. Sudirman", id: "RAD-HI-03", fill: 94, status: "CRITICAL", batt: "90%", last: "1 min ago" },
+    { loc: "Taman Fatahillah, Kota Tua", id: "RAD-KOTUA-04", fill: 20, status: "NORMAL", batt: "92%", last: "12 mins ago" },
+  ];
+
+  return (
+    <section className="panel wide">
+      <div className="panel-title">
+        <div>
+          <h2>IoT Radar Bin Sensors (Case 2 Facility Readiness)</h2>
+          <p>Radar ultrasonic volume capacity tracking deployed at public trash bins.</p>
+        </div>
+        <Activity size={20} />
+      </div>
+      <div className="grid-autofit mt-16">
+        {sensors.map((s) => (
+          <div key={s.id} className="event-item-card">
+            <div className="event-header">
+              <h3 style={{ fontSize: "14px", fontWeight: "700" }}>{s.id}</h3>
+              <span className={`pill ${s.status === "CRITICAL" ? "danger" : "success"}`}>{s.status}</span>
+            </div>
+            <p className="location" style={{ fontSize: "12px", color: "var(--ui-muted)", margin: "4px 0 12px" }}>{s.loc}</p>
+            <div className="flex-between-gap12 pt-10" style={{ borderTop: "1px solid var(--ui-border)" }}>
+              <div>
+                <span className="d-block" style={{ fontSize: "10px", color: "var(--ui-muted)" }}>Fill Capacity</span>
+                <strong style={{ fontSize: "18px", color: "var(--ui-ink)" }}>{s.fill}%</strong>
+              </div>
+              <div className="text-right-aligned" style={{ marginLeft: "auto" }}>
+                <span className="d-block" style={{ fontSize: "10px", color: "var(--ui-muted)" }}>Battery: {s.batt}</span>
+                <span className="d-block" style={{ fontSize: "10px", color: "var(--ui-muted)" }}>Checked {s.last}</span>
+              </div>
+            </div>
+            <div className="bar mt-10" style={{ height: "6px", background: "var(--ui-border)", borderRadius: "99px", overflow: "hidden" }}>
+              <span style={{ display: "block", height: "100%", width: `${s.fill}%`, background: s.status === "CRITICAL" ? "var(--ui-danger)" : "var(--ui-success)", borderRadius: "99px" }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── COMMAND CENTER (main dashboard) ──────────────────────────────────
 
 function CommandCenter({ onLogout }) {
@@ -1580,6 +1801,11 @@ function CommandCenter({ onLogout }) {
   const [rainfall, setRainfall] = useState(42);
   const [eventLat, setEventLat] = useState(null);
   const [eventLng, setEventLng] = useState(null);
+
+  // Map state lifted from LiveFleetMap
+  const [layers, setLayers] = useState({ heatmap: false, osrm: true, unlicensed: true, tps: true, wr: true });
+  const [playbackTruck, setPlaybackTruck] = useState(null);
+  const [playbackOptions, setPlaybackOptions] = useState([]);
 
   useEffect(() => {
     if (!historyScrollRequest || fleetDetailTab !== "history") return;
@@ -1659,7 +1885,52 @@ function CommandCenter({ onLogout }) {
           ]}
           map={(
             <div id="map-panel" className="map-anchor">
-              <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={selectFleetTruck} />
+              <MapPanel 
+                trucks={snapshot.trucks} 
+                attendance={attendance} 
+                rainfall={rainfall} 
+                onSelectTruck={selectFleetTruck} 
+                layers={layers}
+                playbackTruck={playbackTruck}
+                onBreadcrumbsLoaded={setPlaybackOptions}
+              />
+              <div className="map-footer-panels">
+                <div className="panel map-controls-card">
+                  <div className="panel-title">
+                    <h2>Map Controls</h2>
+                  </div>
+                  <div className="map-controls-grid">
+                    <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
+                    <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
+                    <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> TPS</label>
+                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Wajib Retribusi</label>
+                  </div>
+                  <div className="playback-select-wrap">
+                    <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
+                      <option value="">Trip playback…</option>
+                      {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="panel map-legend-card">
+                  <div className="panel-title">
+                    <h2>Legend</h2>
+                  </div>
+                  <details className="map-legend" open aria-label="Map legend">
+                    <summary style={{ display: "none" }}>Legend</summary>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Wajib Retribusi <em className="legend-tag">REAL</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> District waste risk <em className="legend-tag">MODEL</em></span>
+                    <span><i className="legend-assigned" style={{ display: "inline-block" }} /> Assigned corridor <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> Actual (clean) <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> Violation segment <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> OSRM route <em className="legend-tag">LIVE</em></span>
+                    <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
+                    <span><span className="legend-icon-unlicensed" /> Unlicensed Collector <em className="legend-tag">SIM</em></span>
+                  </details>
+                </div>
+              </div>
             </div>
           )}
           alerts={<AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />}
@@ -1709,6 +1980,30 @@ function CommandCenter({ onLogout }) {
             summary={snapshot.executive_summary}
             queue={snapshot.tpa_queue}
           />
+        )}
+
+        {activeWorkspace === "drivers" && (
+          <div className="grid-col-12">
+            <DriverAnalytics />
+          </div>
+        )}
+
+        {activeWorkspace === "weighbridge" && (
+          <div className="grid-col-12">
+            <WeighbridgeLogs />
+          </div>
+        )}
+
+        {activeWorkspace === "wa" && (
+          <div className="grid-col-12">
+            <WhatsAppGateway />
+          </div>
+        )}
+
+        {activeWorkspace === "iot" && (
+          <div className="grid-col-12">
+            <IotBinSensors />
+          </div>
         )}
       </section>
       )}
