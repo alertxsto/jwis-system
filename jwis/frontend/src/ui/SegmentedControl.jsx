@@ -8,7 +8,11 @@ export function SegmentedControl({ label, value, options, onChange }) {
           key={option.value}
           type="button"
           aria-pressed={value === option.value}
-          onClick={() => onChange(option.value)}
+          disabled={option.disabled}
+          title={option.title}
+          onClick={() => {
+            if (!option.disabled) onChange(option.value);
+          }}
         >
           {option.label}
         </button>

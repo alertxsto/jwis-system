@@ -167,16 +167,13 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 16px;
-  padding: 12px;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  background: var(--ui-surface-muted);
 }
 
 .forecast-tools .panel {
   flex: 1 1 260px;
   margin: 0;
   padding: 16px;
+  border-radius: var(--ui-radius);
   box-shadow: none;
 }
 

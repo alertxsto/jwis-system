@@ -4,8 +4,8 @@ import { SegmentedControl } from "../ui/SegmentedControl.jsx";
 
 const horizonOptions = [
   { value: "7d", label: "7 days" },
-  { value: "14d", label: "14 days" },
-  { value: "30d", label: "30 days" },
+  { value: "14d", label: "14 days", disabled: true, title: "Unavailable: source provides 7 days" },
+  { value: "30d", label: "30 days", disabled: true, title: "Unavailable: source provides 7 days" },
 ];
 
 export function WasteForecast({
@@ -41,7 +41,7 @@ export function WasteForecast({
         <div className="forecast-primary-analysis" data-testid="forecast-primary-analysis">
           {forecast}
         </div>
-        <aside className="forecast-driver-rail" data-testid="forecast-driver-rail">
+        <aside className="forecast-driver-rail" data-testid="forecast-driver-rail" aria-label="Forecast drivers">
           {weather}
           {events}
         </aside>

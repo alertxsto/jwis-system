@@ -112,8 +112,8 @@
 }
 
 .segmented-control button[aria-pressed="true"] {
-  color: var(--ui-primary);
-  background: var(--ui-surface);
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
   box-shadow: var(--ui-shadow);
 }
 
