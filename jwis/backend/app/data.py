@@ -137,7 +137,6 @@ def get_dynamic_trucks() -> list[dict[str, Any]]:
         _truck("T-047", "B 5678 EF", "Agus Pratama", "Jakarta Barat", "deviation", False, "Compactor Besar"),
         _truck("T-088", "B 9012 GH", "Joko Wijaya", "Jakarta Selatan", "active", False, "Arm Roll Besar"),
         _truck("T-112", "B 4410 KL", "Rizky Maulana", "Jakarta Timur", "active", True, "Compactor Kecil"),
-        _truck("T-136", "B 7781 MN", "Sari Nurlaila", "Jakarta Timur", "active", False, "Dump Truck Kecil"),
     ]
 
 class DynamicTruckList(list):
