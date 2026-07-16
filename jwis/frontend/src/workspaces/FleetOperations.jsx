@@ -55,13 +55,9 @@ export function FleetOperations({
       <MetricStrip metrics={metrics} />
 
       <div className="fleet-stage">
-        <div className="fleet-map-stage" data-testid="fleet-map-stage">
+        <div className="fleet-map-stage" data-testid="fleet-map-stage" style={{ width: "100%", borderRight: "none" }}>
           {map}
         </div>
-        <aside className="fleet-inspector">
-          {alerts}
-          {rerouting}
-        </aside>
       </div>
 
       {mapFooter}

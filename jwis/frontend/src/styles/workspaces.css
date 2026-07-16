@@ -11,8 +11,8 @@
 
 .fleet-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  height: 480px;
+  grid-template-columns: minmax(0, 1fr);
+  height: 540px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   overflow: hidden;
@@ -23,7 +23,7 @@
   position: relative;
   min-width: 0;
   height: 100%;
-  border-right: 1px solid var(--ui-border);
+  border-right: none;
 }
 
 .fleet-map-stage .map-anchor,
@@ -545,5 +545,24 @@
 
   .planning-workspace .assign-evidence {
     text-align: left;
+  }
+}
+
+/* Map footer inspector row styles (desktop 3-column grid, mobile stacked) */
+.map-footer-inspector-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+  min-width: 0;
+}
+
+.inspector-col {
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .map-footer-inspector-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
