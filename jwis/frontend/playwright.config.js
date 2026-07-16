@@ -6,7 +6,7 @@ export default defineConfig({
   fullyParallel: false,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:5175",
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || "http://127.0.0.1:5175",
     trace: "off",
     headless: true,
   },

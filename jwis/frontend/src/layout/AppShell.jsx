@@ -1,5 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, LogOut, Menu, RefreshCcw, Route, Truck, Workflow, X, Eye, Shield, MessageCircle, BookOpen, HelpCircle, Search } from "lucide-react";
+import {
+  Activity,
+  BarChart3,
+  LogOut,
+  Menu,
+  MessageCircle,
+  RefreshCcw,
+  Route,
+  Search,
+  Shield,
+  Truck,
+  Workflow,
+  X,
+} from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
 
 const items = [
@@ -43,7 +56,11 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
   useEffect(() => {
     if (!mobileNavOpen) return undefined;
     const drawer = sideRailRef.current;
-    const focusable = Array.from(drawer?.querySelectorAll("button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") || []);
+    const focusable = Array.from(
+      drawer?.querySelectorAll(
+        "button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])",
+      ) || [],
+    );
     const focusDrawer = requestAnimationFrame(() => focusable[0]?.focus());
     const manageModalFocus = (event) => {
       if (event.key === "Escape") {
@@ -74,6 +91,13 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
     closeMobileNav();
   }
 
+  const sections = ["Operations", "Logistics", "Admin"];
+  const sectionLabels = {
+    Operations: "Operations",
+    Logistics: "Logistics (Case 1)",
+    Admin: "Admin (Case 2)",
+  };
+
   return (
     <div className="dashboard-frame professional-shell">
       <aside
@@ -85,38 +109,53 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         inert={mobileNavMode && !mobileNavOpen ? "true" : undefined}
         role={mobileNavOpen ? "dialog" : undefined}
       >
-        <div className="side-brand"><span className="brand-mark"><Route size={19} /></span><div><strong>JWIS</strong><small>DLH Command</small></div></div>
-        <p className="nav-section-label">Operations</p>
-        <nav className="side-nav" id="workspace-navigation" data-testid="workspace-navigation">
-          {items.filter(item => item.section === "Operations").map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}>
-              <Icon size={17} />{label}
-            </button>
-          ))}
-        </nav>
+        <div className="side-brand">
+          <span className="brand-mark"><Route size={19} /></span>
+          <div>
+            <strong>JWIS</strong>
+            <small>DLH Command</small>
+          </div>
+        </div>
 
-        <p className="nav-section-label">Logistics (Case 1)</p>
-        <nav className="side-nav">
-          {items.filter(item => item.section === "Logistics").map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}>
-              <Icon size={17} />{label}
-            </button>
-          ))}
-        </nav>
+        {sections.map((section) => (
+          <React.Fragment key={section}>
+            <p className="nav-section-label">{sectionLabels[section]}</p>
+            <nav className="side-nav" id={section === "Operations" ? "workspace-navigation" : undefined} data-testid={section === "Operations" ? "workspace-navigation" : undefined}>
+              {items.filter((item) => item.section === section).map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`}
+                  aria-current={activeWorkspace === id ? "page" : undefined}
+                  onClick={() => selectWorkspace(id)}
+                >
+                  <Icon size={17} />{label}
+                </button>
+              ))}
+            </nav>
+          </React.Fragment>
+        ))}
 
-        <p className="nav-section-label">Admin (Case 2)</p>
-        <nav className="side-nav">
-          {items.filter(item => item.section === "Admin").map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => selectWorkspace(id)}>
-              <Icon size={17} />{label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="side-system-state mt-24"><Activity size={15} /><span>System status</span><StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge></div>
-        <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}><LogOut size={17} />Logout</button>
+        <div className="side-system-state">
+          <Activity size={15} />
+          <span>System status</span>
+          <StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge>
+        </div>
+        <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}>
+          <LogOut size={17} />Logout
+        </button>
       </aside>
-      {mobileNavMode && mobileNavOpen && <button className="mobile-nav-backdrop" type="button" tabIndex={-1} aria-label="Dismiss workspace navigation" onClick={() => closeMobileNav()} />}
+
+      {mobileNavMode && mobileNavOpen && (
+        <button
+          className="mobile-nav-backdrop"
+          type="button"
+          tabIndex={-1}
+          aria-label="Dismiss workspace navigation"
+          onClick={() => closeMobileNav()}
+        />
+      )}
+
       <button
         ref={mobileNavTriggerRef}
         className="icon-button mobile-nav-trigger"
@@ -134,35 +173,32 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       >
         {mobileNavOpen ? <X size={19} /> : <Menu size={19} />}
       </button>
+
       <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
-          <div className="breadcrumb" style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}>
+          <div className="breadcrumb">
             <span>Home</span>
-            <span style={{ color: "var(--ui-border-strong)", fontSize: "10px" }}>&gt;</span>
+            <span className="breadcrumb-separator">&gt;</span>
             <strong>{current.label}</strong>
           </div>
-          
+
           <div className="topbar-search">
-            <Search size={15} style={{ color: "var(--ui-muted)" }} />
+            <Search size={15} aria-hidden="true" />
             <input type="text" placeholder="Search here" readOnly />
-            <span className="kbd">⌘ + K</span>
+            <span className="kbd">Ctrl K</span>
           </div>
 
-          <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+          <div className="top-actions">
             <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
             <a className="ghost-button" href="/field"><Truck size={16} />Field app</a>
             <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">
               <RefreshCcw size={16} />
             </button>
             <div className="profile-widget">
-              <img 
-                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&h=80&q=80" 
-                alt="User Avatar" 
-                className="profile-avatar" 
-              />
+              <span className="profile-avatar" aria-hidden="true">JW</span>
               <div className="profile-info">
-                <span className="profile-name">John Charly</span>
-                <span className="profile-role">Super Admin</span>
+                <span className="profile-name">JWIS Team</span>
+                <span className="profile-role">DLH Operator</span>
               </div>
             </div>
           </div>

@@ -45,7 +45,7 @@ import {
 import { LiveFleetMap } from "./LiveFleetMap.jsx";
 import "./styles.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -2126,8 +2126,8 @@ function WhatsAppGateway() {
   };
 
   return (
-    <div className="grid-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+    <div className="wa-workspace">
+      <div className="wa-config-stack">
         <section className="panel">
           <div className="panel-title">
             <div>
@@ -2152,9 +2152,9 @@ function WhatsAppGateway() {
             </div>
             <Users size={20} />
           </div>
-          <form onSubmit={handleSave} className="mt-16" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ display: "flex", gap: "16px", marginBottom: "8px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+          <form onSubmit={handleSave} className="wa-config-form">
+            <div className="wa-check-row">
+              <label className="wa-check">
                 <input
                   type="checkbox"
                   checked={config.send_to_driver}
@@ -2162,7 +2162,7 @@ function WhatsAppGateway() {
                 />
                 Send to Drivers
               </label>
-              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+              <label className="wa-check">
                 <input
                   type="checkbox"
                   checked={config.send_to_group}
@@ -2172,11 +2172,11 @@ function WhatsAppGateway() {
               </label>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div className="wa-field-stack">
               <strong>Driver Phone Numbers:</strong>
               {Object.keys(config.drivers).map((driverName) => (
-                <div key={driverName} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span style={{ width: "120px", fontSize: "13px" }}>{driverName}</span>
+                <div key={driverName} className="wa-driver-row">
+                  <span>{driverName}</span>
                   <input
                     type="text"
                     value={config.drivers[driverName]}
@@ -2184,36 +2184,34 @@ function WhatsAppGateway() {
                       const newDrivers = { ...config.drivers, [driverName]: e.target.value };
                       setConfig({ ...config, drivers: newDrivers });
                     }}
-                    style={{ flex: 1, padding: "4px 8px", borderRadius: "4px", border: "1px solid #ddd", background: "#f9f9f9" }}
                     placeholder="e.g. 6289675877496@c.us"
                   />
                 </div>
               ))}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "8px" }}>
+            <div className="wa-field-stack">
               <strong>Coordination Group JID:</strong>
               <input
                 type="text"
                 value={config.group_jid}
                 onChange={(e) => setConfig({ ...config, group_jid: e.target.value })}
-                style={{ padding: "6px 8px", borderRadius: "4px", border: "1px solid #ddd", background: "#f9f9f9" }}
                 placeholder="e.g. 6285229890542-1620000000@g.us"
               />
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px" }}>
-              <button type="submit" className="primary-button" disabled={loading} style={{ width: "fit-content" }}>
+            <div className="wa-form-actions">
+              <button type="submit" className="primary-button wa-save-button" disabled={loading}>
                 Save Configuration
               </button>
-              {saveStatus === "success" && <span style={{ color: "#177a57", fontSize: "13px" }}>✓ Saved successfully</span>}
-              {saveStatus === "error" && <span style={{ color: "#d9534f", fontSize: "13px" }}>✗ Failed to save</span>}
+              {saveStatus === "success" && <span className="wa-save-status success">Saved successfully</span>}
+              {saveStatus === "error" && <span className="wa-save-status error">Failed to save</span>}
             </div>
           </form>
         </section>
       </div>
 
-      <section className="panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <section className="panel wa-log-panel">
         <div className="panel-title">
           <div>
             <h2>Outbound Alert Logs (Dynamic)</h2>
@@ -2224,13 +2222,12 @@ function WhatsAppGateway() {
             type="button"
             onClick={() => { fetchLogs(); fetchStatus(); }} 
             className="ghost-button" 
-            style={{ padding: "4px", borderRadius: "4px", minWidth: "auto" }}
             title="Refresh logs"
           >
             <RefreshCcw size={16} />
           </button>
         </div>
-        <div className="table-wrap mt-16" style={{ flex: 1, overflowY: "auto", maxHeight: "400px" }}>
+        <div className="table-wrap wa-log-table">
           <table>
             <thead>
               <tr>
@@ -2243,7 +2240,7 @@ function WhatsAppGateway() {
             <tbody>
               {logs.length === 0 ? (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: "center", padding: "24px", color: "#888" }}>
+                  <td className="table-empty-state" colSpan="4">
                     No alerts sent yet. Try dispatching from Fleet Operations!
                   </td>
                 </tr>
@@ -2251,8 +2248,8 @@ function WhatsAppGateway() {
                 logs.map((a, idx) => (
                   <tr key={idx}>
                     <td><span className="mono">{a.time}</span></td>
-                    <td style={{ fontSize: "12px" }}><b>{a.recipient}</b></td>
-                    <td><span style={{ fontSize: "11px", display: "block", maxWidth: "240px", whiteSpace: "pre-line" }}>{a.msg}</span></td>
+                    <td><b className="wa-recipient">{a.recipient}</b></td>
+                    <td><span className="wa-message-cell">{a.msg}</span></td>
                     <td>
                       <span className={`pill ${a.status === "DELIVERED" ? "success" : "danger"}`}>
                         {a.status}
@@ -2290,22 +2287,22 @@ function IotBinSensors() {
         {sensors.map((s) => (
           <div key={s.id} className="event-item-card">
             <div className="event-header">
-              <h3 style={{ fontSize: "14px", fontWeight: "700" }}>{s.id}</h3>
+              <h3>{s.id}</h3>
               <span className={`pill ${s.status === "CRITICAL" ? "danger" : "success"}`}>{s.status}</span>
             </div>
-            <p className="location" style={{ fontSize: "12px", color: "var(--ui-muted)", margin: "4px 0 12px" }}>{s.loc}</p>
-            <div className="flex-between-gap12 pt-10" style={{ borderTop: "1px solid var(--ui-border)" }}>
+            <p className="location">{s.loc}</p>
+            <div className="iot-sensor-meta">
               <div>
-                <span className="d-block" style={{ fontSize: "10px", color: "var(--ui-muted)" }}>Fill Capacity</span>
-                <strong style={{ fontSize: "18px", color: "var(--ui-ink)" }}>{s.fill}%</strong>
+                <span>Fill Capacity</span>
+                <strong>{s.fill}%</strong>
               </div>
-              <div className="text-right-aligned" style={{ marginLeft: "auto" }}>
-                <span className="d-block" style={{ fontSize: "10px", color: "var(--ui-muted)" }}>Battery: {s.batt}</span>
-                <span className="d-block" style={{ fontSize: "10px", color: "var(--ui-muted)" }}>Checked {s.last}</span>
+              <div className="iot-sensor-health">
+                <span>Battery: {s.batt}</span>
+                <span>Checked {s.last}</span>
               </div>
             </div>
-            <div className="bar mt-10" style={{ height: "6px", background: "var(--ui-border)", borderRadius: "99px", overflow: "hidden" }}>
-              <span style={{ display: "block", height: "100%", width: `${s.fill}%`, background: s.status === "CRITICAL" ? "var(--ui-danger)" : "var(--ui-success)", borderRadius: "99px" }} />
+            <div className="iot-fill-track">
+              <span className={s.status === "CRITICAL" ? "critical" : "normal"} style={{ width: `${s.fill}%` }} />
             </div>
           </div>
         ))}

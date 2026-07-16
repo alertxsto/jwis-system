@@ -39,7 +39,7 @@ test("newest manager dispatch flows to field app and is confirmed", async ({ pag
 });
 
 test("same-millisecond dispatches preserve ISO microsecond ordering", async ({ page }) => {
-  await page.route(`${API}/dispatch/T-047`, async (route) => {
+  await page.route("**/api/dispatch/T-047", async (route) => {
     await route.fulfill({
       json: [
         {

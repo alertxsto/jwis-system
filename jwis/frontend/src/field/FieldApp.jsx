@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Route, Send, ShieldCheck, Truck, X } from "lucide-react";
 import { readOutbox, enqueue, flushOutbox } from "./OfflineOutbox.js";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 function StatusPill({ tone, children }) {
   return <span className={`pill ${tone}`}>{children}</span>;

@@ -1,0 +1,2 @@
+facility,observed_ton_per_day_latest,observed_ton_per_day_max_2011_2019,observed_ton_per_day_avg_2011_2019,source,source_url,quality_note
+TPST Bantargebang,7702.07,7702.07,6307.12,UPST DLH chart JS,https://upstdlh.id/dist/js/myChart.js,"Observed incoming/handled ton per day chart, not design capacity."

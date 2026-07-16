@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 const JAKARTA_CENTER = [106.8456, -6.2088];
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+const API_URL = import.meta.env.VITE_API_URL || "/api";
 
 function toLngLat(point) {
   return [point.lng, point.lat];

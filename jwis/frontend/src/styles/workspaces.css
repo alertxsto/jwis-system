@@ -460,6 +460,174 @@
   width: 100%;
 }
 
+.wa-workspace {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+.wa-config-stack,
+.wa-config-form,
+.wa-field-stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.wa-check-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 2px;
+}
+
+.wa-check,
+.wa-driver-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wa-check {
+  cursor: pointer;
+  color: var(--ui-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wa-driver-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.wa-driver-row span,
+.wa-field-stack strong {
+  color: var(--ui-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wa-field-stack input {
+  min-height: 34px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  font-size: 13px;
+}
+
+.wa-field-stack input:focus {
+  border-color: var(--ui-accent);
+  box-shadow: var(--ui-focus);
+}
+
+.wa-form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.wa-save-button {
+  width: auto;
+}
+
+.wa-save-status {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.wa-save-status.success {
+  color: var(--ui-success);
+}
+
+.wa-save-status.error {
+  color: var(--ui-danger);
+}
+
+.wa-log-panel {
+  height: 100%;
+}
+
+.wa-log-panel .panel-title .ghost-button {
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.wa-log-table {
+  flex: 1;
+  max-height: 400px;
+  overflow: auto;
+}
+
+.wa-recipient {
+  font-size: 12px;
+}
+
+.wa-message-cell {
+  display: block;
+  max-width: 240px;
+  color: var(--ui-muted);
+  font-size: 11px;
+  white-space: pre-line;
+}
+
+.iot-sensor-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+}
+
+.iot-sensor-meta span,
+.iot-sensor-health span {
+  display: block;
+  color: var(--ui-muted);
+  font-size: 10px;
+}
+
+.iot-sensor-meta strong {
+  display: block;
+  color: var(--ui-ink);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.iot-sensor-health {
+  margin-left: auto;
+  text-align: right;
+}
+
+.iot-fill-track {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--ui-border);
+}
+
+.iot-fill-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.iot-fill-track span.critical {
+  background: var(--ui-danger);
+}
+
+.iot-fill-track span.normal {
+  background: var(--ui-success);
+}
+
 @media (max-width: 1180px) {
   .planning-workspace {
     grid-template-columns: 1fr;
@@ -484,6 +652,12 @@
 
   .planning-workspace .scenario-reqs {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .wa-workspace {
+    grid-template-columns: 1fr;
   }
 }
 

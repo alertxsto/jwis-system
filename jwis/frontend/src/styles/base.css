@@ -4,7 +4,7 @@ html {
   color: var(--ui-ink);
   background: var(--ui-canvas);
   font-family: "Plus Jakarta Sans", "Geist Sans", ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -0.015em;
+  letter-spacing: 0;
   color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -44,7 +44,7 @@ h1,
 h2,
 h3 {
   color: var(--ui-ink);
-  letter-spacing: -0.025em;
+  letter-spacing: 0;
   text-wrap: balance;
 }
 
