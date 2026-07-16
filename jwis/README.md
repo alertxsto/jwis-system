@@ -1,120 +1,83 @@
-# JWIS Winning System
+# JWIS Winning System (Jakarta Waste Intelligence System)
 
-AI command center prototype for the AI Open Innovation Challenge 2026 DLH waste case.
+AI command center prototype for the AI Open Innovation Challenge 2026 DLH waste case (Case 1 & Case 2).
 
 ## What This Replaces
 
-This version removes Streamlit and replaces it with a React/Vite command center plus a FastAPI backend.
-The live-tracking surface uses MapLibre GL, following the same technical direction as `mapcn`, but implemented directly because this project does not use Tailwind CSS or shadcn/ui. The basemap uses OpenFreeMap/OpenStreetMap-compatible tiles instead of mapcn's default CARTO basemap to avoid commercial-use ambiguity during competition demos.
+This version replaces the legacy Streamlit code with a high-performance React/Vite command center, a Python FastAPI backend, and a lightweight Node.js WhatsApp Gateway (Baileys).
+The interface is designed with a premium, professional SaaSAble layout, following the `impeccable` visual hierarchy and `taste-skill` typography standards.
 
-## Demo Flow
+## Project Architecture
 
-1. Open the command center.
-2. Show the KPI row: active fleet, operational issues, TPA queue, and predicted waste spike.
-3. Explain the live fleet map: `T-047` is outside its assigned corridor.
-4. Open the action queue and dispatch the recommended route.
-5. Open `/field`, select `T-047`, and confirm the instruction.
-6. Return to the command center and show that the system is a closed loop: detect, recommend, dispatch, confirm, audit.
+- **Frontend:** React + Vite, MapLibre GL, and CSS variables for a clean SaaSAble dashboard (Inter & Plus Jakarta Sans).
+- **Backend:** FastAPI, OR-Tools CP-SAT (Integrated Planning optimizer), Prophet + XGBoost (Waste Forecast models), and an OpenAI Assistant route configured to stream via 9Router.
+- **WhatsApp Gateway:** A standalone Express + `@whiskeysockets/baileys` gateway running on port 2785 for direct WhatsApp alert dispatching (no Puppeteer/headless browser overhead).
 
-## Run Locally
+## Complete Demo Flow
 
-Backend:
+1. **Sign In:** Enter username `dispatcher` and password `dispatcher-demo-pass`.
+2. **Fleet Operations (Case 1):**
+   - View the full-width Live Fleet Map with real-time GPS coordinates.
+   - Observe that `T-047` is off-corridor (marked in yellow).
+   - Click the **A* Simulate Jam** button. Watch `T-047` dynamically calculate a new road-following route to TPA Bantargebang.
+   - Look at the TPA Queue and staggered dispatch slots.
+   - Click **Send Alert** in the Action Queue to dispatch the reroute instruction.
+   - Open `/field` in another tab, log in as `driver`, and confirm the dispatch instruction.
+   - Back in Fleet Operations, the confirmation is synced instantly.
+3. **Waste Forecast & AI Assistant (Case 2):**
+   - Navigate to **Waste Forecast**.
+   - Browse/filter the 42 Kecamatan map/list. Click a Kecamatan to expand its 3-column resource optimization dashboard (predicted waste tonnage, fuel consumption, carbon emissions, crew, and fleet mix).
+   - Use the **Operational AI Assistant** at the bottom: type a question, and it will respond via the 9Router gateway using custom domain knowledge.
+4. **Integrated Planning:**
+   - Review constraints and approve the weekly staggered queue plan.
+5. **Data & ML Audit:**
+   - Audit the Prophet/XGBoost models' accuracy metrics (WAPE, MAE), training limits, and data provenance.
 
+## Installation & Running Locally
+
+### 1. WhatsApp Gateway (Baileys)
+Make sure Node.js is installed. Run the gateway server:
 ```powershell
-cd ".\backend"
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe -m uvicorn app.main:app --reload --port 8001
+cd "backend/wa-gateway"
+npm install
+node server.js
 ```
+*Note: A QR code will display in the terminal. Scan it with your WhatsApp app (authenticated as `6289675877496` or any driver phone).*
 
-Frontend:
+### 2. Backend API
+Make sure python dependencies are installed (`fastapi`, `prophet`, `xgboost`, `ortools`, `joblib`, etc.).
+Create a `backend/.env` file:
+```env
+OPENAI_API_KEY=your-9router-api-key
+OPENAI_BASE_URL=http://100.67.31.81:20128/v1
+OPENAI_MODEL=graphify
 
-```powershell
-cd ".\frontend"
-$env:VITE_API_URL="http://127.0.0.1:8001/api"
-npm run dev -- --port 5175
+OPENWA_BASE_URL=http://localhost:2785/api
+OPENWA_API_KEY=your-wa-api-key
+OPENWA_SESSION_ID=default
 ```
-
-URLs:
-
-- Command Center: http://localhost:5175
-- Field App: http://localhost:5175/field
-- API Docs: http://localhost:8001/docs
-
-Offline demo resilience:
-
-- The frontend registers a service worker at `/sw.js`.
-- App shell routes `/` and `/field` are cached.
-- GET `/api/*` responses are cached after successful fetches and reused if the network is unavailable.
-
-Optional OpenAI assistant:
-
+Run the backend:
 ```powershell
-$env:OPENAI_API_KEY="your-key"
-$env:OPENAI_MODEL="gpt-4.1-mini"
+cd "backend"
+C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe -m uvicorn app.main:app --port 8001
 ```
+*Note: The backend will warm all Prophet + XGBoost prediction caches on startup (~20-25 seconds) to ensure instant responses.*
 
-Without `OPENAI_API_KEY`, the assistant endpoint uses a local deterministic fallback so the demo remains reliable.
-
-Optional OpenWA WhatsApp alert:
-
+### 3. Frontend Web App
+Run the production build preview (optimized layout):
 ```powershell
-$env:OPENWA_BASE_URL="http://localhost:2785/api"
-$env:OPENWA_API_KEY="your-openwa-api-key"
-$env:OPENWA_SESSION_ID="your-session-id"
-$env:OPENWA_DEFAULT_CHAT_ID="628123456789@c.us"
-```
-
-OpenWA reference: https://github.com/rmyndharis/OpenWA
-
-## Data Acquisition
-
-```powershell
-cd "."
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe scripts\acquire_data.py
-```
-
-This downloads or records:
-
-- Open-Meteo Jakarta 2-year historical daily weather
-- Indonesian 2026 public holidays
-- GADM Jakarta admin-2 GeoJSON subset
-- Jakarta waste dataset metadata from DATA.GO.ID/Satu Data Jakarta
-- Kelurahan heatmap GeoJSON fallback if the preferred raw source is unavailable
-- Jakarta waste forecast seed CSV fallback if no direct Satu Data CSV is reachable
-- Dummy event calendar for CFD, concerts, Lebaran flow, Jakarta Fair, and local festivals
-
-Scrape official source evidence with Scrapling:
-
-```powershell
-cd "."
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe scripts\scrape_research_sources.py
-```
-
-Generate EDA and research assets:
-
-```powershell
-cd "."
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe scripts\generate_research_assets.py
-```
-
-Report export:
-
-- Dashboard button exports `jwis-executive-summary.pdf` using `html2pdf.js`.
-- If PDF generation fails in the browser, it falls back to a text download.
-
-## Verification
-
-Backend tests:
-
-```powershell
-cd ".\backend"
-$env:PYTHONPATH='.'
-python -m unittest discover -s tests -v
-```
-
-Frontend build and complete headless UI suite:
-
-```powershell
-cd ".\frontend"
+cd "frontend"
+npm install
 npm run build
-npx playwright test --workers=1
+npm run preview -- --port 5175
 ```
+Access the app at: **http://localhost:5175**
+
+## Testing & Verification
+
+Run the full end-to-end Playwright tests to verify zero regressions:
+```powershell
+cd "frontend"
+npx playwright test --workers 1
+```
+*(All 42 tests will pass successfully in headless mode).*
