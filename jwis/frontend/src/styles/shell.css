@@ -9,10 +9,10 @@
   position: sticky;
   top: 0;
   height: 100dvh;
-  padding: 20px 14px;
+  padding: 20px 16px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   border-right: 1px solid var(--ui-border);
   background: var(--ui-surface);
   overflow-y: auto;
@@ -89,12 +89,12 @@
 
 .nav-tab-btn:hover {
   color: var(--ui-accent-foreground);
-  background: #f4f4ff;
+  background: color-mix(in srgb, var(--ui-accent-soft) 70%, transparent);
 }
 
 .nav-tab-btn.active {
   color: var(--ui-accent-foreground);
-  background: #e5e6ff;
+  background: var(--ui-accent-soft);
 }
 
 .topbar-search {

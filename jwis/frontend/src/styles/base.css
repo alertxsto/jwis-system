@@ -3,7 +3,7 @@
 html {
   color: var(--ui-ink);
   background: var(--ui-canvas);
-  font-family: "Plus Jakarta Sans", "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0;
   color-scheme: light;
   font-synthesis: none;
@@ -32,13 +32,9 @@ button:disabled {
   transform: none !important;
 }
 
-button,
-a,
-input,
-select,
-textarea {
-  outline: none;
-}
+/* Removed global outline: none — browser default focus indicators are kept.
+   Custom focus styles are applied via :focus-visible per-component where needed.
+   See button:focus-visible, a:focus-visible, etc. below. */
 
 h1,
 h2,

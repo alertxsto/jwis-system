@@ -1,26 +1,46 @@
 :root {
-  --ui-primary: #6366e8;
-  --ui-primary-hover: #4f46e5;
-  --ui-accent: #6366e8;
-  --ui-accent-foreground: #4f46e5;
-  --ui-accent-soft: #eef2ff;
+  /* ── Accent: Teal — contextual for DLH environmental operations ── */
+  --ui-primary: #0f766e;
+  --ui-primary-hover: #0d6b64;
+  --ui-accent: #0f766e;
+  --ui-accent-foreground: #0d6b64;
+  --ui-accent-soft: #ccfbf1;
+
+  /* ── Canvas & surfaces ── */
   --ui-canvas: #f8fafc;
   --ui-surface: #ffffff;
   --ui-surface-muted: #f1f5f9;
+
+  /* ── Borders ── */
   --ui-border: #e2e8f0;
   --ui-border-strong: #cbd5e1;
+
+  /* ── Text ── */
   --ui-ink: #0f172a;
   --ui-muted: #64748b;
+
+  /* ── Semantic tones ── */
   --ui-success: #177a57;
   --ui-warning: #f59e0b;
   --ui-danger: #ef4444;
   --ui-info: #06b6d4;
+
+  /* ── Shape & spacing ── */
   --ui-radius: 8px;
   --ui-radius-control: 8px;
+
+  /* ── Elevation ── */
   --ui-shadow: none;
+  --ui-shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+
+  /* ── Layout ── */
   --ui-sidebar-width: 248px;
   --ui-topbar-height: 72px;
-  --ui-focus: 0 0 0 3px rgba(99, 102, 232, 0.24);
+
+  /* ── Focus ring (teal-derived) ── */
+  --ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.28);
+
+  /* ── Z-index scale ── */
   --z-dropdown: 20;
   --z-sticky: 30;
   --z-modal-backdrop: 40;
@@ -28,7 +48,7 @@
   --z-toast: 60;
   --z-tooltip: 70;
 
-  /* Feature-level aliases retained while legacy modules are decomposed. */
+  /* ── Legacy aliases — retained while decomposing old modules ── */
   --green: var(--ui-success);
   --green-light: #ecfdf5;
   --green-dark: #047857;
@@ -36,6 +56,7 @@
   --red-light: #fef2f2;
   --amber: var(--ui-warning);
   --amber-light: #fffbeb;
+  /* --purple alias kept for backward compatibility during migration */
   --purple: var(--ui-accent);
   --purple-light: var(--ui-accent-soft);
   --bg: var(--ui-canvas);
@@ -49,5 +70,6 @@
   --radius: var(--ui-radius);
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   --shadow: none;
-  --shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-hover: var(--ui-shadow-hover);
 }
+

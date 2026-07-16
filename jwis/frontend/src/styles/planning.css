@@ -1,0 +1,435 @@
+/* ── Operations Optimizer & Planning specific styles ── */
+
+.summary-panel h3 {
+  margin: 0 0 12px;
+  font-weight: 800;
+}
+
+.summary-panel ul {
+  margin: 0 0 18px;
+  padding-left: 18px;
+  color: #344452;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.summary-panel li {
+  margin-bottom: 8px;
+}
+
+.queue-box {
+  border: 1px solid #cbd5df;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfcfd;
+}
+
+.queue-box strong {
+  display: block;
+}
+
+.queue-box span {
+  display: block;
+  font-size: 13px;
+  color: #526170;
+  margin-top: 2px;
+}
+
+.queue-box p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.scenario-panel .control-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.scenario-panel label span {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #526170;
+  margin-bottom: 4px;
+}
+
+.scenario-panel input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #cbd5df;
+  padding: 10px 12px;
+  min-height: 44px;
+}
+
+.scenario-result {
+  border: 1px solid #d8d9f5;
+  background: #f5f5ff;
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+  color: var(--ui-accent-foreground);
+}
+
+.scenario-result strong {
+  display: block;
+  font-size: 18px;
+}
+
+.scenario-result span {
+  display: block;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+/* Scenario and stagger simulator extensions */
+.scenario-reqs {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  justify-content: space-between;
+}
+
+.req-chip {
+  flex: 1;
+  background: var(--ui-accent-soft);
+  padding: 10px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid #d8d9f5;
+}
+
+.req-chip b {
+  display: block;
+  font-size: 18px;
+  color: var(--ui-accent-foreground);
+}
+
+.req-chip span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.stagger-compare {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  margin-top: 16px;
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  position: relative;
+}
+
+.stagger-col {
+  text-align: center;
+}
+
+.stagger-col.before strong {
+  color: var(--red);
+}
+
+.stagger-col.after strong {
+  color: var(--green-dark);
+}
+
+.stagger-col strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.stagger-label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.stagger-arrow {
+  font-size: 24px;
+  color: var(--text-muted);
+}
+
+.stagger-badge {
+  position: absolute;
+  top: -10px;
+  right: 12px;
+  background: var(--green-dark);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+/* A* Dynamic Rerouting Panel */
+.astar-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.success-button { background: var(--ui-accent); }
+
+.danger-button { background: var(--red); }
+
+.traffic-status-badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.traffic-status-badge.clear { background: var(--green-light); color: var(--green-dark); }
+
+.traffic-status-badge.congested { background: var(--red-light); color: var(--red); }
+
+.astar-info-card {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  padding: 14px;
+}
+
+.astar-msg {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.astar-stats {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.astar-stat-col {
+  flex: 1;
+  text-align: center;
+}
+
+.astar-stat-col span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.astar-stat-col strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.text-diverted { color: var(--red) !important; }
+
+.text-normal { color: var(--green-dark) !important; }
+
+/* TPA Queue Panel */
+.tpa-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tpa-status-card {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 12px;
+  text-align: center;
+}
+
+.tpa-status-card span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.tpa-status-card strong { font-size: 17px; color: var(--text); }
+
+.text-danger { color: var(--red) !important; }
+
+.text-success { color: var(--green-dark) !important; }
+
+.tpa-logs h3 { font-size: 13px; margin: 0 0 8px; color: var(--text-muted); }
+
+.tpa-logs ul { list-style: none; padding: 0; margin: 0; }
+
+.tpa-logs li {
+  font-size: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.tpa-logs .time { font-weight: 700; }
+
+.status-badge.cleared { background: var(--green-light); color: var(--green-dark); }
+
+.status-badge.weighing { background: #fef3c7; color: #b45309; }
+
+/* Operations Optimizer UI styling */
+.optimizer-section {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+
+.optimizer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.optimizer-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.optimizer-plan-card {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  margin-top: 14px;
+}
+
+.plan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.plan-header strong {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.plan-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.plan-stat-item {
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.plan-stat-item strong {
+  font-size: 14px;
+  color: var(--ink);
+  margin-top: 2px;
+}
+
+.unmet-reasons-box {
+  background: var(--red-light);
+  border: 1px solid rgba(180, 35, 24, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.unmet-reasons-box strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.unmet-reasons-box ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.assign-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 12px 0 8px 0;
+}
+
+.assign-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.assign-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assign-info strong {
+  color: var(--ink);
+}
+
+.assign-info span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.assign-evidence {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.assign-evidence span.ok { color: var(--green); font-weight: 600; }
+
+.assign-evidence span.warn { color: var(--red); font-weight: 600; }
+
+.optimizer-success {
+  background: var(--green-light);
+  border: 1px solid rgba(23, 107, 84, 0.2);
+  border-radius: 6px;
+  padding: 10px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--green-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plan-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.plan-status-badge.proposed {
+  background: var(--amber-light);
+  color: var(--amber);
+}
+
+.plan-status-badge.approved {
+  background: var(--green-light);
+  color: var(--green);
+}

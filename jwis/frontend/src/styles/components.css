@@ -74,8 +74,15 @@
 
 .icon-button {
   width: 40px;
-  background: var(--ui-ink);
-  color: #ffffff;
+  background: var(--ui-surface);
+  color: var(--ui-muted);
+  border: 1px solid var(--ui-border);
+}
+
+.icon-button:hover {
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink);
+  border-color: var(--ui-border-strong);
 }
 
 .main-grid {
