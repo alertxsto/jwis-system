@@ -38,35 +38,34 @@ The interface is designed with a premium, professional SaaSAble layout, followin
 ### 1. WhatsApp Gateway (Baileys)
 Make sure Node.js is installed. Run the gateway server:
 ```powershell
-cd "backend/wa-gateway"
+cd "jwis/backend/wa-gateway"
 npm install
 node server.js
 ```
 *Note: A QR code will display in the terminal. Scan it with your WhatsApp app (authenticated as `6289675877496` or any driver phone).*
 
 ### 2. Backend API
-Make sure python dependencies are installed (`fastapi`, `prophet`, `xgboost`, `ortools`, `joblib`, etc.).
-Create a `backend/.env` file:
-```env
-OPENAI_API_KEY=your-9router-api-key
-OPENAI_BASE_URL=http://100.67.31.81:20128/v1
-OPENAI_MODEL=graphify
-
-OPENWA_BASE_URL=http://localhost:2785/api
-OPENWA_API_KEY=your-wa-api-key
-OPENWA_SESSION_ID=default
-```
-Run the backend:
+Make sure Python (3.10+) is installed. Install dependencies and run the API:
 ```powershell
-cd "backend"
-C:\Users\HP\AppData\Local\Programs\Python\Python312\python.exe -m uvicorn app.main:app --port 8001
+cd "jwis/backend"
+pip install -r requirements.txt
+
+# Create a .env file inside jwis/backend/ with the following:
+# OPENAI_API_KEY=your-9router-api-key
+# OPENAI_BASE_URL=http://100.67.31.81:20128/v1
+# OPENAI_MODEL=graphify
+# OPENWA_BASE_URL=http://localhost:2785/api
+# OPENWA_API_KEY=your-wa-api-key
+# OPENWA_SESSION_ID=default
+
+python -m uvicorn app.main:app --port 8001
 ```
 *Note: The backend will warm all Prophet + XGBoost prediction caches on startup (~20-25 seconds) to ensure instant responses.*
 
 ### 3. Frontend Web App
 Run the production build preview (optimized layout):
 ```powershell
-cd "frontend"
+cd "jwis/frontend"
 npm install
 npm run build
 npm run preview -- --port 5175
@@ -77,7 +76,7 @@ Access the app at: **http://localhost:5175**
 
 Run the full end-to-end Playwright tests to verify zero regressions:
 ```powershell
-cd "frontend"
+cd "jwis/frontend"
 npx playwright test --workers 1
 ```
 *(All 42 tests will pass successfully in headless mode).*
