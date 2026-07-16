@@ -104,7 +104,7 @@ _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
     },
     {
         "name": "kelurahan_dki_full_267.geojson",
-        "source_url": "https://github.com/pararawendy/border-indonesia-geojson",
+        "source_url": "https://github.com/pararawendy/border-desa-indonesia-geojson",
         "as_of": "2020",
         "granularity": "kelurahan-polygon",
         "classification": "real",
