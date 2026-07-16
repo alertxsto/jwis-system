@@ -1143,7 +1143,8 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .map-footer-panels {
   display: flex;
   gap: 16px;
-  margin-top: 16px;
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 .map-footer-panels > .panel {
   grid-column: auto !important;
@@ -1265,8 +1266,21 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 .kec-details-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 16px;
+}
+@media (max-width: 768px) {
+  .kec-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.status-overcapacity {
+  color: #d92d20;
+  font-weight: 700;
+}
+.status-normal {
+  color: #039855;
+  font-weight: 700;
 }
 .kec-details-section h4 {
   font-size: 11px;

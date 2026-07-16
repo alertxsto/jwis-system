@@ -1,11 +1,13 @@
 @media (max-width: 980px) {
   .fleet-stage {
     grid-template-columns: minmax(0, 1fr);
+    height: auto;
   }
 
   .fleet-map-stage {
     border-right: 0;
     border-bottom: 1px solid var(--ui-border);
+    height: 560px;
   }
 
   .fleet-inspector {

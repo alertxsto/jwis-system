@@ -1,5 +1,8 @@
 .fleet-workspace {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .workspace-canvas:has(.fleet-workspace) {
@@ -9,7 +12,7 @@
 .fleet-stage {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
-  min-height: 560px;
+  height: 480px;
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius);
   overflow: hidden;
@@ -19,7 +22,7 @@
 .fleet-map-stage {
   position: relative;
   min-width: 0;
-  min-height: 560px;
+  height: 100%;
   border-right: 1px solid var(--ui-border);
 }
 
@@ -30,7 +33,6 @@
 
 .fleet-map-stage .map-panel {
   grid-column: auto;
-  min-height: 560px;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -39,7 +41,6 @@
 .fleet-map-stage .maplibre-shell,
 .fleet-map-stage .maplibre-container {
   height: 100%;
-  min-height: 560px;
   border-radius: 0;
 }
 
@@ -64,8 +65,9 @@
 .workspace-tabs {
   display: flex;
   gap: 2px;
-  margin-top: 16px;
+  margin-top: 8px;
   border-bottom: 1px solid var(--ui-border);
+  flex-shrink: 0;
 }
 
 .workspace-tab {
@@ -90,11 +92,21 @@
 }
 
 .fleet-detail-surface {
-  margin-top: 16px;
+  margin-top: 0;
+  height: 200px;
+  min-height: 0;
+  flex-shrink: 0;
+  overflow: hidden;
 }
 
 .fleet-detail-surface .panel {
   width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  box-shadow: none;
+  border-radius: var(--ui-radius);
+  border: 1px solid var(--ui-border);
 }
 
 .forecast-workspace {
@@ -139,9 +151,10 @@
 
 .forecast-analysis-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.42fr);
-  gap: 16px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(360px, 0.85fr);
+  gap: 18px;
   align-items: start;
+  margin-top: 4px;
 }
 
 .forecast-primary-analysis,
@@ -166,13 +179,23 @@
 }
 
 .forecast-primary-analysis .panel {
-  min-height: 100%;
+  min-height: auto;
+}
+
+.forecast-primary-analysis {
+  display: grid;
+  gap: 16px;
 }
 
 .forecast-driver-rail {
-  display: flex;
-  flex-direction: column;
+  position: sticky;
+  top: 88px;
+  display: grid;
   gap: 16px;
+  max-height: calc(100dvh - 108px);
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-gutter: stable;
 }
 
 .forecast-districts {
@@ -184,21 +207,21 @@
 }
 
 .forecast-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(340px, 1.15fr) repeat(2, minmax(240px, 0.7fr));
+  gap: 14px;
   margin-top: 16px;
+  align-items: stretch;
 }
 
 .forecast-tools .panel {
-  flex: 1 1 260px;
   margin: 0;
   padding: 16px;
   box-shadow: none;
 }
 
 .forecast-tools .assistant-panel {
-  flex-basis: 440px;
+  min-width: 0;
 }
 
 .workspace-canvas:has(.planning-workspace) {
@@ -241,7 +264,7 @@
   place-items: center;
   border-radius: 50%;
   color: #ffffff;
-  background: var(--ui-accent);
+  background: var(--ui-primary-hover);
   font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -327,6 +350,28 @@
 .planning-workspace .optimizer-empty {
   margin: 10px 0;
   text-align: center;
+}
+
+.planning-workspace .optimizer-empty-state {
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px dashed var(--ui-border-strong);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-muted);
+  color: var(--ui-muted);
+}
+
+.planning-workspace .optimizer-empty-state strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ui-ink);
+  font-size: 14px;
+}
+
+.planning-workspace .optimizer-empty-state p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .optimizer-error,
@@ -448,8 +493,15 @@
   }
 
   .forecast-driver-rail {
+    position: static;
+    max-height: none;
+    overflow: visible;
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .forecast-tools {
+    grid-template-columns: 1fr;
   }
 }
 
