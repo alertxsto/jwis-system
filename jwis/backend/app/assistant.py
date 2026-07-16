@@ -40,8 +40,10 @@ def answer_operational_question(question: str, snapshot: dict[str, Any]) -> str:
 
 
 def answer_with_openai_if_configured(question: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    print("ASSISTANT: Entering answer_with_openai_if_configured")
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
+        print("ASSISTANT: No API key, using local fallback")
         return {
             "provider": "local-fallback",
             "answer": answer_operational_question(question, snapshot),
@@ -50,12 +52,22 @@ def answer_with_openai_if_configured(question: str, snapshot: dict[str, Any]) ->
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     url = f"{base_url}/chat/completions"
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+    print(f"ASSISTANT: Configured URL: {url}, Model: {model}")
     payload = {
         "model": model,
         "messages": [
             {
                 "role": "system",
-                "content": "You are JWIS, a concise operational assistant for DLH Jakarta waste logistics.",
+                "content": (
+                    "Kamu adalah Ana, asisten AI operasional utama untuk logistik sampah DLH Jakarta di sistem JWIS.\n"
+                    "Gaya bicara: santai, langsung ke inti (terse), praktis, tanpa basa-basi formal, "
+                    "menggunakan bahasa Indonesia informal/casual (seperti percakapan sehari-hari, gunakan istilah santai secara alami).\n"
+                    "Kamu menguasai seluruh aspek operasional JWIS:\n"
+                    "1. Real-time Tracking & Anomaly (Case 1): Memantau rute truk, mendeteksi deviasi rute (geofencing corridor), estimasi rute pemulihan menggunakan A* routing dan OSRM, queue time TPA Bantargebang, serta simulasi staggered dispatch.\n"
+                    "2. Waste Forecasting & Optimization (Case 2): Prediksi timbulan sampah per kecamatan/kelurahan untuk 7 hari ke depan berbasis Prophet + XGBoost (dipengaruhi curah hujan, cuaca, event keramaian, hari libur), alokasi armada (truk & kru) optimal menggunakan OR-Tools CP-SAT, serta audit kesesuaian armada.\n"
+                    "Gunakan data snapshot Pusat Komando JWIS yang disediakan di input user untuk menjawab secara konkret, menyajikan fakta kuantitatif (angka, persentase, koordinat, nama supir/truk jika ada), dan memberikan rekomendasi taktis yang siap eksekusi.\n"
+                    "Jangan gunakan format LaTeX (seperti $ atau $$), gunakan teks biasa atau blok kode/tabel Markdown jika diperlukan."
+                )
             },
             {
                 "role": "user",
@@ -74,8 +86,11 @@ def answer_with_openai_if_configured(question: str, snapshot: dict[str, Any]) ->
     )
 
     try:
+        print("ASSISTANT: Calling urlopen...")
         with urlopen(request, timeout=15) as response:
+            print("ASSISTANT: urlopen returned. Reading body...")
             body = response.read().decode("utf-8")
+            print(f"ASSISTANT: Body read complete. Length: {len(body)}")
         
         # Robust parsing of stream or raw JSON
         def parse_body(text: str) -> dict[str, Any]:

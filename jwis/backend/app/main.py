@@ -110,7 +110,7 @@ class WhatsAppAlertRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
     issue: str = Field(min_length=1, max_length=500)
     recommendation: str = Field(min_length=1, max_length=500)
-    chat_id: str = "6285229890542-1620000000@g.us" # Bibin default group
+    chat_id: str = "6289675877496@c.us" # User direct chat ID
 
 class DispatchRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
@@ -442,6 +442,54 @@ def executive_summary() -> dict:
 def history() -> list[dict]:
     return history_store.list_events()
 
+CONTACTS_FILE = "driver_contacts.json"
+DEFAULT_CONTACTS = {
+    "drivers": {
+        "Budi Santoso": "6289675877496@c.us",
+        "Agus Pratama": "6289675877496@c.us",
+        "Joko Wijaya": "6289675877496@c.us",
+        "Rizky Maulana": "6289675877496@c.us",
+        "Sari Nurlaila": "6289675877496@c.us"
+    },
+    "group_jid": "6285229890542-1620000000@g.us",
+    "send_to_group": True,
+    "send_to_driver": True
+}
+
+def load_contacts():
+    if not os.path.exists(CONTACTS_FILE):
+        with open(CONTACTS_FILE, "w") as f:
+            json.dump(DEFAULT_CONTACTS, f, indent=4)
+        return DEFAULT_CONTACTS
+    try:
+        with open(CONTACTS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return DEFAULT_CONTACTS
+
+def save_contacts(data):
+    with open(CONTACTS_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+def get_truck_info(truck_code: str) -> dict:
+    from app.data import get_dynamic_trucks
+    for t in get_dynamic_trucks():
+        if t["truck_code"] == truck_code:
+            return t
+    return {
+        "driver_name": "Supir JWIS",
+        "plate_number": "B 1234 CD"
+    }
+
+@app.get("/api/whatsapp/contacts")
+def get_whatsapp_contacts():
+    return load_contacts()
+
+@app.post("/api/whatsapp/contacts")
+def post_whatsapp_contacts(payload: dict):
+    save_contacts(payload)
+    return {"status": "success"}
+
 @app.get("/api/whatsapp/status")
 def whatsapp_status() -> dict:
     client = OpenWAClient.from_env()
@@ -454,11 +502,51 @@ def whatsapp_status() -> dict:
 @app.post("/api/whatsapp/alert")
 def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
     client = OpenWAClient.from_env()
-    msg = build_alert_message(payload.truck_code, payload.issue, payload.recommendation)
-    res = client.send_text(payload.chat_id, msg)
-    history_store.record_event("whatsapp_alert",
-                               {"truck_code": payload.truck_code, "sent": res.get("sent", False)})
-    return res
+    config = load_contacts()
+    info = get_truck_info(payload.truck_code)
+    
+    driver_name = info.get("driver_name", "Supir JWIS")
+    plate_number = info.get("plate_number", "B 1234 CD")
+    
+    responses = {}
+    
+    # 1. Send to Driver
+    if config.get("send_to_driver", True):
+        driver_jid = config.get("drivers", {}).get(driver_name, "6289675877496@c.us")
+        driver_msg = (
+            f"Yth. Bapak {driver_name} (Supir Unit {payload.truck_code} / {plate_number}),\n"
+            f"Anda terdeteksi mengalami kendala: {payload.issue}.\n"
+            f"Rekomendasi rute/tindakan: {payload.recommendation}.\n"
+            f"Harap segera respon di aplikasi JWIS Field App."
+        )
+        res_driver = client.send_text(driver_jid, driver_msg)
+        responses["driver"] = res_driver
+        history_store.record_event("whatsapp_alert", {
+            "recipient": f"Driver: {driver_name} ({driver_jid})",
+            "truck_code": payload.truck_code,
+            "sent": res_driver.get("sent", False),
+            "msg": driver_msg
+        })
+        
+    # 2. Send to Group
+    if config.get("send_to_group", True):
+        group_jid = config.get("group_jid", "6285229890542-1620000000@g.us")
+        group_msg = (
+            "⚠️ JWIS OPERATIONAL ALERT ⚠️\n"
+            f"Unit: {payload.truck_code} ({driver_name} / {plate_number})\n"
+            f"Kendala: {payload.issue}\n"
+            f"Rekomendasi Tindakan: {payload.recommendation}"
+        )
+        res_group = client.send_text(group_jid, group_msg)
+        responses["group"] = res_group
+        history_store.record_event("whatsapp_alert", {
+            "recipient": f"Group: {group_jid}",
+            "truck_code": payload.truck_code,
+            "sent": res_group.get("sent", False),
+            "msg": group_msg
+        })
+        
+    return {"status": "processed", "results": responses}
 
 
 @app.post("/api/whatsapp/alert/simulate")

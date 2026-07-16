@@ -110,6 +110,22 @@ _DATA_SOURCE_REGISTRY: list[dict[str, Any]] = [
         "classification": "real",
         "limitations": "267 DKI village polygons; administrative boundaries only.",
     },
+    {
+        "name": "REAL_SILIKA_TPS_locations_with_coordinates.csv",
+        "source_url": "https://silika.jakarta.go.id/tps",
+        "as_of": "2023",
+        "granularity": "tps-location",
+        "classification": "real",
+        "limitations": "Official SILIKA TPS location coordinate layer.",
+    },
+    {
+        "name": "REAL_SILIKA_wajib_retribusi_locations.csv",
+        "source_url": "https://silika.jakarta.go.id/wr",
+        "as_of": "2023",
+        "granularity": "wr-location",
+        "classification": "real",
+        "limitations": "Official SILIKA Wajib Retribusi commercial waste generator coordinate layer.",
+    },
 ]
 
 # Maps the SIPSN "nama_kabkota" label to the district name used across JWIS.
@@ -358,20 +374,24 @@ def build_provenance_records() -> list[dict[str, Any]]:
     return records
 
 
-@lru_cache(maxsize=1)
-def load_kelurahan_heatmap() -> dict[str, Any]:
-    """Heatmap FeatureCollection over all 267 DKI kelurahan polygons.
+_geojson_base: dict[str, Any] | None = None
 
-    Joins each village polygon to its kecamatan's real SILIKA 2023 baseline,
-    splitting the kecamatan total evenly across its member villages. Replaces
-    the 10-polygon fallback. Every feature carries the administrative key and a
-    predicted_tons risk value.
-    """
-    geo_path = REAL_DIR / "kelurahan_dki_full_267.geojson"
-    fc = json.loads(geo_path.read_text(encoding="utf-8"))
+def load_kelurahan_heatmap(kec_predictions: dict[str, float] | None = None) -> dict[str, Any]:
+    global _geojson_base
+    if _geojson_base is None:
+        geo_path = REAL_DIR / "kelurahan_dki_full_267.geojson"
+        _geojson_base = json.loads(geo_path.read_text(encoding="utf-8"))
 
-    kec_baseline = {k["kecamatan"].strip().upper(): k["baseline_tons_per_day"]
-                    for k in load_kecamatan_map()}
+    import copy
+    fc_val = copy.deepcopy(_geojson_base)
+    fc = fc_val if isinstance(fc_val, dict) else {}
+
+    if kec_predictions is None:
+        kec_predictions = {k["kecamatan"].strip().upper(): k["baseline_tons_per_day"]
+                           for k in load_kecamatan_map()}
+
+    kec_pred_upper = {k.strip().upper(): v for k, v in kec_predictions.items()}
+
     villages_per_kec: dict[str, int] = {}
     for feat in fc.get("features", []):
         kec = str(feat["properties"].get("sub_district", "")).strip().upper()
@@ -381,7 +401,7 @@ def load_kelurahan_heatmap() -> dict[str, Any]:
         props = feat["properties"]
         kec = str(props.get("sub_district", "")).strip().upper()
         village = str(props.get("village", "")).strip()
-        base = kec_baseline.get(kec)
+        base = kec_pred_upper.get(kec)
         n = villages_per_kec.get(kec, 0)
         per_village = round(base / n, 2) if (base is not None and n) else None
         feat["properties"] = {
@@ -389,7 +409,7 @@ def load_kelurahan_heatmap() -> dict[str, Any]:
             "kecamatan": props.get("sub_district", ""),
             "city": props.get("district", ""),
             "predicted_tons": per_village,
-            "classification": "real_baseline_split_evenly_across_villages",
+            "classification": "dynamic_prediction_split_evenly_across_villages",
         }
     return fc
 
@@ -407,3 +427,53 @@ def data_provenance() -> dict[str, Any]:
         "fleet_units_real": fleet.get("total_units"),
         "using_real_baselines": bool(timbulan),
     }
+
+
+@lru_cache(maxsize=1)
+def load_real_tps_coordinates() -> list[dict[str, Any]]:
+    """Loads real 1,081 TPS locations from SILIKA with precise coordinates."""
+    path = REAL_DIR / "REAL_SILIKA_TPS_locations_with_coordinates.csv"
+    if not path.exists():
+        return []
+    out = []
+    with path.open(encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            lat = _to_float(row.get("latitude"))
+            lng = _to_float(row.get("longitude"))
+            if lat is not None and lng is not None:
+                if abs(lat) > abs(lng):
+                    lat, lng = lng, lat
+                out.append({
+                    "name": (row.get("nama_tps") or "").strip(),
+                    "kecamatan": (row.get("kecamatan") or "").strip(),
+                    "kelurahan": (row.get("kelurahan") or "").strip(),
+                    "lat": lat,
+                    "lng": lng,
+                })
+    return out
+
+
+@lru_cache(maxsize=1)
+def load_real_wr_coordinates() -> list[dict[str, Any]]:
+    """Loads real 7,884 Wajib Retribusi locations from SILIKA with precise coordinates."""
+    path = REAL_DIR / "REAL_SILIKA_wajib_retribusi_locations.csv"
+    if not path.exists():
+        return []
+    out = []
+    with path.open(encoding="utf-8-sig") as handle:
+        for row in csv.DictReader(handle):
+            lat = _to_float(row.get("lat"))
+            lng = _to_float(row.get("lng"))
+            if lat is not None and lng is not None:
+                if abs(lat) > abs(lng):
+                    lat, lng = lng, lat
+                out.append({
+                    "name": (row.get("nama") or "").strip(),
+                    "jns": (row.get("jns") or "").strip(),
+                    "almt": (row.get("almt") or "").strip(),
+                    "kec": (row.get("kec") or "").strip(),
+                    "kel": (row.get("kel") or "").strip(),
+                    "lat": lat,
+                    "lng": lng,
+                })
+    return out

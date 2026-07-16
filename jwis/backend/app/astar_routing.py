@@ -14,6 +14,16 @@ from typing import Any
 
 from app.osrm import fetch_osrm_route
 
+TRAFFIC_JAM_ACTIVE = False
+
+def is_traffic_jam_active() -> bool:
+    global TRAFFIC_JAM_ACTIVE
+    return TRAFFIC_JAM_ACTIVE
+
+def set_traffic_jam_active(active: bool) -> None:
+    global TRAFFIC_JAM_ACTIVE
+    TRAFFIC_JAM_ACTIVE = active
+
 # Simplified Jakarta -> Bantargebang road network for real-time truck logistics.
 # Each node is an actual intersection / checkpoint (lat, lng, label).
 NODES = {
@@ -203,7 +213,8 @@ DEMO_CONGESTED_EDGES = [("CAWANG", "BEKASI_BARAT")]
 
 def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG", "ORIGIN")) -> str:
     """Snap a GPS coordinate to the closest real network node (never ORIGIN itself)."""
-    best, best_d = None, float("inf")
+    best: str = "KEBON_JERUK"
+    best_d = float("inf")
     for name, (nlat, nlng, _label) in NODES.items():
         if name in exclude:
             continue
