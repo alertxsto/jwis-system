@@ -15,7 +15,6 @@ export function WasteForecast({
   events,
   districts,
   assistant,
-  voice,
   reportActions,
 }) {
   const [horizon, setHorizon] = useState("7d");
@@ -45,6 +44,7 @@ export function WasteForecast({
 
       <div className="forecast-analysis-grid">
         <div className="forecast-primary-analysis" data-testid="forecast-primary-analysis">
+          {districts}
           {forecast}
         </div>
         <aside className="forecast-driver-rail" data-testid="forecast-driver-rail" aria-label="Forecast drivers">
@@ -53,13 +53,10 @@ export function WasteForecast({
         </aside>
       </div>
 
-      <div className="forecast-districts">{districts}</div>
-
-      <section className="forecast-tools" aria-label="Forecast tools">
+      <div className="forecast-tools" aria-label="Forecast tools">
         {assistant}
-        {voice}
         {reportActions}
-      </section>
+      </div>
     </section>
   );
 }

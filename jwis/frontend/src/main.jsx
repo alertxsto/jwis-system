@@ -1790,105 +1790,6 @@ function ReportActions() {
 
 // ── NEW DASHBOARD PANELS ─────────────────────────────────────────────
 
-function VoicePanel({ onCommand }) {
-  const [listening, setListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
-  const [supported, setSupported] = useState(true);
-  const recognitionRef = useRef(null);
-
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setSupported(false);
-      return;
-    }
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript;
-      setTranscript(text);
-      handleVoiceCommand(text);
-    };
-    recognition.onend = () => setListening(false);
-    recognition.onerror = () => setListening(false);
-    recognitionRef.current = recognition;
-  }, []);
-
-  function speak(message) {
-    if ("speechSynthesis" in window) {
-      const utter = new SpeechSynthesisUtterance(message);
-      utter.lang = "en-US";
-      window.speechSynthesis.speak(utter);
-    }
-  }
-
-  function handleVoiceCommand(text) {
-    const lower = text.toLowerCase();
-    let response = "Command not recognized.";
-    if (lower.includes("refresh") || lower.includes("reload")) {
-      response = "Refreshing the command center.";
-      onCommand({ type: "refresh" });
-    } else if (lower.includes("truck")) {
-      const match = lower.match(/t.?(\\d{3})/);
-      if (match) {
-        const code = "T-" + match[1];
-        response = "Showing history for truck " + code + ".";
-        onCommand({ type: "filter_truck", value: code });
-      }
-    } else if (lower.includes("carbon")) {
-      response = "Showing fleet carbon footprint.";
-      onCommand({ type: "scroll_carbon" });
-    } else if (lower.includes("forecast") || lower.includes("prediction")) {
-      response = "Showing waste-volume forecast.";
-      onCommand({ type: "scroll_prediction" });
-    }
-    speak(response);
-  }
-
-  function toggleListening() {
-    if (!recognitionRef.current) return;
-    if (listening) {
-      recognitionRef.current.stop();
-      setListening(false);
-    } else {
-      setTranscript("");
-      recognitionRef.current.start();
-      setListening(true);
-    }
-  }
-
-  return (
-    <section className="panel voice-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Voice Command Center</h2>
-          <p>Hands-free dashboard control through the browser Web Speech API.</p>
-        </div>
-        <Volume2 size={20} />
-      </div>
-      {supported ? (
-        <>
-          <button className={`voice-btn ${listening ? "listening" : "idle"}`} onClick={toggleListening}>
-            {listening ? <><MicOff size={18} /> Listening... click to stop</> : <><Mic size={18} /> Start Voice Command</>}
-          </button>
-          {transcript && <div className="voice-transcript">"{transcript}"</div>}
-          <div className="voice-command-hints">
-            <span><b>"Refresh"</b> - reload live data</span>
-            <span><b>"Truck T-047"</b> - filter truck history</span>
-            <span><b>"Carbon"</b> - show fleet footprint</span>
-            <span><b>"Forecast"</b> - show waste-volume forecast</span>
-          </div>
-        </>
-      ) : (
-        <div className="voice-transcript">This browser does not support the Web Speech API. Use the latest Chrome or Edge.</div>
-      )}
-    </section>
-  );
-}
-
 function CarbonPanel() {
   const [carbon, setCarbon] = useState(null);
 
@@ -2275,18 +2176,6 @@ function CommandCenter({ onLogout }) {
     }
   }
 
-  function handleVoiceCommand(cmd) {
-    if (cmd.type === "refresh") refresh();
-    else if (cmd.type === "filter_truck") setFilterTruck(cmd.value);
-    else if (cmd.type === "scroll_carbon") {
-      const el = document.getElementById("carbon-panel");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    } else if (cmd.type === "scroll_prediction") {
-      const el = document.querySelector(".prediction-list");
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    }
-  }
-
   async function dispatch(alert) {
     const route = alert.recommended_routes?.[0]?.name || "backup operating route";
     const instruction = "Use " + route + ". Confirm when accepted.";
@@ -2426,7 +2315,6 @@ function CommandCenter({ onLogout }) {
             }} />}
             districts={<KecamatanMapPanel />}
             assistant={<AssistantPanel />}
-            voice={<VoicePanel onCommand={handleVoiceCommand} />}
             reportActions={<ReportActions />}
           />
         )}
