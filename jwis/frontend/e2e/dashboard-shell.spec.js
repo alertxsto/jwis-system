@@ -29,6 +29,14 @@ test("app shell provides three operational workspaces", async ({ page }) => {
   }
 });
 
+test("weighbridge logs workspace renders weighing records", async ({ page }) => {
+  await page.getByRole("button", { name: "weighbridge Logs" }).click();
+
+  await expect(page.getByRole("heading", { name: "weighbridge Weighing Records (Case 1)" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Net Weight" })).toBeVisible();
+  await expect(page.getByText("T-001", { exact: true })).toBeVisible();
+});
+
 test("dashboard exposes the professional design token contract", async ({ page }) => {
   const tokens = await page.locator("html").evaluate((el) => {
     const css = getComputedStyle(el);

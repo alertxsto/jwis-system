@@ -1,0 +1,85 @@
+# TasteSkill — Complete Output
+
+Eliminates incomplete AI output. No placeholder comments, no truncated files, no "add more here," no skipped sections. Every file is production-complete the first time.
+
+## Configuration
+
+- FILE_LENGTH: standard
+  Options: concise | standard | exhaustive
+  concise = minimal viable, standard = complete feature, exhaustive = all edge cases
+
+- COMMENTS: minimal
+  Options: none | minimal | documented
+  none = zero comments, minimal = only non-obvious logic, documented = JSDoc/section headers
+
+- TEST_COVERAGE: none
+  Options: none | basic | full
+  none = no tests, basic = happy path, full = happy + error + edge cases
+
+## Banned Patterns
+
+These must never appear in output. Their presence means the file is incomplete.
+
+| Pattern | Signal |
+|---------|--------|
+| // TODO | Unfinished work |
+| // ... | Truncated code |
+| /* more items */ | Lazy repetition |
+| // add more here | Incomplete |
+| // similar to above | Skipped duplication |
+| // rest of the component | Truncated |
+| // handle other cases | Missing logic |
+| // implement later | Placeholder |
+| // etc. | Vague incompleteness |
+| {/* ... */} | JSX truncation |
+| ... (as code, not spread) | Ellipsis truncation |
+| // your code here | Template placeholder |
+| // existing code | Pretending code exists |
+
+## Completeness Checklist
+
+| Check | Required |
+|-------|----------|
+| File renders/compiles without errors | Always |
+| All imports resolve to real modules | Always |
+| All functions have bodies | Always |
+| All event handlers are implemented | Always |
+| All conditional branches have content | Always |
+| Lists/grids have 5-8 realistic items | Always |
+| Form validation implemented | Always |
+| Error states handled | standard+ |
+| Loading states implemented | standard+ |
+| Empty states implemented | exhaustive |
+| Responsive breakpoints included | exhaustive |
+
+## Procedure
+
+1. Estimate file length. If it exceeds output limits, split into multiple complete files — not one truncated file.
+
+2. Write top to bottom. No sections skipped with intent to fill later.
+
+3. For data-driven components, populate with realistic content:
+   - Names: real-sounding, not "User 1, User 2"
+   - Dates: plausible, relative to today
+   - Numbers: varied, not round or sequential
+   - Text: real labels, not "Lorem ipsum"
+   - Minimum 5 list items, 8 table rows
+
+4. Apply COMMENTS:
+   - none: zero comments
+   - minimal: only non-obvious logic
+   - documented: JSDoc on exports, section separators
+
+5. Apply TEST_COVERAGE if not none:
+   - basic: happy path coverage
+   - full: happy + error + edge cases
+
+6. Scan output for every Banned Pattern. Any match = file not done.
+
+7. Mentally execute: do imports exist? Are variables defined? Are functions implemented? No = incomplete.
+
+## Anti-Patterns
+
+- Splitting too eagerly. One complete 300-line file beats 12 tiny files.
+- Realistic data obsession. 8 rows of plausible data is enough.
+- Test file completeness. Same rules apply — a test with "// add more tests" is incomplete.

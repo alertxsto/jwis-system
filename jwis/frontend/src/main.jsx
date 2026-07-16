@@ -1942,7 +1942,6 @@ function DriverAnalytics() {
     { name: "Agus Pratama", truck: "T-047", score: 72, fuel: 3.5, trips: 118, deviations: 12 },
     { name: "Joko Wijaya", truck: "T-088", score: 95, fuel: 4.6, trips: 135, deviations: 1 },
     { name: "Rizky Maulana", truck: "T-112", score: 90, fuel: 4.2, trips: 98, deviations: 0 },
-    { name: "Sari Nurlaila", truck: "T-136", score: 94, fuel: 4.5, trips: 104, deviations: 0 },
   ];
 
   return (
@@ -2039,38 +2038,199 @@ function WeighbridgeLogs() {
 }
 
 function WhatsAppGateway() {
-  const alerts = [
-    { time: "15:42:01", recipient: "BibinCentralGroup", msg: "WARNING: T-047 is off corridor by 2,924 meters.", status: "DELIVERED" },
-    { time: "12:15:30", recipient: "BibinCentralGroup", msg: "INFO: TPA Bantargebang queue wait is critical (116 mins).", status: "DELIVERED" },
-    { time: "10:04:15", recipient: "BibinCentralGroup", msg: "WARNING: T-112 compactor issue reported.", status: "DELIVERED" },
-  ];
+  const [config, setConfig] = useState({
+    drivers: {
+      "Budi Santoso": "",
+      "Agus Pratama": "",
+      "Joko Wijaya": "",
+      "Rizky Maulana": ""
+    },
+    group_jid: "",
+    send_to_group: true,
+    send_to_driver: true
+  });
+  const [logs, setLogs] = useState([]);
+  const [status, setStatus] = useState({ configured: false, base_url: "", session_id: "" });
+  const [loading, setLoading] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
+
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch(`${API_URL}/whatsapp/contacts`);
+      const data = await res.json();
+      setConfig(data);
+    } catch (err) {
+      console.error("Failed to load contacts config", err);
+    }
+  };
+
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch(`${API_URL}/whatsapp/status`);
+      const data = await res.json();
+      setStatus(data);
+    } catch (err) {
+      console.error("Failed to load WA status", err);
+    }
+  };
+
+  const fetchLogs = async () => {
+    try {
+      const res = await fetch(`${API_URL}/history`);
+      const data = await res.json();
+      const waAlerts = data
+        .filter(event => event.event_type === "whatsapp_alert")
+        .map(event => {
+          const date = new Date(event.created_at);
+          const timeStr = date.toTimeString().split(" ")[0];
+          return {
+            time: timeStr,
+            recipient: event.payload.recipient || event.payload.chat_id || "Driver/Group",
+            msg: event.payload.msg || `Alert sent for truck ${event.payload.truck_code}`,
+            status: event.payload.sent ? "DELIVERED" : "FAILED"
+          };
+        });
+      setLogs(waAlerts);
+    } catch (err) {
+      console.error("Failed to load logs", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfig();
+    fetchStatus();
+    fetchLogs();
+  }, []);
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setSaveStatus("");
+    try {
+      const res = await fetch(`${API_URL}/whatsapp/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(config)
+      });
+      if (res.ok) {
+        setSaveStatus("success");
+        setTimeout(() => setSaveStatus(""), 3000);
+      } else {
+        setSaveStatus("error");
+      }
+    } catch (err) {
+      setSaveStatus("error");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="grid-split">
-      <section className="panel">
-        <div className="panel-title">
-          <div>
-            <h2>Connection State</h2>
-            <p>WhatsApp Gateway status.</p>
+    <div className="grid-split" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>Connection State</h2>
+              <p>WhatsApp Gateway status.</p>
+            </div>
+            <MessageCircle size={20} />
           </div>
-          <MessageCircle size={20} />
-        </div>
-        <dl className="approval-evidence-list mt-16">
-          <div><dt>Gateway</dt><dd>OpenWA Link</dd></div>
-          <div><dt>Status</dt><dd><span className="pill success">CONNECTED</span></dd></div>
-          <div><dt>Session JID</dt><dd className="mono">6285229890542-1620000000@g.us</dd></div>
-          <div><dt>API Latency</dt><dd className="mono">124 ms</dd></div>
-        </dl>
-      </section>
-      <section className="panel">
+          <dl className="approval-evidence-list mt-16">
+            <div><dt>Gateway</dt><dd>OpenWA Link (Baileys)</dd></div>
+            <div><dt>Status</dt><dd><span className="pill success">CONNECTED</span></dd></div>
+            <div><dt>Session JID</dt><dd className="mono">{status.session_id || "default"}@c.us</dd></div>
+            <div><dt>API Port</dt><dd className="mono">2785</dd></div>
+          </dl>
+        </section>
+
+        <section className="panel">
+          <div className="panel-title">
+            <div>
+              <h2>Driver &amp; Group Routing Config</h2>
+              <p>Map fleet units to driver numbers or coordination groups.</p>
+            </div>
+            <Users size={20} />
+          </div>
+          <form onSubmit={handleSave} className="mt-16" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "16px", marginBottom: "8px" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={config.send_to_driver}
+                  onChange={(e) => setConfig({ ...config, send_to_driver: e.target.checked })}
+                />
+                Send to Drivers
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={config.send_to_group}
+                  onChange={(e) => setConfig({ ...config, send_to_group: e.target.checked })}
+                />
+                Send to Group
+              </label>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <strong>Driver Phone Numbers:</strong>
+              {Object.keys(config.drivers).map((driverName) => (
+                <div key={driverName} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ width: "120px", fontSize: "13px" }}>{driverName}</span>
+                  <input
+                    type="text"
+                    value={config.drivers[driverName]}
+                    onChange={(e) => {
+                      const newDrivers = { ...config.drivers, [driverName]: e.target.value };
+                      setConfig({ ...config, drivers: newDrivers });
+                    }}
+                    style={{ flex: 1, padding: "4px 8px", borderRadius: "4px", border: "1px solid #ddd", background: "#f9f9f9" }}
+                    placeholder="e.g. 6289675877496@c.us"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "8px" }}>
+              <strong>Coordination Group JID:</strong>
+              <input
+                type="text"
+                value={config.group_jid}
+                onChange={(e) => setConfig({ ...config, group_jid: e.target.value })}
+                style={{ padding: "6px 8px", borderRadius: "4px", border: "1px solid #ddd", background: "#f9f9f9" }}
+                placeholder="e.g. 6285229890542-1620000000@g.us"
+              />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "12px" }}>
+              <button type="submit" className="primary-button" disabled={loading} style={{ width: "fit-content" }}>
+                Save Configuration
+              </button>
+              {saveStatus === "success" && <span style={{ color: "#177a57", fontSize: "13px" }}>✓ Saved successfully</span>}
+              {saveStatus === "error" && <span style={{ color: "#d9534f", fontSize: "13px" }}>✗ Failed to save</span>}
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <section className="panel" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
         <div className="panel-title">
           <div>
-            <h2>Outbound Alert Logs (Case 1 Handoff)</h2>
-            <p>Audit trail of automatic follow-up messages pushed to operators.</p>
+            <h2>Outbound Alert Logs (Dynamic)</h2>
+            <p>Real-time log of automated messages dispatched to drivers &amp; groups.</p>
           </div>
           <Activity size={20} />
+          <button 
+            type="button"
+            onClick={() => { fetchLogs(); fetchStatus(); }} 
+            className="ghost-button" 
+            style={{ padding: "4px", borderRadius: "4px", minWidth: "auto" }}
+            title="Refresh logs"
+          >
+            <RefreshCcw size={16} />
+          </button>
         </div>
-        <div className="table-wrap mt-16">
+        <div className="table-wrap mt-16" style={{ flex: 1, overflowY: "auto", maxHeight: "400px" }}>
           <table>
             <thead>
               <tr>
@@ -2081,14 +2241,26 @@ function WhatsAppGateway() {
               </tr>
             </thead>
             <tbody>
-              {alerts.map((a, idx) => (
-                <tr key={idx}>
-                  <td><span className="mono">{a.time}</span></td>
-                  <td><b>{a.recipient}</b></td>
-                  <td><span style={{ fontSize: "12px" }}>{a.msg}</span></td>
-                  <td><span className="pill success">{a.status}</span></td>
+              {logs.length === 0 ? (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: "center", padding: "24px", color: "#888" }}>
+                    No alerts sent yet. Try dispatching from Fleet Operations!
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                logs.map((a, idx) => (
+                  <tr key={idx}>
+                    <td><span className="mono">{a.time}</span></td>
+                    <td style={{ fontSize: "12px" }}><b>{a.recipient}</b></td>
+                    <td><span style={{ fontSize: "11px", display: "block", maxWidth: "240px", whiteSpace: "pre-line" }}>{a.msg}</span></td>
+                    <td>
+                      <span className={`pill ${a.status === "DELIVERED" ? "success" : "danger"}`}>
+                        {a.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

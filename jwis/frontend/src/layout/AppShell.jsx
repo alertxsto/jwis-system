@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Activity, BarChart3, LogOut, Menu, RefreshCcw, Route, Truck, Workflow, X, Eye, Shield, MessageCircle, BookOpen, HelpCircle } from "lucide-react";
+import { Activity, BarChart3, LogOut, Menu, RefreshCcw, Route, Truck, Workflow, X, Eye, Shield, MessageCircle, BookOpen, HelpCircle, Search } from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
 
 const items = [
@@ -136,8 +136,36 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       </button>
       <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
-          <div className="breadcrumb"><span>JWIS</span><span>/</span><strong>{current.label}</strong></div>
-          <div className="top-actions"><StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge><a className="ghost-button" href="/field"><Truck size={16} />Field app</a><button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center"><RefreshCcw size={17} /></button></div>
+          <div className="breadcrumb" style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}>
+            <span>Home</span>
+            <span style={{ color: "var(--ui-border-strong)", fontSize: "10px" }}>&gt;</span>
+            <strong>{current.label}</strong>
+          </div>
+          
+          <div className="topbar-search">
+            <Search size={15} style={{ color: "var(--ui-muted)" }} />
+            <input type="text" placeholder="Search here" readOnly />
+            <span className="kbd">⌘ + K</span>
+          </div>
+
+          <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
+            <a className="ghost-button" href="/field"><Truck size={16} />Field app</a>
+            <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">
+              <RefreshCcw size={16} />
+            </button>
+            <div className="profile-widget">
+              <img 
+                src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=80&h=80&q=80" 
+                alt="User Avatar" 
+                className="profile-avatar" 
+              />
+              <div className="profile-info">
+                <span className="profile-name">John Charly</span>
+                <span className="profile-role">Super Admin</span>
+              </div>
+            </div>
+          </div>
         </header>
         <div className="workspace-canvas">{children}</div>
       </main>

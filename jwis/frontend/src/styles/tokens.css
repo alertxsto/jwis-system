@@ -1,22 +1,22 @@
 :root {
   --ui-primary: #6366e8;
-  --ui-primary-hover: #5558d9;
+  --ui-primary-hover: #4f46e5;
   --ui-accent: #6366e8;
-  --ui-accent-foreground: #4d4ab0;
-  --ui-accent-soft: #eef0ff;
-  --ui-canvas: #f7f8fb;
+  --ui-accent-foreground: #4f46e5;
+  --ui-accent-soft: #eef2ff;
+  --ui-canvas: #f8fafc;
   --ui-surface: #ffffff;
-  --ui-surface-muted: #f3f5f8;
-  --ui-border: #e3e7ee;
-  --ui-border-strong: #cbd3df;
-  --ui-ink: #17202a;
-  --ui-muted: #657180;
+  --ui-surface-muted: #f1f5f9;
+  --ui-border: #e2e8f0;
+  --ui-border-strong: #cbd5e1;
+  --ui-ink: #0f172a;
+  --ui-muted: #64748b;
   --ui-success: #177a57;
-  --ui-warning: #a46108;
-  --ui-danger: #bd2c2c;
-  --ui-info: #117f9b;
+  --ui-warning: #f59e0b;
+  --ui-danger: #ef4444;
+  --ui-info: #06b6d4;
   --ui-radius: 8px;
-  --ui-radius-control: 6px;
+  --ui-radius-control: 8px;
   --ui-shadow: none;
   --ui-sidebar-width: 248px;
   --ui-topbar-height: 72px;
@@ -30,24 +30,24 @@
 
   /* Feature-level aliases retained while legacy modules are decomposed. */
   --green: var(--ui-success);
-  --green-light: #eaf7f0;
-  --green-dark: #126247;
+  --green-light: #ecfdf5;
+  --green-dark: #047857;
   --red: var(--ui-danger);
-  --red-light: #fff0f0;
+  --red-light: #fef2f2;
   --amber: var(--ui-warning);
-  --amber-light: #fff8e8;
+  --amber-light: #fffbeb;
   --purple: var(--ui-accent);
   --purple-light: var(--ui-accent-soft);
   --bg: var(--ui-canvas);
   --surface: var(--ui-surface);
   --surface-soft: var(--ui-surface-muted);
   --ink: var(--ui-ink);
-  --text: #26323d;
+  --text: #334155;
   --text-muted: var(--ui-muted);
   --border: var(--ui-border);
   --border-strong: var(--ui-border-strong);
   --radius: var(--ui-radius);
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   --shadow: none;
-  --shadow-hover: none;
+  --shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
 }

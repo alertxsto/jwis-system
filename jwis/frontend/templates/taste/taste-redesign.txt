@@ -1,0 +1,73 @@
+# TasteSkill — Redesign
+
+A structured workflow for improving existing interfaces. Audit the current design, identify specific problems, propose targeted fixes, implement with taste constraints. The goal is measurable improvement, not aesthetic preference.
+
+## Configuration
+
+- AUDIT_DEPTH: structural
+  Options: surface | structural | comprehensive
+  surface = visual issues only, structural = layout+hierarchy, comprehensive = full design audit
+
+- PRESERVATION: balanced
+  Options: conservative | balanced | aggressive
+  conservative = minimal changes, balanced = fix problems, aggressive = substantial rework
+
+- SCOPE: page
+  Options: component | page | system
+  component = single widget, page = full view, system = cross-page patterns
+
+## Audit Checklist by Depth
+
+| Check | surface | structural | comprehensive |
+|-------|---------|-----------|---------------|
+| Color contrast | yes | yes | yes |
+| Spacing consistency | yes | yes | yes |
+| Typography scale | no | yes | yes |
+| Visual hierarchy | no | yes | yes |
+| Alignment grid | no | yes | yes |
+| Component consistency | no | no | yes |
+| Responsive behavior | no | no | yes |
+| Interaction states | no | no | yes |
+| Accessibility | no | no | yes |
+| Information architecture | no | no | yes |
+
+## Procedure
+
+### Phase 1: Audit
+
+1. Read the existing code or examine the screenshot. Don't touch anything yet.
+
+2. Run the audit checklist. For each finding note:
+   - What's wrong — specific, not "the spacing is off"
+   - Severity — critical (usability), major (quality), minor (polish)
+   - Fix effort — trivial (one property), small (few changes), medium (structural)
+
+3. Present findings ranked by severity, not location. Worst problems first.
+
+### Phase 2: Proposal
+
+4. Based on PRESERVATION:
+   - conservative: critical + major only. Keep existing design decisions.
+   - balanced: critical + major + high-impact minor. May adjust colors, type, proportions.
+   - aggressive: all issues. May introduce new type pairings, restructure layout.
+
+5. Show before/after for each change. User approves, modifies, or rejects each one.
+
+### Phase 3: Implementation
+
+6. Apply changes from structural inward:
+   - Layout and grid first
+   - Typography hierarchy second
+   - Spacing and alignment third
+   - Color and contrast fourth
+   - Polish (shadows, borders, radius) last
+
+7. Re-run the audit. Every Phase 1 issue should be resolved or explicitly deferred.
+
+8. Present final result alongside original. State what changed and what stayed.
+
+## Anti-Patterns
+
+- Redesign creep. If asked to fix the header, don't redesign the footer.
+- Taste-washing. New colors won't fix broken hierarchy. Fix structure first.
+- Breaking what works. Dense data tables and ugly-but-scannable forms may be intentional. Check before polishing.

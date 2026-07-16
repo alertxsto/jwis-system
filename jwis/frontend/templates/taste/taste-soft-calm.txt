@@ -1,0 +1,64 @@
+# TasteSkill — Soft & Calm
+
+An aesthetic preset for interfaces that should feel quiet, unhurried, and warm. Think: meditation apps, personal journals, reading environments. Layers on top of the default taste rules.
+
+## Configuration
+
+- WARMTH: warm
+  Options: warm | neutral | cool
+  warm = cream/amber tints, neutral = true grays, cool = blue-gray tints
+
+- DENSITY: airy
+  Options: airy | balanced | compact
+  airy = maximum breathing room, balanced = comfortable, compact = still calm but tighter
+
+- MOTION: subtle
+  Options: none | subtle | gentle
+  none = static, subtle = fade-ins only, gentle = soft transitions + scroll effects
+
+## Palette
+
+| Element | Soft-Calm Treatment |
+|---------|-------------------|
+| Background | Off-white: #FAFAF8 (warm), #F8F8F8 (neutral), #F6F8FA (cool) |
+| Text | Never pure black. Use #2C2C2C (warm) or #1F2937 (cool) |
+| Accent | One muted tone: sage #7C9A82, dusty blue #6B8CAE, clay #C4977A |
+| Borders | 1px solid with 6-8% opacity of foreground color. Prefer none. |
+| Shadows | Single layer, large blur (20-40px), 3-5% opacity. No stacking. |
+| Radius | 8-12px on cards, 6-8px on inputs, 4px on small elements |
+| Font weight | 400 body, 500 headings. Never 700+ unless it's a page title. |
+| Line height | 1.6-1.75 for body. Generous. |
+| Padding | 24px minimum on containers. 16px minimum on interactive elements. |
+| Transitions | 200-300ms ease-out. No bouncing, no elastic, no overshoot. |
+
+## Procedure
+
+1. Set background based on WARMTH. The background is the foundation.
+
+2. Choose body text color: dark enough for AA contrast, never #000.
+
+3. Select one muted accent. Desaturate 10-20% from your first pick.
+
+4. Set spacing using DENSITY:
+   - airy: page 48-64px, section 40-48px, elements 16-24px
+   - balanced: page 32-40px, section 24-32px, elements 12-16px
+   - compact: page 24-32px, section 16-24px, elements 8-12px
+
+5. Typography: use the lightest weight that's still legible. 400 body, 500 headers, 600 page title only.
+
+6. Apply MOTION:
+   - none: no transitions, no animations
+   - subtle: opacity transitions on mount (200ms ease-out), hover (150ms)
+   - gentle: above plus scroll-triggered fade-up on sections (300ms, translateY(8px) start)
+
+7. Red flags:
+   - Color saturation above 60% — too loud
+   - Shadow opacity above 8% — too heavy
+   - Font-weight above 600 in body — too aggressive
+   - Transitions under 150ms or over 400ms — breaks the rhythm
+
+## Anti-Patterns
+
+- Calm does not mean empty. Whitespace serves hierarchy.
+- Low contrast trap. Soft palettes invite unreadable text. Check contrast ratios.
+- Hover states still matter. Changes should be perceptible: at least 3-4% lightness shift.

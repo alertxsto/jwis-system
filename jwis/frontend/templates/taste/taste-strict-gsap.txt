@@ -1,0 +1,88 @@
+# TasteSkill — Strict GSAP
+
+Animation rules for GSAP projects. Prevents floaty, gratuitous motion by enforcing timing budgets, easing standards, and performance constraints. Every animation must justify its existence.
+
+## Configuration
+
+- COMPLEXITY: intermediate
+  Options: basic | intermediate | advanced
+  basic = opacity+transform only, intermediate = adds stagger+timeline, advanced = ScrollTrigger+morphs
+
+- PERFORMANCE_BUDGET: tight
+  Options: tight | moderate | generous
+  tight = 60fps or nothing, moderate = allow occasional layout triggers, generous = creative freedom
+
+- EASING_STYLE: natural
+  Options: natural | snappy | elastic
+  natural = ease-out/power2, snappy = power3-4, elastic = back/elastic/bounce (sparing)
+
+## Allowed Properties by Complexity
+
+| Property | basic | intermediate | advanced |
+|----------|-------|--------------|----------|
+| opacity | yes | yes | yes |
+| x, y | yes | yes | yes |
+| scale | yes | yes | yes |
+| rotation | no | yes | yes |
+| stagger | no | yes | yes |
+| timeline | no | yes | yes |
+| ScrollTrigger | no | no | yes |
+| MorphSVG | no | no | yes |
+| width/height | no | no | avoid |
+| top/left | never | never | never |
+
+## Duration Limits
+
+| Type | Min | Max | Default |
+|------|-----|-----|---------|
+| Micro (hover, toggle) | 0.15s | 0.3s | 0.2s |
+| Element entrance | 0.3s | 0.6s | 0.4s |
+| Section reveal | 0.4s | 0.8s | 0.6s |
+| Page transition | 0.3s | 0.6s | 0.4s |
+| Stagger per item | 0.03s | 0.1s | 0.05s |
+| Total stagger group | — | 1.2s | — |
+
+## Easing Reference
+
+| Purpose | natural | snappy | elastic |
+|---------|---------|--------|---------|
+| Enter | power2.out | power3.out | back.out(1.4) |
+| Exit | power2.in | power3.in | power2.in |
+| Emphasis | power2.inOut | power4.inOut | elastic.out(1, 0.5) |
+| Hover | power1.out | power2.out | power1.out |
+
+## Procedure
+
+1. For every animation, state what it communicates. Valid: "appeared," "related," "attention," "state changed." If "looks cool," remove it.
+
+2. Set will-change before animation. Remove after with onComplete. Never permanent.
+
+3. Animate only compositor-friendly properties: opacity, transform. Tight budget = reject layout/paint triggers.
+
+4. Use gsap.set() for initial states:
+
+gsap.set('.card', { opacity: 0, y: 20 });
+gsap.to('.card', { opacity: 1, y: 0, duration: 0.4, ease: 'power2.out', stagger: 0.05 });
+
+5. Stagger totals must not exceed 1.2s. 30 items × 0.05s = 1.5s — reduce or cap.
+
+6. ScrollTrigger (advanced only): start at 'top 80%' or later. Use once: true for entrances. Never scrub entrance animations.
+
+7. Respect prefers-reduced-motion:
+
+const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (prefersReduced) gsap.globalTimeline.timeScale(20);
+
+8. Red flags:
+   - Duration over 0.8s for a single element
+   - Stagger totals over 1.2s
+   - Animating width, height, top, left, margin, padding
+   - Missing prefers-reduced-motion
+   - Permanent will-change
+   - Elastic easing on more than one element per view
+
+## Anti-Patterns
+
+- Staggering 50 items. Cap stagger groups at 4-8. Beyond that, animate as a block.
+- Entrance-only. If elements animate in but snap-disappear on exit, the experience is asymmetric.
+- Scroll-jacking. Never override native scroll behavior.

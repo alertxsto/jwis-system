@@ -1,0 +1,71 @@
+# TasteSkill — Editorial
+
+Magazine-style typographic hierarchy for text-heavy interfaces. Strong contrast, deliberate asymmetry, reading-optimized body text. For landing pages, blogs, documentation, and any screen where text does the heavy lifting.
+
+## Configuration
+
+- GRID_RIGIDITY: strict
+  Options: flexible | strict | magazine
+  flexible = fluid widths, strict = fixed column grid, magazine = asymmetric multi-column
+
+- TYPE_SCALE: confident
+  Options: modest | confident | dramatic
+  modest = 1.2 ratio, confident = 1.333 ratio, dramatic = 1.5+ ratio
+
+- IMAGERY: balanced
+  Options: minimal | balanced | hero
+  minimal = text-first, balanced = text+image, hero = image-dominant with text overlay
+
+## Type Scale Reference
+
+| Level | Modest (1.2) | Confident (1.333) | Dramatic (1.5) |
+|-------|-------------|-------------------|----------------|
+| Caption | 13px | 12px | 11px |
+| Body | 16px | 18px | 18px |
+| H3 | 19px | 24px | 27px |
+| H2 | 23px | 32px | 41px |
+| H1 | 28px | 42px | 61px |
+| Display | 33px | 56px | 92px |
+
+## Rules
+
+| Element | Editorial Treatment |
+|---------|-------------------|
+| Headline | Display typeface, weight 700-900, tracking -0.02em to -0.04em |
+| Body | 18-20px, line-height 1.6-1.8, measure 55-75ch |
+| Caption | Small, muted, uppercase tracking 0.05-0.1em |
+| Column width | 680px single, 960px with sidebar, never full-bleed text |
+| Paragraph spacing | margin-bottom equal to line-height |
+| Image | Full-bleed or outdented. Never smaller than the text column. |
+
+## Procedure
+
+1. Select a type pairing: one display face for headlines, one text face for body.
+
+2. Apply the type scale based on TYPE_SCALE. Set body text 18-20px. Derive all sizes from the ratio.
+
+3. Set the reading measure (line length): max-width 680px for body text. Never exceed 75ch.
+
+4. Configure grid per GRID_RIGIDITY:
+   - flexible: percentage widths, max-width on text
+   - strict: 12-column, text on center 8, images 10-12
+   - magazine: asymmetric columns (60/40 or 70/30)
+
+5. Handle images per IMAGERY:
+   - minimal: inline only, never wider than text
+   - balanced: images outdented at 1.2-1.5x text width
+   - hero: full-bleed with text overlays
+
+6. Vertical rhythm: paragraph spacing equals body line-height. Section breaks get 2x. Headings: 1.5x above, 0.5x below.
+
+7. Red flags:
+   - Body text wider than 75ch
+   - More than 4 heading levels per page
+   - Images smaller than text column
+   - Missing visual breaks in content longer than 800 words
+
+## Anti-Patterns
+
+- Tracking on body text. Letter-spacing adjustments belong on headlines and captions only.
+- Too many weights. Use 2-3 weights maximum. Variation comes from size, not weight.
+- Justified text without hyphens. Use text-align: left or justify with hyphens: auto.

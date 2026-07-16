@@ -1,0 +1,83 @@
+# TasteSkill — Image Generation
+
+Art direction for AI image prompts. Prevents the default AI image aesthetic (glossy, over-rendered, uncanny) by enforcing consistent style tokens, composition rules, and prompt structure. Works with any model — DALL-E, Midjourney, Stable Diffusion, Flux, Ideogram.
+
+## Configuration
+
+- REALISM: balanced
+  Options: stylized | balanced | photorealistic
+  stylized = illustration/graphic, balanced = polished render, photorealistic = camera-real
+
+- DETAIL_LEVEL: standard
+  Options: simple | standard | intricate
+  simple = 15-30 words, standard = 30-60 words, intricate = 60-100 words
+
+- CONSISTENCY: guided
+  Options: loose | guided | strict
+  loose = per-image freedom, guided = shared palette/mood, strict = unified style bible
+
+## Prompt Structure
+
+Every prompt follows this order. Omit unused sections, never reorder.
+
+[STYLE] [SUBJECT] [COMPOSITION] [LIGHTING] [COLOR] [MOOD] [TECHNICAL] [NEGATIVE]
+
+| Section | Purpose | Example |
+|---------|---------|---------|
+| STYLE | Medium and aesthetic | "flat vector illustration" / "editorial photograph" |
+| SUBJECT | What's depicted | "a single espresso cup on a marble counter" |
+| COMPOSITION | Framing and layout | "centered, close-up, shallow depth of field" |
+| LIGHTING | Light source and quality | "soft natural side light, morning" |
+| COLOR | Palette constraint | "muted earth tones, cream and terracotta" |
+| MOOD | Emotional tone | "quiet, contemplative" |
+| TECHNICAL | Model-specific params | "4:3 aspect ratio, high detail" |
+| NEGATIVE | What to avoid | "no text, no watermarks, no hands" |
+
+## Style Tokens by Realism
+
+| Realism | Good Tokens | Avoid |
+|---------|------------|-------|
+| stylized | flat illustration, vector, geometric, risograph, line art | photorealistic, 8K, unreal engine |
+| balanced | editorial, clean render, product photography, studio shot | anime, cartoon, watercolor |
+| photorealistic | shot on Hasselblad, 85mm f/1.4, natural light, candid | illustration, stylized, vector |
+
+## Procedure
+
+1. Identify the image's job. What sits next to it? What should the viewer understand in 2 seconds?
+
+2. Select style tokens from REALISM dial. Lock in 2-3 descriptors, use consistently.
+
+3. Write subject. Be specific about content, don't over-specify arrangement.
+   Bad: "cup at 30 degrees on the left third with steam at 45 degrees"
+   Good: "espresso cup on marble counter, steam rising"
+
+4. Set composition in photography terms: framing, angle, depth. One note per prompt.
+
+5. Apply CONSISTENCY:
+   - loose: each image gets its own tokens
+   - guided: define palette + mood + medium at session start, reference in every prompt
+   - strict: style bible with exact tokens, aspect ratios, negatives for every image
+
+6. Add negative prompts:
+   - Always: "no text, no watermarks, no signatures"
+   - People: "no extra fingers, no distorted hands"
+   - Products: "no floating objects, no impossible reflections"
+   - Scenes: "no oversaturation, no HDR glow"
+
+7. Match word count to DETAIL_LEVEL:
+   - simple: 15-30 words
+   - standard: 30-60 words
+   - intricate: 60-100 words
+
+8. Red flags:
+   - Contradictory styles ("photorealistic watercolor")
+   - More than 2 spatial composition instructions
+   - Generic mood words ("beautiful," "stunning," "amazing")
+   - Duplicate modifiers ("detailed, highly detailed, ultra detailed")
+
+## Anti-Patterns
+
+- Prompt stuffing. After ~80 words, additional detail causes mode collapse.
+- Style salad. "Cinematic editorial minimalist Wes Anderson Bauhaus" = incoherent.
+- Ignoring aspect ratio. 1:1 and 16:9 need different compositions.
+- The "beautiful" trap. Beautiful/stunning/gorgeous are noise. Use specific descriptors.

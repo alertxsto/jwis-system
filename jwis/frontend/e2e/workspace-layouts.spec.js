@@ -167,6 +167,8 @@ test("Integrated Planning presents an ordered decision flow", async ({ page }) =
   await expect(workspace.locator(".panel .panel")).toHaveCount(0);
   await expect(workspace.getByText("Decision authority", { exact: true })).toHaveCount(1);
   await expect(workspace.locator(".role-badge")).toHaveCount(1);
+  await expect(workspace.getByText("No dispatch plan generated yet.", { exact: true })).toBeVisible();
+  await expect(workspace.getByText("Generate a CP-SAT plan to fill this stage with assigned trucks, demand coverage, and permit compliance evidence.", { exact: true })).toBeVisible();
 
   const workspaceFrame = await workspace.evaluate((element) => {
     const styles = getComputedStyle(element);
