@@ -20,7 +20,7 @@ const items = [
   { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
   { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
   { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
-  { id: "weighbridge", label: "weighbridge Logs", icon: Workflow, section: "Logistics" },
+  { id: "weighbridge", label: "Weighbridge Logs", icon: Workflow, section: "Logistics" },
   { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
   { id: "iot", label: "IoT Bin Sensors", icon: Activity, section: "Admin" },
   { id: "audit", label: "Data & ML Audit", icon: Shield, section: "Admin" },
@@ -32,6 +32,8 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
   const [mobileNavMode, setMobileNavMode] = useState(() => window.matchMedia("(max-width: 860px)").matches);
   const mobileNavTriggerRef = useRef(null);
   const sideRailRef = useRef(null);
+  const roleRaw = localStorage.getItem("jwis_role") || "operator";
+  const roleLabel = roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1);
 
   const closeMobileNav = useCallback((restoreFocus = true) => {
     setMobileNavOpen(false);
@@ -98,6 +100,19 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
     Admin: "Admin (Case 2)",
   };
 
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   return (
     <div className="dashboard-frame professional-shell">
       <aside
@@ -139,7 +154,6 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         <div className="side-system-state">
           <Activity size={15} />
           <span>System status</span>
-          <StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge>
         </div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}>
           <LogOut size={17} />Logout
@@ -184,7 +198,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
 
           <div className="topbar-search">
             <Search size={15} aria-hidden="true" />
-            <input type="text" placeholder="Search here" readOnly />
+            <input ref={searchInputRef} type="text" placeholder="Search workspaces..." />
             <span className="kbd">Ctrl K</span>
           </div>
 
@@ -198,7 +212,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
               <span className="profile-avatar" aria-hidden="true">JW</span>
               <div className="profile-info">
                 <span className="profile-name">JWIS Team</span>
-                <span className="profile-role">DLH Operator</span>
+                <span className="profile-role">{roleLabel}</span>
               </div>
             </div>
           </div>
@@ -207,4 +221,5 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       </main>
     </div>
   );
+
 }

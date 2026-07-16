@@ -6,6 +6,19 @@ import { AppShell } from "./layout/AppShell.jsx";
 import { FleetOperations } from "./workspaces/FleetOperations.jsx";
 import { IntegratedPlanning } from "./workspaces/IntegratedPlanning.jsx";
 import { WasteForecast } from "./workspaces/WasteForecast.jsx";
+import { StatusPill } from "./ui/StatusPill.jsx";
+import { AlertQueue } from "./components/AlertQueue.jsx";
+import { RouteEvidencePanel } from "./components/RouteEvidencePanel.jsx";
+import { WeatherPanel } from "./components/WeatherPanel.jsx";
+import { TpaQueuePanel } from "./components/TpaQueuePanel.jsx";
+import { FleetTable } from "./components/FleetTable.jsx";
+import { FleetHistoryPanel } from "./components/FleetHistoryPanel.jsx";
+import { AssistantPanel } from "./components/AssistantPanel.jsx";
+import { CarbonPanel } from "./components/CarbonPanel.jsx";
+import { UnlicensedCollectorAlerts } from "./components/UnlicensedCollectorAlerts.jsx";
+import { AStarReroutingPanel } from "./components/AStarReroutingPanel.jsx";
+import { StaggerSimulatorPanel } from "./components/StaggerSimulatorPanel.jsx";
+import { DataAuditWorkspace } from "./components/DataAuditWorkspace.jsx";
 import {
   Activity,
   AlertTriangle,
@@ -44,6 +57,7 @@ import {
 } from "lucide-react";
 import { LiveFleetMap } from "./LiveFleetMap.jsx";
 import "./styles.css";
+
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -217,18 +231,18 @@ function useSnapshot() {
   return { snapshot, online, refresh: load };
 }
 
-function StatusPill({ tone, children }) {
-  return <span className={`pill ${tone}`}>{children}</span>;
-}
 
 function LoginPage({ onLogin }) {
   const [username, setUsername] = useState("dispatcher");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
+    if (isSubmitting) return;
     setError("");
+    setIsSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
@@ -243,6 +257,7 @@ function LoginPage({ onLogin }) {
       onLogin();
     } catch {
       setError("Invalid username or password.");
+      setIsSubmitting(false);
     }
   }
 
@@ -269,6 +284,7 @@ function LoginPage({ onLogin }) {
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
                 autoComplete="username"
+                disabled={isSubmitting}
               />
             </div>
             <label htmlFor="password">Password</label>
@@ -281,11 +297,18 @@ function LoginPage({ onLogin }) {
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
                 placeholder="Enter password"
+                disabled={isSubmitting}
               />
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
-            <button className="primary-button login-submit" type="submit">
-              <Lock size={16} /> Sign in
+            <button
+              className="primary-button login-submit"
+              type="submit"
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
+            >
+              <Lock size={16} />
+              {isSubmitting ? "Signing in…" : "Sign in"}
             </button>
           </form>
           <div className="login-demo-note">
@@ -355,79 +378,7 @@ function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbac
   );
 }
 
-function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
-  return (
-    <section className="panel">
-      <div className="panel-title">
-        <div>
-          <h2>Action Queue</h2>
-          <p>Alerts are linked to route recommendations and field instructions.</p>
-        </div>
-        <StatusPill tone="danger">{alerts.length} active</StatusPill>
-      </div>
-      <div className="alert-list">
-        {alerts.map((alert) => (
-          <article className="alert-item" key={alert.id}>
-            <div className="alert-head">
-              <AlertTriangle size={18} />
-              <div>
-                <strong>{alert.title}</strong>
-                <p>{alert.description}</p>
-              </div>
-            </div>
-            {alert.recommended_routes?.[0] && (
-              <div className="route-rec">
-                <Route size={17} />
-                <div>
-                  <strong>{alert.recommended_routes[0].name}</strong>
-                  <span>{alert.recommended_routes[0].eta_minutes} min ETA - score {alert.recommended_routes[0].score}</span>
-                </div>
-              </div>
-            )}
-            <div className="alert-actions">
-              <button className="primary-button" onClick={() => onDispatch(alert)}>
-                <Send size={16} /> Approve &amp; Dispatch
-              </button>
-              <button className="ghost-button alert-wa-button" onClick={() => onWhatsApp(alert)}>
-                <MessageCircle size={16} /> WA Alert
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
 
-function RouteEvidencePanel({ route }) {
-  if (!route) return null;
-  return (
-    <section className="panel route-evidence-panel">
-      <div className="panel-title">
-        <div>
-          <h2>OSRM Route Evidence</h2>
-          <p>ETA and route geometry are fetched from OSRM public routing, with fallback for demo resilience.</p>
-        </div>
-        <StatusPill tone={route.source === "osrm" ? "success" : "warning"}>{route.source}</StatusPill>
-      </div>
-      <div className="route-evidence-grid">
-        <div>
-          <span>Recommended route</span>
-          <strong>{route.name}</strong>
-        </div>
-        <div>
-          <span>ETA</span>
-          <strong>{route.eta_minutes} min</strong>
-        </div>
-        <div>
-          <span>Distance</span>
-          <strong>{route.distance_km} km</strong>
-        </div>
-      </div>
-      <p className="route-reason">{route.reason}</p>
-    </section>
-  );
-}
 
 function PredictionPanel({ predictions }) {
   return (
@@ -696,291 +647,8 @@ function KecamatanMapPanel() {
   );
 }
 
-function DataAuditWorkspace() {
-  const [provenance, setProvenance] = useState(null);
-  const [fleet, setFleet] = useState(null);
-  const [suitability, setSuitability] = useState(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const [provRes, fleetRes, suitRes] = await Promise.all([
-          fetch(`${API_URL}/data/provenance`),
-          fetch(`${API_URL}/fleet/composition`),
-          fetch(`${API_URL}/ml/suitability`)
-        ]);
-        setProvenance(await provRes.json());
-        setFleet(await fleetRes.json());
-        setSuitability(await suitRes.json());
-      } catch (e) {
-        console.error("Failed to load audit data", e);
-      }
-      setLoading(false);
-    }
-    load();
-  }, []);
 
-  if (loading) {
-    return <div className="loading-state">Memuat data audit...</div>;
-  }
-
-  const records = provenance?.records || [];
-  const fleetTypes = fleet?.by_vehicle_type || {};
-
-  return (
-    <div className="audit-workspace grid-col-12" data-testid="audit-workspace">
-      <div className="audit-header">
-        <h1>Data & ML Audit Registry</h1>
-        <p>Transparansi asal data, kepatuhan model ML, dan inventori armada fisik JWIS.</p>
-      </div>
-
-      <div className="audit-grid">
-        <section className="panel wide">
-          <div className="panel-title">
-            <div>
-              <h2>Data Provenance Registry</h2>
-              <p>Manifest sumber data riil, jumlah baris, tingkat kesegaran, dan limitasi operasional.</p>
-            </div>
-            <Database size={20} />
-          </div>
-          <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Data provenance registry">
-              <thead>
-                <tr>
-                  <th scope="col">Nama Dataset</th>
-                  <th scope="col">Sumber / URL</th>
-                  <th scope="col">Baris</th>
-                  <th scope="col">Kesegaran</th>
-                  <th scope="col">Granularitas</th>
-                  <th scope="col">Klasifikasi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r, i) => (
-                  <tr key={i}>
-                    <td>
-                      <div><strong>{r.name}</strong></div>
-                      <div className="table-subtext">{r.limitations}</div>
-                    </td>
-                    <td>
-                      {r.source_url.startsWith("http") ? (
-                        <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="audit-link">
-                          Buka Sumber
-                        </a>
-                      ) : (
-                        <span>{r.source_url}</span>
-                      )}
-                    </td>
-                    <td>{r.row_count?.toLocaleString("id-ID") || "—"}</td>
-                    <td>{r.freshness}</td>
-                    <td><code>{r.granularity}</code></td>
-                    <td>
-                      <span className={`role-badge ${r.classification === "real" ? "dispatcher" : "driver"}`}>
-                        {r.classification.toUpperCase()}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-title">
-            <div>
-              <h2>ML Model Suitability Map</h2>
-              <p>Metrik evaluasi akurasi Prophet+XGBoost untuk setiap tingkat resolusi data.</p>
-            </div>
-            <Cpu size={20} />
-          </div>
-          <div className="suitability-list">
-            {Object.entries(fleetTypes).length > 0 && Object.entries(suitability?.resolutions || {}).map(([res, status]) => (
-              <div key={res} className="suitability-item">
-                <div className="suitability-head">
-                  <strong><code>{res.replace(/_/g, "-")}</code></strong>
-                  <span className={`status-pill ${status === "reliable" || status === "high" ? "success" : "warning"}`}>
-                    {status.replace(/_/g, " ")}
-                  </span>
-                </div>
-                <p className="suitability-notes">
-                  {res === "city_day" && "Diverifikasi terhadap log harian total weighbridge Jembatan Timbang (real)."}
-                  {res === "district_week" && "Total mingguan per kecamatan, selaras dengan tagihan retribusi (real)."}
-                  {res === "district_day" && "Resolusi harian per kecamatan; hanya simulasi dinamis terkalibrasi."}
-                  {res === "district_month" && "Total bulanan per kecamatan; digunakan untuk perencanaan anggaran."}
-                  {res === "hotspot_rank" && "Penentuan urutan wilayah berisiko tinggi secara spasial."}
-                </p>
-              </div>
-            ))}
-          </div>
-          <p className="audit-note"><strong>Catatan Kejujuran Model:</strong> {suitability?.note}</p>
-        </section>
-
-        <section className="panel">
-          <div className="panel-title">
-            <div>
-              <h2>Komposisi Tipe Armada (Sensus 2023)</h2>
-              <p>Inventori unit truk kebersihan DKI Jakarta berdasarkan jenis kendaraan.</p>
-            </div>
-            <Truck size={20} />
-          </div>
-          <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Karakteristik armada fisik">
-              <thead>
-                <tr>
-                  <th scope="col">Tipe Kendaraan</th>
-                  <th scope="col">Jumlah Unit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(fleetTypes).map(([type, count]) => (
-                  <tr key={type}>
-                    <td><strong>{type.toUpperCase()}</strong></td>
-                    <td>{count?.toLocaleString("id-ID")} unit</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="panel">
-          <div className="panel-title">
-            <div>
-              <h2>Distribusi Wilayah (Sensus 2023)</h2>
-              <p>Pembagian unit armada kebersihan di 5 Kota Administrasi & Kabupaten.</p>
-            </div>
-            <Users size={20} />
-          </div>
-          <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Distribusi wilayah sensus">
-              <thead>
-                <tr>
-                  <th scope="col">Wilayah Administrasi</th>
-                  <th scope="col">Jumlah Unit</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(fleet?.by_wilayah || {}).map(([wilayah, count]) => (
-                  <tr key={wilayah}>
-                    <td><strong>{wilayah}</strong></td>
-                    <td>{count?.toLocaleString("id-ID")} unit</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="fleet-totals">
-            <div className="fleet-total-row">
-              <span>Total Unit Armada Tercatat:</span>
-              <b>{fleet?.total_units?.toLocaleString("id-ID")} unit</b>
-            </div>
-            <div className="fleet-total-row">
-              <span>Sumber Data Sensus:</span>
-              <span>{fleet?.source}</span>
-            </div>
-          </div>
-        </section>
-      </div>
-    </div>
-  );
-}
-
-function WeatherPanel({ weather }) {
-  const forecast = weather?.forecast || [];
-  const peak = forecast.reduce(
-    (best, item) => (item.waste_impact_percent > (best?.waste_impact_percent || 0) ? item : best),
-    forecast[0],
-  );
-
-  return (
-    <section className="panel weather-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Open-Meteo Weather Risk</h2>
-          <p>Jakarta 7-day rainfall forecast used as a driver for waste-volume readiness.</p>
-        </div>
-        <StatusPill tone={weather?.source === "open-meteo" ? "success" : "warning"}>
-          {weather?.source === "open-meteo" ? "Open-Meteo live" : "fallback"}
-        </StatusPill>
-      </div>
-      {peak && (
-        <div className="weather-hero">
-          <CloudRain size={26} />
-          <div>
-            <strong>{peak.date}</strong>
-            <span>{peak.rainfall_mm.toFixed(1)} mm rain - {Math.round(peak.precipitation_probability)}% probability</span>
-          </div>
-          <b>+{peak.waste_impact_percent}%</b>
-        </div>
-      )}
-      <div className="weather-strip">
-        {forecast.slice(0, 7).map((day) => (
-          <article key={day.date} className={`weather-day ${day.risk_level}`}>
-            <strong>{new Date(day.date).toLocaleDateString("en-US", { weekday: "short" })}</strong>
-            <span>{Math.round(day.rainfall_mm)} mm</span>
-            <small>{Math.round(day.temperature_min_c)}-{Math.round(day.temperature_max_c)} C</small>
-          </article>
-        ))}
-      </div>
-      {peak && <p className="weather-advice">{peak.operational_advice}</p>}
-    </section>
-  );
-}
-
-function FleetTable({ trucks, onOpenTripHistory }) {
-  return (
-    <section className="panel wide">
-      <div className="panel-title">
-        <div>
-          <h2>Fleet State</h2>
-          <p>Each row is directly actionable and audit-ready.</p>
-        </div>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Truck</th>
-              <th>Driver</th>
-              <th>Zone</th>
-              <th>Status</th>
-              <th>Speed</th>
-              <th>Deviation</th>
-              <th>History</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trucks.map((truck) => (
-              <tr key={truck.truck_code}>
-                <td><b>{truck.truck_code}</b><span>{truck.plate_number}</span></td>
-                <td>{truck.driver_name}</td>
-                <td>{truck.assigned_zone}</td>
-                <td>
-                  {truck.deviation?.violated ? (
-                    <StatusPill tone="danger">Route violation</StatusPill>
-                  ) : truck.is_damaged ? (
-                    <StatusPill tone="warning">Damaged</StatusPill>
-                  ) : (
-                    <StatusPill tone="success">Normal</StatusPill>
-                  )}
-                </td>
-                <td>{truck.latest_position?.speed_kmh} km/h</td>
-                <td>{Math.round(truck.deviation?.distance_meters || 0)} m</td>
-                <td>
-                  <button className="ghost-button" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)}>
-                    Trip history
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
 
 function ExecutiveSummary({ summary, queue }) {
   return (
@@ -1005,59 +673,6 @@ function ExecutiveSummary({ summary, queue }) {
   );
 }
 
-function AssistantPanel() {
-  const [question, setQuestion] = useState("What is the highest operational risk today?");
-  const [answer, setAnswer] = useState("");
-  const [provider, setProvider] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  async function askAssistant() {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/assistant/query`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
-      });
-      const data = await response.json();
-      setAnswer(data.answer || "No answer returned.");
-      setProvider(data.provider || "unknown");
-    } catch {
-      setAnswer("Assistant fallback unavailable. Check API server.");
-      setProvider("offline");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <section className="panel assistant-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Operational AI Assistant</h2>
-          <p>Natural language query endpoint; uses OpenAI when OPENAI_API_KEY is configured.</p>
-        </div>
-        <Bot size={20} />
-      </div>
-      <label className="field-label" htmlFor="assistant-question">Question</label>
-      <textarea
-        id="assistant-question"
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        rows={3}
-      />
-      <button className="primary-button" onClick={askAssistant} disabled={loading}>
-        <Send size={16} /> {loading ? "Analyzing..." : "Ask JWIS"}
-      </button>
-      {answer && (
-        <article className="assistant-answer">
-          <StatusPill tone={provider === "openai" ? "success" : "warning"}>{provider}</StatusPill>
-          <p>{answer}</p>
-        </article>
-      )}
-    </section>
-  );
-}
 
 function ScenarioPanel({ mode, children }) {
   return <div className={`scenario-panel scenario-${mode}`}>{children}</div>;
@@ -1347,70 +962,6 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
 
 
 
-function TpaQueuePanel() {
-  const [queue, setQueue] = useState(null);
-
-  async function fetchQueue() {
-    try {
-      const res = await fetch(`${API_URL}/tpa/queue-status`);
-      if (res.ok) setQueue(await res.json());
-    } catch {}
-  }
-
-  useEffect(() => {
-    fetchQueue();
-    const interval = setInterval(fetchQueue, 6000);
-    return () => clearInterval(interval);
-  }, []);
-
-  if (!queue) return null;
-
-  return (
-    <section className="panel tpa-queue-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Bantargebang Landfill Queue Status (Case 1)</h2>
-          <p>Real-time visualization of weighbridge throughput and final-disposal truck queues.</p>
-        </div>
-        <Clock size={20} />
-      </div>
-
-      <div className="tpa-status-grid">
-        <div className="tpa-status-card">
-          <span>Queued Trucks</span>
-          <strong>{queue.trucks_in_queue} units</strong>
-        </div>
-        <div className="tpa-status-card">
-          <span>Estimated Wait</span>
-          <strong className={queue.avg_wait_minutes > 60 ? "text-danger" : "text-success"}>
-            {queue.avg_wait_minutes} min
-          </strong>
-        </div>
-        <div className="tpa-status-card">
-          <span>Weighbridge</span>
-          <strong className={queue.weighbridge_status.includes("DEGRADED") ? "text-danger" : "text-success"}>
-            {queue.weighbridge_status}
-          </strong>
-        </div>
-      </div>
-
-      <div className="tpa-logs">
-        <h3>Latest Weighbridge Log:</h3>
-        <ul>
-          {queue.scale_logs?.map((log, i) => (
-            <li key={i}>
-              <span className="time">{log.time}</span> - 
-              <span className="truck"> {log.truck}</span> | 
-              <span className="weight"> {log.weight_ton} ton</span> | 
-              <span className={`status-badge ${log.status.toLowerCase()}`}>{log.status}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
 
 function CrowdEventsPanel({ onSimulateEvent }) {
   const [events, setEvents] = useState([]);
@@ -1474,262 +1025,8 @@ function CrowdEventsPanel({ onSimulateEvent }) {
   );
 }
 
-function AStarReroutingPanel() {
-  const [jamActive, setJamActive] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [info, setInfo] = useState(null);
 
-  async function fetchRerouteInfo() {
-    try {
-      const res = await fetch(`${API_URL}/fleet/astar-reroute`);
-      if (res.ok) setInfo(await res.json());
-    } catch {}
-  }
 
-  useEffect(() => {
-    fetchRerouteInfo();
-  }, [jamActive]);
-
-  async function toggleTrafficJam() {
-    setLoading(true);
-    const nextState = !jamActive;
-    try {
-      const res = await fetch(`${API_URL}/fleet/astar-simulate-jam?active=${nextState}`, { method: "POST" });
-      if (res.ok) {
-        setJamActive(nextState);
-        await fetchRerouteInfo();
-      }
-    } catch {
-      setJamActive(nextState); // Local demo fallback
-    }
-    setLoading(false);
-  }
-
-  return (
-    <section className="panel astar-panel">
-      <div className="panel-title">
-        <div>
-          <h2>A* Dynamic Rerouting (Case 1)</h2>
-          <p>Tests A* route recovery when a logistics corridor is fully congested.</p>
-        </div>
-        <Truck size={20} />
-      </div>
-      
-      <div className="astar-control">
-        <button 
-          className={`primary-button ${jamActive ? "danger-button" : "success-button"}`} 
-          onClick={toggleTrafficJam} 
-          disabled={loading}
-        >
-          {loading ? "Processing..." : jamActive ? "Restore Traffic" : "Simulate Corridor Jam"}
-        </button>
-        
-        <span className={`traffic-status-badge ${jamActive ? "congested" : "clear"}`}>
-          {jamActive ? "Jam Active" : "Clear"}
-        </span>
-      </div>
-
-      {info && (
-        <div className="astar-info-card">
-          <p className="astar-msg">
-            <b>Logistics Status:</b>{" "}
-            {info.jam_active
-              ? "Corridor congestion detected. JWIS is diverting trucks through the active A* recovery route."
-              : "Traffic is normal. Trucks are following the shortest approved route to Bantargebang."}
-          </p>
-          <div className="astar-stats">
-            <div className="astar-stat-col">
-              <span>Distance</span>
-              <strong>{info.active_route?.distance_km} km</strong>
-            </div>
-            <div className="astar-stat-col">
-              <span>Estimated Time</span>
-              <strong>{info.active_route?.eta_minutes} min</strong>
-            </div>
-            <div className="astar-stat-col">
-              <span>Route Status</span>
-              <strong className={info.jam_active ? "text-diverted" : "text-normal"}>
-                {info.jam_active ? "Diverted (A*)" : "Corridor Compliant"}
-              </strong>
-            </div>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function StaggerSimulatorPanel() {
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  async function runSimulation() {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/simulator/stagger?active_trucks=5`, { method: "POST" });
-      const data = await response.json();
-      setResult(data);
-    } catch {
-      // Robust local fallback for demo stability
-      setResult({
-        baseline_wait_minutes: 116, baseline_queue_trucks: 47,
-        optimized_wait_minutes: 48, optimized_queue_trucks: 19,
-        queue_reduction_percent: 58.6, recommended_stagger_minutes: 15,
-        dispatch_slots: [
-          { truck_index: 1, suggested_departure: "08:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 2, suggested_departure: "08:15", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 3, suggested_departure: "08:30", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 4, suggested_departure: "08:45", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 5, suggested_departure: "09:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-        ],
-      });
-    }
-    setLoading(false);
-  }
-
-  return (
-    <section className="panel stagger-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Bantargebang Queue Optimization (Case 1)</h2>
-          <p>Staggered-dispatch simulation to reduce landfill waiting time.</p>
-        </div>
-        <ClipboardList size={20} />
-      </div>
-      <button className="primary-button" onClick={runSimulation} disabled={loading}>
-        {loading ? "Calculating..." : "Run Dispatch Simulation"}
-      </button>
-      {result && (
-        <>
-          <div className="stagger-compare">
-            <div className="stagger-col before">
-              <span className="stagger-label">Without Optimization</span>
-              <strong>{result.baseline_wait_minutes} min</strong>
-              <small>{result.baseline_queue_trucks} queued trucks</small>
-            </div>
-            <div className="stagger-arrow">-&gt;</div>
-            <div className="stagger-col after">
-              <span className="stagger-label">With JWIS</span>
-              <strong>{result.optimized_wait_minutes} min</strong>
-              <small>{result.optimized_queue_trucks} queued trucks</small>
-            </div>
-            <div className="stagger-badge">-{result.queue_reduction_percent}%</div>
-          </div>
-
-          {result.dispatch_slots && result.dispatch_slots.length > 0 && (
-            <div className="stagger-schedule-wrap">
-              <h3>Rekomendasi Jadwal Keberangkatan Staggered:</h3>
-              <div className="table-wrap">
-                <table className="audit-table">
-                  <thead>
-                    <tr>
-                      <th>ID Truk</th>
-                      <th>Saran Jam Berangkat</th>
-                      <th>Estimasi Antri TPA</th>
-                      <th>Status Jadwal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.dispatch_slots.slice(0, 10).map((slot, i) => (
-                      <tr key={i}>
-                        <td><strong>T-0{slot.truck_index}</strong></td>
-                        <td><code>{slot.suggested_departure}</code></td>
-                        <td>{slot.tpa_wait_est_minutes} menit</td>
-                        <td>
-                          <span className="status-pill success">{slot.slot_status.toUpperCase()}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {result.dispatch_slots.length > 10 && (
-                <p className="stagger-schedule-note">
-                  Menampilkan 10 slot pertama dari {result.dispatch_slots.length} total armada terjadwal.
-                </p>
-              )}
-            </div>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-function UnlicensedCollectorAlerts() {
-  const [alerts, setAlerts] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [enforced, setEnforced] = useState({});
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/fleet/unlicensed-collectors`);
-      if (res.ok) setAlerts(await res.json());
-    } catch {}
-    setLoading(false);
-  }
-
-  useEffect(() => {
-    load();
-  }, []);
-
-  function handleEnforce(plate) {
-    setEnforced(prev => ({ ...prev, [plate]: true }));
-  }
-
-  if (loading) return <div>Memuat data deteksi...</div>;
-  if (!alerts || !alerts.alerts || alerts.alerts.length === 0) return null;
-
-  return (
-    <section className="panel unlicensed-alerts-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Deteksi Kolektor Sampah Liar (Case 1)</h2>
-          <p>Daftar kendaraan operasional tanpa izin resmi yang terdeteksi di area DKI Jakarta.</p>
-        </div>
-        <AlertTriangle size={20} />
-      </div>
-      <div className="table-wrap">
-        <table className="audit-table" role="grid" aria-label="Deteksi kolektor liar">
-          <thead>
-            <tr>
-              <th scope="col">Plat Nomor</th>
-              <th scope="col">Lokasi Koordinat</th>
-              <th scope="col">Status</th>
-              <th scope="col">Aksi Penertiban</th>
-            </tr>
-          </thead>
-          <tbody>
-            {alerts.alerts.map((a, i) => (
-              <tr key={i}>
-                <td><strong>{a.plate || "Unknown"}</strong></td>
-                <td><code>{a.lat.toFixed(4)}, {a.lng.toFixed(4)}</code></td>
-                <td>
-                  <span className={`status-pill ${enforced[a.plate] ? "success" : "warning"}`}>
-                    {enforced[a.plate] ? "PATROL DISPATCHED" : "UNAUTHORIZED"}
-                  </span>
-                </td>
-                <td>
-                  <button 
-                    className="primary-button compact" 
-                    onClick={() => handleEnforce(a.plate)}
-                    disabled={enforced[a.plate]}
-                  >
-                    {enforced[a.plate] ? "Telah Ditindak" : "Kirim Patroli"}
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="stagger-schedule-note">
-        Sumber data: Plat terdaftar di database DLH 2023. Pencocokan otomatis via plat nomor kendaraan komersial/swasta.
-      </p>
-    </section>
-  );
-}
 
 function ReportActions() {
   async function downloadSummaryPdf() {
@@ -1790,151 +1087,7 @@ function ReportActions() {
 
 // ── NEW DASHBOARD PANELS ─────────────────────────────────────────────
 
-function CarbonPanel() {
-  const [carbon, setCarbon] = useState(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`${API_URL}/fleet/carbon`);
-        if (!res.ok) throw new Error("no api");
-        setCarbon(await res.json());
-      } catch {
-        setCarbon({
-          total_fleet_distance_km: 216.9,
-          total_co2_emitted_kg: 206.06,
-          carbon_saved_today_kg: 17.58,
-          fuel_saved_equivalent_liters: 6.5,
-          compliance_rate_percent: 86,
-        });
-      }
-    }
-    load();
-  }, []);
-
-  if (!carbon) return null;
-
-  return (
-    <section className="panel carbon-panel" id="carbon-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Carbon Footprint Tracker</h2>
-          <p>Fleet CO2 emissions and route-optimization savings (Euro 4 diesel: 0.95 kg CO2/km).</p>
-        </div>
-        <Leaf size={20} />
-      </div>
-      <div className="carbon-grid">
-        <div className="carbon-stat">
-          <span>Total Distance</span>
-          <strong>{carbon.total_fleet_distance_km} km</strong>
-        </div>
-        <div className="carbon-stat">
-          <span>CO2 Emitted</span>
-          <strong>{carbon.total_co2_emitted_kg} kg</strong>
-        </div>
-        <div className="carbon-stat">
-          <span>CO2 Saved</span>
-          <strong>{carbon.carbon_saved_today_kg} kg</strong>
-        </div>
-        <div className="carbon-stat">
-          <span>Fuel Saved</span>
-          <strong>{carbon.fuel_saved_equivalent_liters} L</strong>
-        </div>
-      </div>
-      <div className="carbon-badge">
-        <Leaf size={16} /> Optimal-route compliance: {carbon.compliance_rate_percent}% - equivalent to planting {Math.round(carbon.carbon_saved_today_kg / 21)} trees/day
-      </div>
-    </section>
-  );
-}
-
-function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
-  const [date, setDate] = useState(new Date(Date.now() - 86400000).toISOString().slice(0, 10));
-  const [history, setHistory] = useState([]);
-
-  async function loadHistory() {
-    try {
-      const params = new URLSearchParams();
-      if (filterTruck && filterTruck !== "ALL") params.append("truck_code", filterTruck);
-      if (date) params.append("date", date);
-      const res = await fetch(`${API_URL}/fleet/history?${params.toString()}`);
-      if (!res.ok) throw new Error("no api");
-      setHistory(await res.json());
-    } catch {
-      setHistory([]);
-    }
-  }
-
-  useEffect(() => {
-    loadHistory();
-  }, [filterTruck, date]);
-
-  return (
-    <section className="panel wide" id="history-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Fleet Trip History</h2>
-          <p>Route history by truck with date filters for distance, fuel, and deviation audits.</p>
-        </div>
-        <History size={20} />
-      </div>
-      <div className="history-filter-panel">
-        <span className="history-title"><Calendar size={16} /> Filter</span>
-        <label>
-          Truck
-          <select value={filterTruck} onChange={(e) => setFilterTruck(e.target.value)}>
-            <option value="ALL">All Trucks</option>
-            <option value="T-001">T-001</option>
-            <option value="T-047">T-047</option>
-            <option value="T-112">T-112</option>
-          </select>
-        </label>
-        <label>
-          Date
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        </label>
-      </div>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Truck</th>
-              <th>Driver</th>
-              <th>Date</th>
-              <th>Distance</th>
-              <th>Fuel</th>
-              <th>GPS Points</th>
-              <th>Deviation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {history.length === 0 ? (
-              <tr><td className="table-empty-state" colSpan={7}>No trip history for this filter.</td></tr>
-            ) : (
-              history.map((trip) => (
-                <tr key={`${trip.truck_code}-${trip.date}`}>
-                  <td><b>{trip.truck_code}</b></td>
-                  <td>{trip.driver_name}</td>
-                  <td>{trip.date}</td>
-                  <td>{trip.distance_km} km</td>
-                  <td>{trip.fuel_consumed_liters} L</td>
-                  <td>{trip.points?.length || 0} points</td>
-                  <td>
-                    {(trip.deviations_count ?? trip.deviations_detected ?? 0) > 0 ? (
-                      <StatusPill tone="danger">{trip.deviations_count ?? trip.deviations_detected} deviations</StatusPill>
-                    ) : (
-                      <StatusPill tone="success">Clean</StatusPill>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
 
 function DriverAnalytics() {
   const drivers = [
