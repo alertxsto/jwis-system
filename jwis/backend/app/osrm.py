@@ -130,7 +130,7 @@ def fetch_osrm_route(
     name: str,
     origin: tuple[float, float],
     destination: tuple[float, float],
-    timeout_seconds: float = 8.0,
+    timeout_seconds: float = 2.0,
 ) -> dict[str, Any]:
     url = build_osrm_url(origin, destination)
     try:

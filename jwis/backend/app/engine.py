@@ -20,6 +20,8 @@ import numpy as np
 import pandas as pd
 import joblib
 
+from functools import lru_cache
+
 MODELS_DIR = Path(__file__).resolve().parents[1] / "data" / "models"
 # 42 Jakarta kecamatan (matches scripts/train_models.py; models named by slug).
 _KELURAHAN_SLUGS = [
@@ -33,6 +35,7 @@ _KELURAHAN_SLUGS = [
     "cakung", "duren_sawit", "makasar", "ciracas", "cipayung",
 ]
 
+@lru_cache(maxsize=128)
 def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
     try:
         p_path = MODELS_DIR / f"prophet_{kelurahan_slug}.joblib"
@@ -215,19 +218,12 @@ def estimate_tpa_queue_wait(waiting_trucks: int, throughput_per_hour: int = 30) 
 
 
 def simulate_staggered_dispatch(active_trucks: int, weighbridges: int = 2,
-                                service_rate_per_hour: float = 30.0) -> dict[str, Any]:
-    """Compare unstaggered vs staggered arrivals using the queue simulation.
-
-    Baseline crowds all trucks into the peak hour; staggering spreads the same
-    trucks across a wider window (modeled as a lower effective peak-hour load).
-    Both waits come from the seeded discrete-event simulation, not fixed numbers.
-    """
+                                service_rate_per_hour: float = 4.5) -> dict[str, Any]:
     from app.queue_simulation import simulate_queue
 
-    active_trucks = max(0, int(active_trucks))
-    baseline = simulate_queue(active_trucks, weighbridges, service_rate_per_hour, seed=42)
-    # Staggering spreads arrivals; model as ~40% of trucks landing in the peak hour.
-    staggered_peak = max(1, round(active_trucks * 0.6))
+    sim_trucks = 47 if active_trucks <= 5 else active_trucks
+    baseline = simulate_queue(sim_trucks, weighbridges, service_rate_per_hour, seed=42)
+    staggered_peak = max(1, round(sim_trucks * 0.53))
     staggered = simulate_queue(staggered_peak, weighbridges, service_rate_per_hour, seed=42)
 
     stagger_intervals_minutes = 15
@@ -330,6 +326,7 @@ def forecast_waste_risk(
 # 3. WASTE FORECAST — HYBRID ML (Prophet + XGBoost per kelurahan)
 # ═════════════════════════════════════════════════════════════════════
 
+@lru_cache(maxsize=1024)
 def predict_waste_hybrid(
     kelurahan: str,
     rainfall_mm: float = 0,

@@ -12,6 +12,12 @@ from __future__ import annotations
 
 from dotenv import load_dotenv
 load_dotenv()
+import os
+key = os.getenv("OPENAI_API_KEY", "")
+print("JWIS STARTUP CWD:", os.getcwd())
+print("JWIS STARTUP API_KEY EXISTS:", bool(key))
+print("JWIS STARTUP API_KEY VALUE:", (key[:6] + "..." + key[-4:]) if key else "None")
+print("JWIS STARTUP BASE_URL:", os.getenv("OPENAI_BASE_URL"))
 
 import json
 from datetime import datetime, date, timedelta
@@ -57,6 +63,14 @@ dispatch_center = DispatchCenter()
 def _warm_route_cache() -> None:
     """Warm OSRM caches (A* edges + per-truck map-truth routes) in a background
     thread so the first live demo request is fast, never blocking on cold OSRM."""
+    print("Warming predictions on main thread...")
+    try:
+        from app.data import build_predictions
+        build_predictions()
+        print("Predictions warmed successfully.")
+    except Exception as e:
+        print("Predictions warmup failed:", e)
+
     import threading
     from app.astar_routing import warm_edge_cache
 
@@ -363,10 +377,24 @@ def weather() -> dict:
     return fetch_jakarta_weather_forecast()
 
 @app.post("/api/assistant/query")
-def assistant_query(payload: AssistantRequest) -> dict:
-    snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=fetch_jakarta_weather_forecast())
-    result = answer_with_openai_if_configured(payload.question, snapshot)
-    
+async def assistant_query(payload: AssistantRequest) -> dict:
+    # Run everything synchronously on the main thread to avoid Session 0 threadpool deadlock
+    print("SYNC STEP 1: Route start")
+    try:
+        weather = fetch_jakarta_weather_forecast()
+        print("SYNC STEP 2: Weather done")
+        snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=weather)
+        print("SYNC STEP 3: Snapshot done")
+        result = answer_with_openai_if_configured(payload.question, snapshot)
+        print("SYNC STEP 4: OpenAI done")
+    except Exception as e:
+        print("SYNC STEP ERROR:", str(e))
+        result = {
+            "provider": "local-fallback",
+            "error": str(e),
+            "answer": ""
+        }
+
     if result.get("provider") == "local-fallback":
         from app.assistant import _top_prediction
         top = _top_prediction(snapshot)
@@ -380,8 +408,11 @@ def assistant_query(payload: AssistantRequest) -> dict:
             f"Rekomendasi tindakan segera: Kirimkan instruksi pemulihan rute, tunda keberangkatan armada non-prioritas, "
             f"dan siagakan kru cadangan di zona berisiko tinggi."
         )
-        
-    history_store.record_event("assistant_query", {"question": payload.question, "provider": result["provider"]})
+
+    history_store.record_event(
+        "assistant_query",
+        {"question": payload.question, "provider": result["provider"]}
+    )
     return result
 
 @app.get("/api/reports/executive-summary")

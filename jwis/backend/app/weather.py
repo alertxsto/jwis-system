@@ -116,7 +116,17 @@ def fallback_weather_forecast() -> list[dict[str, Any]]:
     return forecast
 
 
+_WEATHER_CACHE: dict[str, Any] | None = None
+_WEATHER_CACHE_TIME: float = 0.0
+
+
 def fetch_jakarta_weather_forecast(timeout_seconds: float = 5.0) -> dict[str, Any]:
+    global _WEATHER_CACHE, _WEATHER_CACHE_TIME
+    import time
+    now = time.time()
+    if _WEATHER_CACHE is not None and (now - _WEATHER_CACHE_TIME) < 300:
+        return _WEATHER_CACHE
+
     params = {
         "latitude": JAKARTA_LAT,
         "longitude": JAKARTA_LNG,
@@ -136,18 +146,25 @@ def fetch_jakarta_weather_forecast(timeout_seconds: float = 5.0) -> dict[str, An
     try:
         with urlopen(url, timeout=timeout_seconds) as response:
             payload = json.loads(response.read().decode("utf-8"))
-        return {
+        res = {
             "source": "open-meteo",
             "location": "Jakarta, Indonesia",
             "latitude": JAKARTA_LAT,
             "longitude": JAKARTA_LNG,
             "forecast": parse_open_meteo_daily(payload),
         }
+        _WEATHER_CACHE = res
+        _WEATHER_CACHE_TIME = now
+        return res
     except Exception:
-        return {
+        res = {
             "source": "fallback-demo",
             "location": "Jakarta, Indonesia",
             "latitude": JAKARTA_LAT,
             "longitude": JAKARTA_LNG,
             "forecast": fallback_weather_forecast(),
         }
+        # Cache fallback too so we don't spam if offline/rate-limited
+        _WEATHER_CACHE = res
+        _WEATHER_CACHE_TIME = now
+        return res
