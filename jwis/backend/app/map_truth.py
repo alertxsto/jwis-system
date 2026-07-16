@@ -19,6 +19,17 @@ from app.osrm import road_route, snap_to_road
 DEVIATION_THRESHOLD_M = 500.0
 
 
+def map_astar_to_osrm_format(astar_res: dict) -> dict:
+    if not astar_res:
+        return {"geometry": [], "distance_km": 0.0, "duration_min": 0.0, "source": "LIVE_EXTERNAL"}
+    return {
+        "geometry": astar_res.get("path") or [],
+        "distance_km": astar_res.get("distance_km") or 0.0,
+        "duration_min": astar_res.get("eta_minutes") or 0.0,
+        "source": "LIVE_EXTERNAL",
+    }
+
+
 def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
     """Assemble the one-payload geospatial truth for a single truck."""
     code = truck["truck_code"]
@@ -30,8 +41,49 @@ def build_map_truth(truck: dict[str, Any]) -> dict[str, Any]:
 
     assigned_pts = ASSIGNED_PATHS.get(code, [])
     actual_pts = ACTUAL_PATHS.get(code, [])
-    assigned_route = road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
-    actual_route = road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+
+    if code == "T-047":
+        from .astar_routing import is_traffic_jam_active
+        try:
+            import json
+            from pathlib import Path
+            cache_path = Path(__file__).resolve().parent / "road_geometry_cache.json"
+            if cache_path.exists():
+                cache = json.loads(cache_path.read_text(encoding="utf-8"))
+                normal_astar = cache.get("astar-normal", {})
+                diverted_astar = cache.get("astar-diverted", {})
+                assigned_route = map_astar_to_osrm_format(normal_astar)
+                if is_traffic_jam_active():
+                    actual_route = map_astar_to_osrm_format(diverted_astar)
+                else:
+                    actual_route = map_astar_to_osrm_format(normal_astar)
+            else:
+                from .astar_routing import reroute_payload
+                norm_res = reroute_payload(False)
+                div_res = reroute_payload(True)
+                assigned_route = map_astar_to_osrm_format(norm_res.get("active_route", {}))
+                if is_traffic_jam_active():
+                    actual_route = map_astar_to_osrm_format(div_res.get("active_route", {}))
+                else:
+                    actual_route = map_astar_to_osrm_format(norm_res.get("active_route", {}))
+        except Exception:
+            assigned_route = {"geometry": [], "source": "FALLBACK_DEGRADED"}
+            actual_route = {"geometry": [], "source": "FALLBACK_DEGRADED"}
+    else:
+        try:
+            import json
+            from pathlib import Path
+            cache_path = Path(__file__).resolve().parent / "road_geometry_cache.json"
+            if cache_path.exists():
+                cache = json.loads(cache_path.read_text(encoding="utf-8"))
+                assigned_route = cache.get(f"{code}-assigned") or (road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"})
+                actual_route = cache.get(f"{code}-actual") or (road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"})
+            else:
+                assigned_route = road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+                actual_route = road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+        except Exception:
+            assigned_route = road_route(assigned_pts) if assigned_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
+            actual_route = road_route(actual_pts) if actual_pts else {"geometry": [], "source": "FALLBACK_DEGRADED"}
 
     # Meter deviation of snapped position vs assigned road geometry (point-to-segment).
     geom = cast(list[dict[str, float]], assigned_route.get("geometry") or [])
