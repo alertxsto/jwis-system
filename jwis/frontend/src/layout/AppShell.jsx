@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Bot,
   LogOut,
   Menu,
   MessageCircle,
@@ -20,15 +21,16 @@ const items = [
   { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
   { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
   { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
-  { id: "weighbridge", label: "weighbridge Logs", icon: Workflow, section: "Logistics" },
+  { id: "weighbridge", label: "Weighbridge Logs", icon: Workflow, section: "Logistics" },
   { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
   { id: "iot", label: "IoT Bin Sensors", icon: Activity, section: "Admin" },
   { id: "audit", label: "Data & ML Audit", icon: Shield, section: "Admin" },
 ];
 
-export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, children }) {
+export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, assistant, children }) {
   const current = items.find((item) => item.id === activeWorkspace) || items[0];
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [mobileNavMode, setMobileNavMode] = useState(() => window.matchMedia("(max-width: 860px)").matches);
   const mobileNavTriggerRef = useRef(null);
   const sideRailRef = useRef(null);
@@ -91,11 +93,20 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
     closeMobileNav();
   }
 
+  useEffect(() => {
+    if (!assistantOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setAssistantOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [assistantOpen]);
+
   const sections = ["Operations", "Logistics", "Admin"];
   const sectionLabels = {
     Operations: "Operations",
-    Logistics: "Logistics (Case 1)",
-    Admin: "Admin (Case 2)",
+    Logistics: "Field Logistics",
+    Admin: "Command Systems",
   };
 
   return (
@@ -190,6 +201,9 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
 
           <div className="top-actions">
             <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
+            <button className="ghost-button assistant-topbar-button" type="button" onClick={() => setAssistantOpen(true)}>
+              <Bot size={16} />AI Assistant
+            </button>
             <a className="ghost-button" href="/field"><Truck size={16} />Field app</a>
             <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">
               <RefreshCcw size={16} />
@@ -204,6 +218,22 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
           </div>
         </header>
         <div className="workspace-canvas">{children}</div>
+        {assistantOpen && (
+          <div className="assistant-modal-backdrop" role="presentation" onMouseDown={() => setAssistantOpen(false)}>
+            <section
+              className="assistant-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Operational AI Assistant"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button className="icon-button assistant-modal-close" type="button" aria-label="Close AI assistant" onClick={() => setAssistantOpen(false)}>
+                <X size={17} />
+              </button>
+              {assistant}
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );

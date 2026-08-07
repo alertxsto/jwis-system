@@ -272,7 +272,20 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
 
     def _route(cong):
         if origin_position:
-            return route_from_truck(origin_position, congested_edges=cong)
+            route = route_from_truck(origin_position, congested_edges=cong)
+            path = route.get("path")
+            if isinstance(path, list):
+                origin_point = {
+                    "lat": round(float(origin_position["lat"]), 6),
+                    "lng": round(float(origin_position["lng"]), 6),
+                }
+                if not path or path[0] != origin_point:
+                    route["path"] = [origin_point, *path]
+            route["origin_position"] = {
+                "lat": round(float(origin_position["lat"]), 6),
+                "lng": round(float(origin_position["lng"]), 6),
+            }
+            return route
         return find_astar_route(congested_edges=cong)
 
     normal = _route([])

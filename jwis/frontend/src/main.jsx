@@ -45,7 +45,7 @@ import {
 import { LiveFleetMap } from "./LiveFleetMap.jsx";
 import "./styles.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8011/api";
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -145,6 +145,14 @@ const fallbackSnapshot = {
       ],
     },
   ],
+  predictions: [
+    { district: "CENGKARENG", date: "2026-06-01", predicted_tons: 489.4, spike_percent: 41, risk_level: "critical", recommended_extra_trucks: 27, recommended_extra_crews: 28 },
+    { district: "CILINCING", date: "2026-06-01", predicted_tons: 443.1, spike_percent: 36, risk_level: "high", recommended_extra_trucks: 25, recommended_extra_crews: 25 },
+    { district: "CAKUNG", date: "2026-06-01", predicted_tons: 426.6, spike_percent: 33, risk_level: "high", recommended_extra_trucks: 24, recommended_extra_crews: 24 },
+    { district: "TANJUNG PRIOK", date: "2026-06-01", predicted_tons: 399.5, spike_percent: 31, risk_level: "high", recommended_extra_trucks: 22, recommended_extra_crews: 23 },
+    { district: "KALI DERES", date: "2026-06-01", predicted_tons: 380.2, spike_percent: 29, risk_level: "high", recommended_extra_trucks: 21, recommended_extra_crews: 22 },
+    { district: "DUREN SAWIT", date: "2026-06-01", predicted_tons: 354.2, spike_percent: 27, risk_level: "high", recommended_extra_trucks: 20, recommended_extra_crews: 20 },
+  ],
   osrm_route: {
     name: "Route B - Daan Mogot Recovery",
     source: "fallback",
@@ -192,18 +200,49 @@ const fallbackSnapshot = {
   },
 };
 
+function normalizeCommandSnapshot(rawSnapshot) {
+  const merged = {
+    ...fallbackSnapshot,
+    ...(rawSnapshot || {}),
+    kpis: { ...fallbackSnapshot.kpis, ...(rawSnapshot?.kpis || {}) },
+    tpa_queue: { ...fallbackSnapshot.tpa_queue, ...(rawSnapshot?.tpa_queue || {}) },
+    weather: {
+      ...fallbackSnapshot.weather,
+      ...(rawSnapshot?.weather || {}),
+      forecast: rawSnapshot?.weather?.forecast?.length
+        ? rawSnapshot.weather.forecast
+        : fallbackSnapshot.weather.forecast,
+    },
+    osrm_route: rawSnapshot?.osrm_route || fallbackSnapshot.osrm_route,
+  };
+
+  const predictions = Array.isArray(merged.predictions) && merged.predictions.length
+    ? merged.predictions
+    : fallbackSnapshot.critical_predictions;
+  const criticalPredictions = Array.isArray(merged.critical_predictions) && merged.critical_predictions.length
+    ? merged.critical_predictions
+    : predictions
+      .filter((item) => ["critical", "high"].includes(item.risk_level))
+      .sort((a, b) => (b.spike_percent || 0) - (a.spike_percent || 0))
+      .slice(0, 8);
+
+  merged.predictions = predictions;
+  merged.critical_predictions = criticalPredictions.length ? criticalPredictions : fallbackSnapshot.critical_predictions;
+  return merged;
+}
+
 function useSnapshot() {
-  const [snapshot, setSnapshot] = useState(fallbackSnapshot);
+  const [snapshot, setSnapshot] = useState(() => normalizeCommandSnapshot(fallbackSnapshot));
   const [online, setOnline] = useState(false);
 
   async function load() {
     try {
       const response = await fetch(`${API_URL}/command-center`);
       if (!response.ok) throw new Error("API unavailable");
-      setSnapshot(await response.json());
+      setSnapshot(normalizeCommandSnapshot(await response.json()));
       setOnline(true);
     } catch {
-      setSnapshot(fallbackSnapshot);
+      setSnapshot(normalizeCommandSnapshot(fallbackSnapshot));
       setOnline(false);
     }
   }
@@ -289,8 +328,9 @@ function LoginPage({ onLogin }) {
             </button>
           </form>
           <div className="login-demo-note">
-            <strong>Demo roles</strong>
-            <span>dispatcher / supervisor / auditor · password &lt;role&gt;-demo-pass</span>
+            <strong>Demo access</strong>
+            <span>dispatcher, supervisor, or auditor</span>
+            <code>dispatcher-demo-pass</code>
           </div>
         </div>
         <aside className="login-proof" aria-label="JWIS operating scope">
@@ -298,7 +338,17 @@ function LoginPage({ onLogin }) {
             <span className="brand-mark"><Route size={19} /></span>
             <div>
               <strong>Jakarta Waste Intelligence System</strong>
-              <p>Operational access for DLH command personnel.</p>
+              <p>Operational access for DLH command personnel, dispatch supervisors, and audit reviewers.</p>
+            </div>
+          </div>
+          <div className="login-status-strip" aria-label="Command status">
+            <div>
+              <span>Command mode</span>
+              <strong>Protected</strong>
+            </div>
+            <div>
+              <span>Decision loop</span>
+              <strong>Live demo</strong>
             </div>
           </div>
           <div className="login-proof-metrics">
@@ -309,8 +359,13 @@ function LoginPage({ onLogin }) {
             </div>
             <div>
               <span className="metric-label">Coverage</span>
-              <strong>Case 1 + 2</strong>
+              <strong>Fleet + Forecast</strong>
               <p>Fleet supervision and resource planning.</p>
+            </div>
+            <div>
+              <span className="metric-label">Assistant</span>
+              <strong>Ana AI</strong>
+              <p>Operational guidance for route, weather, and dispatch decisions.</p>
             </div>
           </div>
         </aside>
@@ -366,34 +421,44 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
         <StatusPill tone="danger">{alerts.length} active</StatusPill>
       </div>
       <div className="alert-list">
-        {alerts.map((alert) => (
-          <article className="alert-item" key={alert.id}>
-            <div className="alert-head">
-              <AlertTriangle size={18} />
-              <div>
-                <strong>{alert.title}</strong>
-                <p>{alert.description}</p>
-              </div>
-            </div>
-            {alert.recommended_routes?.[0] && (
-              <div className="route-rec">
-                <Route size={17} />
+        {alerts.map((alert) => {
+          const recommendedRoute = alert.recommended_routes?.[0];
+          return (
+            <article className="alert-item" key={alert.id}>
+              <div className="alert-head">
+                <AlertTriangle size={18} />
                 <div>
-                  <strong>{alert.recommended_routes[0].name}</strong>
-                  <span>{alert.recommended_routes[0].eta_minutes} min ETA - score {alert.recommended_routes[0].score}</span>
+                  <strong>{alert.title}</strong>
+                  <p>{alert.description}</p>
                 </div>
               </div>
-            )}
-            <div className="alert-actions">
-              <button className="primary-button" onClick={() => onDispatch(alert)}>
-                <Send size={16} /> Approve &amp; Dispatch
-              </button>
-              <button className="ghost-button alert-wa-button" onClick={() => onWhatsApp(alert)}>
-                <MessageCircle size={16} /> WA Alert
-              </button>
-            </div>
-          </article>
-        ))}
+              <div className={`route-rec ${recommendedRoute ? "" : "route-rec-empty"}`}>
+                {recommendedRoute ? (
+                  <>
+                    <Route size={17} />
+                    <div>
+                      <strong>{recommendedRoute.name}</strong>
+                      <span>{recommendedRoute.eta_minutes} min ETA - score {recommendedRoute.score}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <strong>Awaiting route recommendation</strong>
+                    <span>Dispatch can proceed after operator review.</span>
+                  </div>
+                )}
+              </div>
+              <div className="alert-actions">
+                <button className="primary-button" onClick={() => onDispatch(alert)}>
+                  <Send size={16} /> Approve &amp; Dispatch
+                </button>
+                <button className="ghost-button alert-wa-button" onClick={() => onWhatsApp(alert)}>
+                  <MessageCircle size={16} /> WA Alert
+                </button>
+              </div>
+            </article>
+          );
+        })}
       </div>
     </section>
   );
@@ -429,15 +494,81 @@ function RouteEvidencePanel({ route }) {
   );
 }
 
-function PredictionPanel({ predictions }) {
+function PredictionPanel({ predictions, allPredictions = predictions }) {
+  const totalExtraTrucks = predictions.reduce((sum, item) => sum + (item.recommended_extra_trucks || 0), 0);
+  const totalExtraCrews = predictions.reduce((sum, item) => sum + (item.recommended_extra_crews || 0), 0);
+  const highestSpike = predictions.reduce(
+    (max, item) => Math.max(max, item.spike_percent || 0),
+    0,
+  );
+  const priorityRows = [...predictions]
+    .sort((a, b) => (b.predicted_tons || 0) - (a.predicted_tons || 0))
+    .slice(0, 6);
+  const maxTons = Math.max(...priorityRows.map((item) => item.predicted_tons || 0), 1);
+  const verticalRows = [...allPredictions]
+    .sort((a, b) => (b.predicted_tons || 0) - (a.predicted_tons || 0))
+    .slice(0, 6);
+  const verticalMaxTons = Math.max(...verticalRows.map((item) => item.predicted_tons || 0), 1);
+
   return (
-    <section className="panel">
+    <section className="panel prediction-panel">
       <div className="panel-title">
         <div>
           <h2>Predictive Readiness</h2>
           <p>Seven-day spatial risk forecast with explainable demand drivers.</p>
         </div>
         <CloudRain size={20} />
+      </div>
+      <div className="prediction-summary-grid">
+        <div>
+          <span>High-risk districts</span>
+          <strong>{predictions.length}</strong>
+        </div>
+        <div>
+          <span>Peak spike</span>
+          <strong>+{highestSpike}%</strong>
+        </div>
+        <div>
+          <span>Extra capacity</span>
+          <strong>{totalExtraTrucks} trucks / {totalExtraCrews} crews</strong>
+        </div>
+      </div>
+      <div className="prediction-insight-grid">
+        <div className="district-priority-chart" aria-label="District priority chart">
+          <h3>District priority</h3>
+          {priorityRows.map((item) => {
+            const width = Math.max(8, ((item.predicted_tons || 0) / maxTons) * 100);
+            return (
+              <article className="district-priority-row" key={`${item.district}-${item.date}-priority`}>
+                <div className="district-priority-label">
+                  <strong>{item.district}</strong>
+                  <span>{item.recommended_extra_trucks} trucks / {item.recommended_extra_crews} crews</span>
+                </div>
+                <div className="district-priority-bar" aria-label={`${item.district} ${Math.round(item.predicted_tons || 0)} tons`}>
+                  <span style={{ width: `${width}%` }} />
+                </div>
+                <b>+{item.spike_percent}%</b>
+              </article>
+            );
+          })}
+        </div>
+        <div className="district-vertical-chart" aria-label="Waste load by district chart">
+          <h3>Waste load by district</h3>
+          <div className="district-vertical-bars">
+            {verticalRows.map((item) => {
+              const height = Math.max(10, ((item.predicted_tons || 0) / verticalMaxTons) * 100);
+              return (
+                <article className="district-vertical-bar" key={`${item.district}-${item.date}-vertical`}>
+                  <div className="district-vertical-track">
+                    <span style={{ height: `${height}%` }} />
+                  </div>
+                  <strong>{Math.round(item.predicted_tons || 0)}t</strong>
+                  <small title={item.district}>{item.district}</small>
+                </article>
+              );
+            })}
+          </div>
+        </div>
       </div>
       <div className="prediction-list">
         {predictions.map((item) => (
@@ -507,54 +638,54 @@ function KecamatanMapPanel() {
     return matchesSearch && matchesCity;
   });
 
-  const displayedRows = showAll ? filteredRows : filteredRows.slice(0, 12);
+  const displayedRows = showAll ? filteredRows : filteredRows.slice(0, 8);
   const selectedKec = rows.find((r) => r.slug === selectedSlug);
 
   return (
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Peta Timbulan Sampah per Kecamatan (Case 2)</h2>
+          <h2>District Waste Forecast Map</h2>
           <p>
-            Prediksi hybrid Prophet+XGBoost untuk {data?.kecamatan_count || 42} kecamatan DKI,
-            di-anchor ke timbulan resmi SILIKA DLH 2023. Total prediksi:{" "}
-            <b>{data?.total_predicted_tons?.toLocaleString("id-ID") || "…"} ton/hari</b>.
+            Hybrid Prophet+XGBoost forecast for {data?.kecamatan_count || 42} DKI districts,
+            anchored to official SILIKA DLH 2023 baseline. Total forecast:{" "}
+            <b>{data?.total_predicted_tons?.toLocaleString("en-US") || "..."} tons/day</b>.
           </p>
         </div>
         <MapPinned size={20} />
       </div>
 
       <div className="scenario-controls">
-        <label>Curah hujan (mm): <b>{rain}</b>
+        <label>Rainfall (mm): <b>{rain}</b>
           <input type="range" min="0" max="60" value={rain} onChange={(e) => setRain(+e.target.value)} />
         </label>
-        <label>Event pengunjung: <b>{attendance.toLocaleString("id-ID")}</b>
+        <label>Event attendance: <b>{attendance.toLocaleString("en-US")}</b>
           <input type="range" min="0" max="200000" step="5000" value={attendance} onChange={(e) => setAttendance(+e.target.value)} />
         </label>
         <label className="scenario-check">
           <input type="checkbox" checked={weekend} onChange={(e) => setWeekend(e.target.checked)} /> Weekend
         </label>
         <button className="primary-button" onClick={load} disabled={loading}>
-          {loading ? "Menghitung…" : "Prediksi ulang"}
+          {loading ? "Calculating..." : "Recalculate forecast"}
         </button>
       </div>
 
       <div className="forecast-filter-bar">
         <input 
           type="text" 
-          placeholder="Cari kecamatan..." 
+          placeholder="Search district..." 
           value={search} 
           onChange={(e) => setSearch(e.target.value)} 
           className="search-input" 
-          aria-label="Cari kecamatan"
+          aria-label="Search district"
         />
         <select 
           value={cityFilter} 
           onChange={(e) => setCityFilter(e.target.value)} 
           className="city-select" 
-          aria-label="Filter kota"
+          aria-label="Filter city"
         >
-          <option value="">Semua Kota</option>
+          <option value="">All cities</option>
           <option value="Jakarta Pusat">Jakarta Pusat</option>
           <option value="Jakarta Barat">Jakarta Barat</option>
           <option value="Jakarta Selatan">Jakarta Selatan</option>
@@ -567,74 +698,74 @@ function KecamatanMapPanel() {
         <div className="kec-details-panel">
           <div className="kec-details-panel-title">
             <div>
-              <h3>Detail Analisis: {selectedKec.kecamatan} ({selectedKec.city})</h3>
+              <h3>Analysis details: {selectedKec.kecamatan} ({selectedKec.city})</h3>
               <p>Model: Prophet + XGBoost Hybrid ({selectedKec.model_available ? "Active" : "Unavailable"})</p>
             </div>
-            <button className="text-button" onClick={() => setSelectedSlug(null)}>Tutup</button>
+            <button className="text-button" onClick={() => setSelectedSlug(null)}>Close</button>
           </div>
           
           <div className="kec-details-grid">
             <div className="kec-details-section">
-              <h4>Komponen Prediksi (Tonase)</h4>
+              <h4>Forecast components</h4>
               <ul className="kec-details-list">
                 <li className="kec-details-item">
-                  <span>Baseline Musiman (Prophet):</span>
-                  <b>{selectedKec.prophet_baseline_tons ? `${selectedKec.prophet_baseline_tons.toLocaleString("id-ID")} ton` : "…"}</b>
+                  <span>Seasonal baseline (Prophet):</span>
+                  <b>{selectedKec.prophet_baseline_tons ? `${selectedKec.prophet_baseline_tons.toLocaleString("en-US")} tons` : "..."}</b>
                 </li>
                 <li className="kec-details-item">
-                  <span>Koreksi Dinamis (XGBoost):</span>
+                  <span>Dynamic correction (XGBoost):</span>
                   <b style={{ color: selectedKec.xgboost_residual > 0 ? "#ea580c" : "#64748b" }}>
-                    {selectedKec.xgboost_residual > 0 ? `+${selectedKec.xgboost_residual.toLocaleString("id-ID")}` : (selectedKec.xgboost_residual || 0)} ton
+                    {selectedKec.xgboost_residual > 0 ? `+${selectedKec.xgboost_residual.toLocaleString("en-US")}` : (selectedKec.xgboost_residual || 0)} tons
                   </b>
                 </li>
                 <li className="kec-details-item-total">
-                  <span>Total Prediksi Harian:</span>
-                  <span>{selectedKec.predicted_tons ? `${selectedKec.predicted_tons.toLocaleString("id-ID")} ton` : "…"}</span>
+                  <span>Total daily forecast:</span>
+                  <span>{selectedKec.predicted_tons ? `${selectedKec.predicted_tons.toLocaleString("en-US")} tons` : "..."}</span>
                 </li>
               </ul>
             </div>
             
             <div className="kec-details-section">
-              <h4>Uncertainty & Jejak Karbon</h4>
+              <h4>Uncertainty & carbon impact</h4>
               <ul className="kec-details-list">
                 <li className="kec-details-item">
-                  <span>Rentang Keyakinan (P10-P90):</span>
-                  <b>{selectedKec.prediction_interval_p10_p90 ? `${selectedKec.prediction_interval_p10_p90[0].toLocaleString("id-ID")} - ${selectedKec.prediction_interval_p10_p90[1].toLocaleString("id-ID")} ton` : "…"}</b>
+                  <span>Confidence range (P10-P90):</span>
+                  <b>{selectedKec.prediction_interval_p10_p90 ? `${selectedKec.prediction_interval_p10_p90[0].toLocaleString("en-US")} - ${selectedKec.prediction_interval_p10_p90[1].toLocaleString("en-US")} tons` : "..."}</b>
                 </li>
                 <li className="kec-details-item">
-                  <span>Konsumsi Solar Armada:</span>
-                  <b>{selectedKec.fuel_consumption_liters ? `${selectedKec.fuel_consumption_liters.toLocaleString("id-ID")} Liter` : "…"}</b>
+                  <span>Fleet diesel use:</span>
+                  <b>{selectedKec.fuel_consumption_liters ? `${selectedKec.fuel_consumption_liters.toLocaleString("en-US")} liters` : "..."}</b>
                 </li>
                 <li className="kec-details-item">
-                  <span>Jejak Karbon (CO2):</span>
-                  <b>{selectedKec.co2_emissions_kg ? `${selectedKec.co2_emissions_kg.toLocaleString("id-ID")} kg` : "…"}</b>
+                  <span>Carbon footprint (CO2):</span>
+                  <b>{selectedKec.co2_emissions_kg ? `${selectedKec.co2_emissions_kg.toLocaleString("en-US")} kg` : "..."}</b>
                 </li>
               </ul>
             </div>
 
             <div className="kec-details-section">
-              <h4>Kebutuhan Operasional & Fasilitas</h4>
+              <h4>Operational and facility needs</h4>
               <ul className="kec-details-list">
                 <li className="kec-details-item">
-                  <span>Armada Truk Pengangkut:</span>
-                  <b>{selectedKec.trucks_required} unit</b>
+                  <span>Collection trucks:</span>
+                  <b>{selectedKec.trucks_required} units</b>
                 </li>
                 <li className="kec-details-item">
-                  <span>Kru Lapangan Dibutuhkan:</span>
-                  <b>{selectedKec.crews_required} orang</b>
+                  <span>Required field crews:</span>
+                  <b>{selectedKec.crews_required} people</b>
                 </li>
                 <li className="kec-details-item">
-                  <span>Total Jam Kerja (Man-Hours):</span>
-                  <b>{selectedKec.man_hours_required} jam</b>
+                  <span>Total work hours:</span>
+                  <b>{selectedKec.man_hours_required} hours</b>
                 </li>
                 <li className="kec-details-item">
-                  <span>Kebutuhan Bin Sampah Besar:</span>
-                  <b>{selectedKec.disposal_bins_required || 0} unit</b>
+                  <span>Large waste bins:</span>
+                  <b>{selectedKec.disposal_bins_required || 0} units</b>
                 </li>
                 <li className="kec-details-item-total">
-                  <span>Status TPS:</span>
+                  <span>TPS status:</span>
                   <span className={selectedKec.facility_over_capacity ? "status-overcapacity" : "status-normal"}>
-                    {selectedKec.facility_over_capacity ? "⚠ OVER-CAPACITY" : "NORMAL (OK)"}
+                    {selectedKec.facility_over_capacity ? "Warning: OVER-CAPACITY" : "NORMAL (OK)"}
                   </span>
                 </li>
               </ul>
@@ -643,10 +774,10 @@ function KecamatanMapPanel() {
           
           {selectedKec.factors && selectedKec.factors.length > 0 && (
             <div className="kec-details-drivers">
-              <h4>Faktor Driver Lonjakan</h4>
+              <h4>Spike drivers</h4>
               {selectedKec.factors.map((f, i) => (
                 <div key={i} className="kec-driver-item">
-                  <span className="kec-driver-bullet">•</span>
+                  <span className="kec-driver-bullet">-</span>
                   <span>{f}</span>
                 </div>
               ))}
@@ -666,31 +797,31 @@ function KecamatanMapPanel() {
               <strong>{k.kecamatan}</strong>
               <span>{k.city}</span>
             </div>
-            <div className="bar" aria-label={`${k.predicted_tons} ton`}>
+            <div className="bar" aria-label={`${k.predicted_tons} tons`}>
               <span style={{ width: `${Math.min(100, (k.predicted_tons / maxTons) * 100)}%` }} />
             </div>
             <div className="kec-meta">
-              <b>{k.predicted_tons.toLocaleString("id-ID")} t</b>
-              <span>{k.trucks_required} truk · {k.crews_required} kru · {k.man_hours_required} m-hr</span>
+              <b>{k.predicted_tons.toLocaleString("en-US")} t</b>
+              <span>{k.trucks_required} trucks / {k.crews_required} crews / {k.man_hours_required} m-hr</span>
               <span className="kec-facility" style={{ color: readinessColor[k.facility_readiness] }}>
-                {k.facility_over_capacity ? "⚠ TPS over-capacity" : "TPS " + k.facility_readiness}
+                {k.facility_over_capacity ? "Warning: TPS over-capacity" : "TPS " + k.facility_readiness}
               </span>
             </div>
           </article>
         ))}
       </div>
 
-      {filteredRows.length > 12 && (
+      {filteredRows.length > 8 && (
         <button 
           className="text-button show-more-btn" 
           onClick={() => setShowAll(!showAll)}
         >
-          {showAll ? "Tampilkan Lebih Sedikit (Top 12)" : `Tampilkan Semua (${filteredRows.length} Kecamatan)`}
+          {showAll ? "Show fewer (Top 8)" : `Show all (${filteredRows.length} districts)`}
         </button>
       )}
       <p className="kec-note">
-        Menampilkan 12 hotspot teratas dari {rows.length} kecamatan. Baseline & lokasi = SILIKA DLH 2023 (real);
-        resolusi harian = calibrated-synthetic anchored to real data.
+        Showing the top 8 hotspots from {rows.length} districts. Baseline and location data use SILIKA DLH 2023;
+        daily resolution is calibrated-synthetic and anchored to real public data.
       </p>
     </section>
   );
@@ -722,7 +853,7 @@ function DataAuditWorkspace() {
   }, []);
 
   if (loading) {
-    return <div className="loading-state">Memuat data audit...</div>;
+    return <div className="loading-state">Loading audit data...</div>;
   }
 
   const records = provenance?.records || [];
@@ -732,7 +863,7 @@ function DataAuditWorkspace() {
     <div className="audit-workspace grid-col-12" data-testid="audit-workspace">
       <div className="audit-header">
         <h1>Data & ML Audit Registry</h1>
-        <p>Transparansi asal data, kepatuhan model ML, dan inventori armada fisik JWIS.</p>
+        <p>Data provenance, ML suitability, and physical fleet inventory for JWIS decision evidence.</p>
       </div>
 
       <div className="audit-grid">
@@ -740,7 +871,7 @@ function DataAuditWorkspace() {
           <div className="panel-title">
             <div>
               <h2>Data Provenance Registry</h2>
-              <p>Manifest sumber data riil, jumlah baris, tingkat kesegaran, dan limitasi operasional.</p>
+              <p>Source manifest with row counts, freshness, granularity, and operational limitations.</p>
             </div>
             <Database size={20} />
           </div>
@@ -748,12 +879,12 @@ function DataAuditWorkspace() {
             <table className="audit-table" role="grid" aria-label="Data provenance registry">
               <thead>
                 <tr>
-                  <th scope="col">Nama Dataset</th>
-                  <th scope="col">Sumber / URL</th>
-                  <th scope="col">Baris</th>
-                  <th scope="col">Kesegaran</th>
-                  <th scope="col">Granularitas</th>
-                  <th scope="col">Klasifikasi</th>
+                  <th scope="col">Dataset</th>
+                  <th scope="col">Source URL</th>
+                  <th scope="col">Rows</th>
+                  <th scope="col">Freshness</th>
+                  <th scope="col">Granularity</th>
+                  <th scope="col">Classification</th>
                 </tr>
               </thead>
               <tbody>
@@ -766,13 +897,13 @@ function DataAuditWorkspace() {
                     <td>
                       {r.source_url.startsWith("http") ? (
                         <a href={r.source_url} target="_blank" rel="noopener noreferrer" className="audit-link">
-                          Buka Sumber
+                          Open source
                         </a>
                       ) : (
                         <span>{r.source_url}</span>
                       )}
                     </td>
-                    <td>{r.row_count?.toLocaleString("id-ID") || "—"}</td>
+                    <td>{r.row_count?.toLocaleString("en-US") || "—"}</td>
                     <td>{r.freshness}</td>
                     <td><code>{r.granularity}</code></td>
                     <td>
@@ -791,7 +922,7 @@ function DataAuditWorkspace() {
           <div className="panel-title">
             <div>
               <h2>ML Model Suitability Map</h2>
-              <p>Metrik evaluasi akurasi Prophet+XGBoost untuk setiap tingkat resolusi data.</p>
+              <p>Prophet+XGBoost suitability evidence by data resolution level.</p>
             </div>
             <Cpu size={20} />
           </div>
@@ -805,39 +936,39 @@ function DataAuditWorkspace() {
                   </span>
                 </div>
                 <p className="suitability-notes">
-                  {res === "city_day" && "Diverifikasi terhadap log harian total weighbridge Jembatan Timbang (real)."}
-                  {res === "district_week" && "Total mingguan per kecamatan, selaras dengan tagihan retribusi (real)."}
-                  {res === "district_day" && "Resolusi harian per kecamatan; hanya simulasi dinamis terkalibrasi."}
-                  {res === "district_month" && "Total bulanan per kecamatan; digunakan untuk perencanaan anggaran."}
-                  {res === "hotspot_rank" && "Penentuan urutan wilayah berisiko tinggi secara spasial."}
+                  {res === "city_day" && "Verified against daily city-level weighbridge totals."}
+                  {res === "district_week" && "Weekly district totals aligned with official retribution billing records."}
+                  {res === "district_day" && "Daily district resolution used as calibrated dynamic simulation."}
+                  {res === "district_month" && "Monthly district totals used for budget planning."}
+                  {res === "hotspot_rank" && "Spatial ranking for high-risk operating areas."}
                 </p>
               </div>
             ))}
           </div>
-          <p className="audit-note"><strong>Catatan Kejujuran Model:</strong> {suitability?.note}</p>
+          <p className="audit-note"><strong>Model honesty note:</strong> {suitability?.note}</p>
         </section>
 
         <section className="panel">
           <div className="panel-title">
             <div>
-              <h2>Komposisi Tipe Armada (Sensus 2023)</h2>
-              <p>Inventori unit truk kebersihan DKI Jakarta berdasarkan jenis kendaraan.</p>
+              <h2>Fleet Type Composition (2023 Census)</h2>
+              <p>Inventory of DKI Jakarta sanitation fleet units by vehicle type.</p>
             </div>
             <Truck size={20} />
           </div>
           <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Karakteristik armada fisik">
+            <table className="audit-table" role="grid" aria-label="Physical fleet characteristics">
               <thead>
                 <tr>
-                  <th scope="col">Tipe Kendaraan</th>
-                  <th scope="col">Jumlah Unit</th>
+                  <th scope="col">Vehicle type</th>
+                  <th scope="col">Unit count</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(fleetTypes).map(([type, count]) => (
                   <tr key={type}>
                     <td><strong>{type.toUpperCase()}</strong></td>
-                    <td>{count?.toLocaleString("id-ID")} unit</td>
+                    <td>{count?.toLocaleString("en-US")} units</td>
                   </tr>
                 ))}
               </tbody>
@@ -848,24 +979,24 @@ function DataAuditWorkspace() {
         <section className="panel">
           <div className="panel-title">
             <div>
-              <h2>Distribusi Wilayah (Sensus 2023)</h2>
-              <p>Pembagian unit armada kebersihan di 5 Kota Administrasi & Kabupaten.</p>
+              <h2>Administrative Distribution (2023 Census)</h2>
+              <p>Distribution of sanitation fleet units across five administrative cities and the regency.</p>
             </div>
             <Users size={20} />
           </div>
           <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Distribusi wilayah sensus">
+            <table className="audit-table" role="grid" aria-label="Census area distribution">
               <thead>
                 <tr>
-                  <th scope="col">Wilayah Administrasi</th>
-                  <th scope="col">Jumlah Unit</th>
+                  <th scope="col">Administrative area</th>
+                  <th scope="col">Unit count</th>
                 </tr>
               </thead>
               <tbody>
                 {Object.entries(fleet?.by_wilayah || {}).map(([wilayah, count]) => (
                   <tr key={wilayah}>
                     <td><strong>{wilayah}</strong></td>
-                    <td>{count?.toLocaleString("id-ID")} unit</td>
+                    <td>{count?.toLocaleString("en-US")} units</td>
                   </tr>
                 ))}
               </tbody>
@@ -873,11 +1004,11 @@ function DataAuditWorkspace() {
           </div>
           <div className="fleet-totals">
             <div className="fleet-total-row">
-              <span>Total Unit Armada Tercatat:</span>
-              <b>{fleet?.total_units?.toLocaleString("id-ID")} unit</b>
+              <span>Total registered fleet units:</span>
+              <b>{fleet?.total_units?.toLocaleString("en-US")} units</b>
             </div>
             <div className="fleet-total-row">
-              <span>Sumber Data Sensus:</span>
+              <span>Census data source:</span>
               <span>{fleet?.source}</span>
             </div>
           </div>
@@ -893,6 +1024,9 @@ function WeatherPanel({ weather }) {
     (best, item) => (item.waste_impact_percent > (best?.waste_impact_percent || 0) ? item : best),
     forecast[0],
   );
+  const trendRows = forecast.slice(0, 7);
+  const maxRainfall = Math.max(...trendRows.map((item) => item.rainfall_mm || 0), 1);
+  const maxImpact = Math.max(...trendRows.map((item) => item.waste_impact_percent || 0), 1);
 
   return (
     <section className="panel weather-panel">
@@ -918,11 +1052,33 @@ function WeatherPanel({ weather }) {
       <div className="weather-strip">
         {forecast.slice(0, 7).map((day) => (
           <article key={day.date} className={`weather-day ${day.risk_level}`}>
-            <strong>{new Date(day.date).toLocaleDateString("en-US", { weekday: "short" })}</strong>
+            <div>
+              <strong>{new Date(day.date).toLocaleDateString("en-US", { weekday: "short" })}</strong>
+              <small>{new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small>
+            </div>
             <span>{Math.round(day.rainfall_mm)} mm</span>
             <small>{Math.round(day.temperature_min_c)}-{Math.round(day.temperature_max_c)} C</small>
           </article>
         ))}
+      </div>
+      <div className="weather-trend-chart" aria-label="Rainfall impact trend chart">
+        <h3>Rainfall impact trend</h3>
+        {trendRows.map((day) => {
+          const rainWidth = Math.max(4, ((day.rainfall_mm || 0) / maxRainfall) * 100);
+          const impactWidth = Math.max(4, ((day.waste_impact_percent || 0) / maxImpact) * 100);
+          const dayLabel = new Date(day.date).toLocaleDateString("en-US", { weekday: "short" });
+          return (
+            <article className="weather-trend-row" key={`${day.date}-trend`}>
+              <span>{dayLabel}</span>
+              <div className="weather-trend-bars">
+                <i className="rainfall-bar" style={{ width: `${rainWidth}%` }} />
+                <i className="impact-bar" style={{ width: `${impactWidth}%` }} />
+              </div>
+              <b>{Math.round(day.rainfall_mm)} mm</b>
+              <em>+{day.waste_impact_percent}%</em>
+            </article>
+          );
+        })}
       </div>
       {peak && <p className="weather-advice">{peak.operational_advice}</p>}
     </section>
@@ -1006,55 +1162,186 @@ function ExecutiveSummary({ summary, queue }) {
 }
 
 function AssistantPanel() {
-  const [question, setQuestion] = useState("What is the highest operational risk today?");
-  const [answer, setAnswer] = useState("");
-  const [provider, setProvider] = useState("");
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      text: "Hi, I am Ana. Ask me about route deviation, rainfall risk, TPA queue, dispatch priority, or waste forecast spikes.",
+    },
+  ]);
   const [loading, setLoading] = useState(false);
 
-  async function askAssistant() {
+  async function askAssistant(promptOverride) {
+    const prompt = (promptOverride || question).trim();
+    if (!prompt || loading) return;
+
+    setMessages((current) => [...current, { role: "user", text: prompt }]);
+    setQuestion("");
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/assistant/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: prompt }),
       });
       const data = await response.json();
-      setAnswer(data.answer || "No answer returned.");
-      setProvider(data.provider || "unknown");
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: data.answer || "No answer returned.",
+          provider: data.provider || "unknown",
+        },
+      ]);
     } catch {
-      setAnswer("Assistant fallback unavailable. Check API server.");
-      setProvider("offline");
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: "Assistant fallback unavailable. Check the API server, then retry the operational query.",
+          provider: "offline",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   }
 
+  function normalizeAssistantText(text) {
+    return text
+      .replace(/\r/g, "")
+      .replace(/[—–�]/g, " - ")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\bis_damaged:\s*true\b/gi, "truck damage confirmed")
+      .replace(/\bis_damaged:\s*false\b/gi, "truck damage not reported")
+      .replace(/\bRisis\b/gi, "Risk")
+      .replace(/,?\s*flags:\s*[^\n.]+[.]?/gi, "")
+      .replace(/Severity:\s*critical,\s*confidence\s*([\d.]+),?\s*/gi, "Severity: critical with high confidence. ");
+  }
+
+  function renderAssistantText(text) {
+    const cleanText = normalizeAssistantText(text);
+    const renderInline = (line) => {
+      const parts = line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+      return parts.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+        }
+        return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
+      });
+    };
+
+    const lines = cleanText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+    const blocks = [];
+    let bullets = [];
+    let numbers = [];
+
+    const flushBullets = () => {
+      if (!bullets.length) return;
+      blocks.push(
+        <ul key={`list-${blocks.length}`}>
+          {bullets.map((line, index) => <li key={`${line}-${index}`}>{renderInline(line)}</li>)}
+        </ul>,
+      );
+      bullets = [];
+    };
+
+    const flushNumbers = () => {
+      if (!numbers.length) return;
+      blocks.push(
+        <ol key={`ordered-${blocks.length}`}>
+          {numbers.map((line, index) => <li key={`${line}-${index}`}>{renderInline(line)}</li>)}
+        </ol>,
+      );
+      numbers = [];
+    };
+
+    lines.forEach((line) => {
+      const bullet = line.match(/^[-*]\s+(.+)/);
+      if (bullet) {
+        flushNumbers();
+        bullets.push(bullet[1]);
+        return;
+      }
+      const ordered = line.match(/^\d+\.\s+(.+)/);
+      if (ordered) {
+        flushBullets();
+        numbers.push(ordered[1]);
+        return;
+      }
+      flushBullets();
+      flushNumbers();
+      blocks.push(<p key={`paragraph-${blocks.length}`}>{renderInline(line)}</p>);
+    });
+
+    flushBullets();
+    flushNumbers();
+    return blocks;
+  }
+
   return (
-    <section className="panel assistant-panel">
-      <div className="panel-title">
+    <section className="assistant-panel assistant-chat-shell">
+      <header className="assistant-chat-header">
+        <span className="assistant-chat-mark" aria-hidden="true">
+          <Bot size={16} />
+        </span>
         <div>
-          <h2>Operational AI Assistant</h2>
-          <p>Natural language query endpoint; uses OpenAI when OPENAI_API_KEY is configured.</p>
+          <h2>Ana</h2>
+          <p>Live command guide for routing, weather risk, and dispatch decisions.</p>
         </div>
-        <Bot size={20} />
+      </header>
+
+      <div className="assistant-message-list" role="log" aria-live="polite">
+        {messages.map((message, index) => (
+          <article className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}>
+            <span className="assistant-message-avatar" aria-hidden="true">
+              {message.role === "assistant" ? "AI" : "ME"}
+            </span>
+            <div className="assistant-bubble">
+              <div className="assistant-formatted-answer">{renderAssistantText(message.text)}</div>
+            </div>
+          </article>
+        ))}
+        {loading && (
+          <article className="assistant-message assistant">
+            <span className="assistant-message-avatar" aria-hidden="true">AI</span>
+            <div className="assistant-bubble assistant-thinking">
+              <span />
+              <span />
+              <span />
+            </div>
+          </article>
+        )}
       </div>
-      <label className="field-label" htmlFor="assistant-question">Question</label>
-      <textarea
-        id="assistant-question"
-        value={question}
-        onChange={(event) => setQuestion(event.target.value)}
-        rows={3}
-      />
-      <button className="primary-button" onClick={askAssistant} disabled={loading}>
-        <Send size={16} /> {loading ? "Analyzing..." : "Ask JWIS"}
-      </button>
-      {answer && (
-        <article className="assistant-answer">
-          <StatusPill tone={provider === "openai" ? "success" : "warning"}>{provider}</StatusPill>
-          <p>{answer}</p>
-        </article>
-      )}
+
+      <div className="assistant-quick-prompts" aria-label="Suggested assistant prompts">
+        <button type="button" onClick={() => askAssistant("What is the highest operational risk today?")}>
+          Highest risk today
+        </button>
+        <button type="button" onClick={() => askAssistant("Which truck should be dispatched first and why?")}>
+          Dispatch priority
+        </button>
+      </div>
+
+      <form
+        className="assistant-chat-input"
+        onSubmit={(event) => {
+          event.preventDefault();
+          askAssistant();
+        }}
+      >
+        <label className="sr-only" htmlFor="assistant-question">Ask Ana anything</label>
+        <input
+          id="assistant-question"
+          value={question}
+          onChange={(event) => setQuestion(event.target.value)}
+          placeholder="Ask Ana anything..."
+          autoComplete="off"
+        />
+        <button className="primary-button" type="submit" aria-label="Send message" disabled={loading || !question.trim()}>
+          <Send size={16} />
+        </button>
+      </form>
     </section>
   );
 }
@@ -1101,7 +1388,7 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Operations Optimizer State (Case 2 -> Case 1 Bridge)
+  // Operations optimizer state for forecast-to-dispatch handoff.
   const [plan, setPlan] = useState(null);
   const [planLoading, setPlanLoading] = useState(false);
   const [approved, setApproved] = useState(false);
@@ -1208,8 +1495,8 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           <ScenarioPanel mode="inputs">
       <div className="panel-title">
         <div>
-          <h2>Event Scenario Simulator (Case 2)</h2>
-          <p>Skenario cuaca + keramaian dijalankan melalui model hybrid 42 kecamatan (live), bukan estimasi statis.</p>
+          <h2>Event Scenario Simulator</h2>
+          <p>Weather and crowd scenarios run through the live 42-district hybrid model, not a static estimate.</p>
         </div>
         <Users size={20} />
       </div>
@@ -1225,12 +1512,12 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           <small>{rainfall} mm</small>
         </label>
         <button className="primary-button" onClick={run} disabled={loading}>
-          {loading ? "Menghitung…" : "Jalankan skenario"}
+          {loading ? "Calculating..." : "Run scenario"}
         </button>
       </div>
       <div className="scenario-result">
-        <strong>Total prediksi {totalTons.toLocaleString("id-ID")} ton/hari ({data?.kecamatan_count || 42} kecamatan)</strong>
-        <span>Puncak: {top5[0]?.kecamatan || "…"} — {top5[0]?.predicted_tons?.toLocaleString("id-ID") || "…"} ton</span>
+        <strong>Total forecast {totalTons.toLocaleString("en-US")} tons/day ({data?.kecamatan_count || 42} districts)</strong>
+        <span>Peak: {top5[0]?.kecamatan || "..."} - {top5[0]?.predicted_tons?.toLocaleString("en-US") || "..."} tons</span>
       </div>
       <div className="scenario-reqs">
         <div className="req-chip"><b>{manHours}</b><span>man-hours (top 5)</span></div>
@@ -1244,7 +1531,7 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           <ScenarioPanel mode="recommendation">
       <div className="optimizer-section">
         <div className="optimizer-head">
-          <h3>Operations Optimizer (Case 2 &rarr; Case 1 Handoff)</h3>
+          <h3>Operations Optimizer</h3>
         </div>
         
         {!plan && (
@@ -1252,6 +1539,20 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
             <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading}>
               {planLoading ? "Optimizing..." : "Generate Dispatch Plan (CP-SAT)"}
             </button>
+            <div className="plan-preflight-grid" aria-label="Plan preflight">
+              <div>
+                <span>Forecast demand</span>
+                <strong>{totalTons.toLocaleString("en-US")} tons/day</strong>
+              </div>
+              <div>
+                <span>Fleet need</span>
+                <strong>{trucks} trucks / {crews} crews</strong>
+              </div>
+              <div>
+                <span>TPA queue</span>
+                <strong>{queue.trucks_waiting} trucks / {queue.estimated_wait_minutes} min</strong>
+              </div>
+            </div>
             <div className="optimizer-empty-state" aria-live="polite">
               <strong>No dispatch plan generated yet.</strong>
               <p>Generate a CP-SAT plan to fill this stage with assigned trucks, demand coverage, and permit compliance evidence.</p>
@@ -1369,7 +1670,7 @@ function TpaQueuePanel() {
     <section className="panel tpa-queue-panel">
       <div className="panel-title">
         <div>
-          <h2>Bantargebang Landfill Queue Status (Case 1)</h2>
+          <h2>Bantargebang Landfill Queue Status</h2>
           <p>Real-time visualization of weighbridge throughput and final-disposal truck queues.</p>
         </div>
         <Clock size={20} />
@@ -1395,13 +1696,13 @@ function TpaQueuePanel() {
       </div>
 
       <div className="tpa-logs">
-        <h3>Latest Weighbridge Log:</h3>
+        <h3>Latest Weighbridge Log</h3>
         <ul>
           {queue.scale_logs?.map((log, i) => (
             <li key={i}>
-              <span className="time">{log.time}</span> - 
-              <span className="truck"> {log.truck}</span> | 
-              <span className="weight"> {log.weight_ton} ton</span> | 
+              <span className="time">{log.time}</span>
+              <span className="truck">{log.truck}</span>
+              <span className="weight">{log.weight_ton} tons</span>
               <span className={`status-badge ${log.status.toLowerCase()}`}>{log.status}</span>
             </li>
           ))}
@@ -1430,7 +1731,7 @@ function CrowdEventsPanel({ onSimulateEvent }) {
     <section className="panel events-panel">
       <div className="panel-title">
         <div>
-          <h2>Crowd Permit & Waste-Volume Forecast (Case 2)</h2>
+          <h2>Crowd Permit & Waste-Volume Forecast</h2>
           <p>Connects public-event permit data with DLH logistics resource planning.</p>
         </div>
         <Calendar size={20} />
@@ -1447,7 +1748,7 @@ function CrowdEventsPanel({ onSimulateEvent }) {
             <div className="event-body">
               <div className="event-metric">
                 <span>Waste Forecast</span>
-                <strong>{ev.predicted_waste_tons} ton</strong>
+                <strong>{ev.predicted_waste_tons} tons</strong>
               </div>
               <div className="event-metric">
                 <span>Field Crews</span>
@@ -1459,7 +1760,7 @@ function CrowdEventsPanel({ onSimulateEvent }) {
               </div>
               <div className="event-metric">
                 <span>Large Bins</span>
-                <strong>{ev.large_bins_required} unit</strong>
+                <strong>{ev.large_bins_required} units</strong>
               </div>
             </div>
             {onSimulateEvent && (
@@ -1509,7 +1810,7 @@ function AStarReroutingPanel() {
     <section className="panel astar-panel">
       <div className="panel-title">
         <div>
-          <h2>A* Dynamic Rerouting (Case 1)</h2>
+          <h2>A* Dynamic Rerouting</h2>
           <p>Tests A* route recovery when a logistics corridor is fully congested.</p>
         </div>
         <Truck size={20} />
@@ -1591,7 +1892,7 @@ function StaggerSimulatorPanel() {
     <section className="panel stagger-panel">
       <div className="panel-title">
         <div>
-          <h2>Bantargebang Queue Optimization (Case 1)</h2>
+          <h2>Bantargebang Queue Optimization</h2>
           <p>Staggered-dispatch simulation to reduce landfill waiting time.</p>
         </div>
         <ClipboardList size={20} />
@@ -1618,7 +1919,7 @@ function StaggerSimulatorPanel() {
 
           {result.dispatch_slots && result.dispatch_slots.length > 0 && (
             <div className="stagger-schedule-wrap">
-              <h3>Rekomendasi Jadwal Keberangkatan Staggered:</h3>
+              <h3>Recommended Staggered Departure Schedule:</h3>
               <div className="table-wrap">
                 <table className="audit-table">
                   <thead>
@@ -1626,7 +1927,7 @@ function StaggerSimulatorPanel() {
                       <th>ID Truk</th>
                       <th>Saran Jam Berangkat</th>
                       <th>Estimasi Antri TPA</th>
-                      <th>Status Jadwal</th>
+                      <th>Schedule status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1634,7 +1935,7 @@ function StaggerSimulatorPanel() {
                       <tr key={i}>
                         <td><strong>T-0{slot.truck_index}</strong></td>
                         <td><code>{slot.suggested_departure}</code></td>
-                        <td>{slot.tpa_wait_est_minutes} menit</td>
+                        <td>{slot.tpa_wait_est_minutes} min</td>
                         <td>
                           <span className="status-pill success">{slot.slot_status.toUpperCase()}</span>
                         </td>
@@ -1645,7 +1946,7 @@ function StaggerSimulatorPanel() {
               </div>
               {result.dispatch_slots.length > 10 && (
                 <p className="stagger-schedule-note">
-                  Menampilkan 10 slot pertama dari {result.dispatch_slots.length} total armada terjadwal.
+                  Showing the first 10 slots out of {result.dispatch_slots.length} scheduled fleet slots.
                 </p>
               )}
             </div>
@@ -1678,26 +1979,40 @@ function UnlicensedCollectorAlerts() {
     setEnforced(prev => ({ ...prev, [plate]: true }));
   }
 
-  if (loading) return <div>Memuat data deteksi...</div>;
-  if (!alerts || !alerts.alerts || alerts.alerts.length === 0) return null;
+  if (loading || !alerts || !alerts.alerts || alerts.alerts.length === 0) {
+    return (
+      <section className="panel unlicensed-alerts-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Unlicensed Waste Collector Detection</h2>
+            <p>Operational vehicles detected without official authorization inside the DKI Jakarta service area.</p>
+          </div>
+          <AlertTriangle size={20} />
+        </div>
+        <div className="empty-state compact">
+          {loading ? "Loading detection data..." : "No unlicensed collector alerts detected."}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel unlicensed-alerts-panel">
       <div className="panel-title">
         <div>
-          <h2>Deteksi Kolektor Sampah Liar (Case 1)</h2>
-          <p>Daftar kendaraan operasional tanpa izin resmi yang terdeteksi di area DKI Jakarta.</p>
+          <h2>Unlicensed Waste Collector Detection</h2>
+          <p>Operational vehicles detected without official authorization inside the DKI Jakarta service area.</p>
         </div>
         <AlertTriangle size={20} />
       </div>
       <div className="table-wrap">
-        <table className="audit-table" role="grid" aria-label="Deteksi kolektor liar">
+        <table className="audit-table" role="grid" aria-label="Unlicensed collector detection">
           <thead>
             <tr>
-              <th scope="col">Plat Nomor</th>
-              <th scope="col">Lokasi Koordinat</th>
+              <th scope="col">Plate number</th>
+              <th scope="col">Coordinate location</th>
               <th scope="col">Status</th>
-              <th scope="col">Aksi Penertiban</th>
+              <th scope="col">Enforcement action</th>
             </tr>
           </thead>
           <tbody>
@@ -1716,7 +2031,7 @@ function UnlicensedCollectorAlerts() {
                     onClick={() => handleEnforce(a.plate)}
                     disabled={enforced[a.plate]}
                   >
-                    {enforced[a.plate] ? "Telah Ditindak" : "Kirim Patroli"}
+                    {enforced[a.plate] ? "Patrol dispatched" : "Dispatch patrol"}
                   </button>
                 </td>
               </tr>
@@ -1725,7 +2040,7 @@ function UnlicensedCollectorAlerts() {
         </table>
       </div>
       <p className="stagger-schedule-note">
-        Sumber data: Plat terdaftar di database DLH 2023. Pencocokan otomatis via plat nomor kendaraan komersial/swasta.
+        Data source: registered plates from the DLH 2023 fleet registry. Matching is automated against commercial and private vehicle plates.
       </p>
     </section>
   );
@@ -1745,7 +2060,7 @@ function ReportActions() {
       <ul>
         <li>AI route deviation detection and OSRM route recommendation</li>
         <li>Open-Meteo weather risk integration</li>
-        <li>Kelurahan waste-risk heatmap layer</li>
+        <li>Subdistrict waste-risk heatmap layer</li>
         <li>Field dispatch loop with confirmation</li>
       </ul>
     `;
@@ -1948,7 +2263,7 @@ function DriverAnalytics() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Driver Performance Analytics (Case 1)</h2>
+          <h2>Driver Performance Analytics</h2>
           <p>Real-time scoring of route corridor compliance, safety, and fuel efficiency.</p>
         </div>
         <Truck size={20} />
@@ -2000,7 +2315,7 @@ function WeighbridgeLogs() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>weighbridge Weighing Records (Case 1)</h2>
+          <h2>Weighbridge Weighing Records</h2>
           <p>Real-time transactions ingested from Bantargebang's weighbridge scales.</p>
         </div>
         <Workflow size={20} />
@@ -2050,7 +2365,7 @@ function WhatsAppGateway() {
     send_to_driver: true
   });
   const [logs, setLogs] = useState([]);
-  const [status, setStatus] = useState({ configured: false, base_url: "", session_id: "" });
+  const [status, setStatus] = useState({ configured: false, connected: false, base_url: "", session_id: "", message: "" });
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -2137,10 +2452,18 @@ function WhatsAppGateway() {
             <MessageCircle size={20} />
           </div>
           <dl className="approval-evidence-list mt-16">
-            <div><dt>Gateway</dt><dd>OpenWA Link (Baileys)</dd></div>
-            <div><dt>Status</dt><dd><span className="pill success">CONNECTED</span></dd></div>
+            <div><dt>Gateway</dt><dd>Baileys WhatsApp Gateway</dd></div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className={`pill ${status.connected ? "success" : "warning"}`}>
+                  {status.connected ? "CONNECTED" : "DISCONNECTED"}
+                </span>
+              </dd>
+            </div>
             <div><dt>Session JID</dt><dd className="mono">{status.session_id || "default"}@c.us</dd></div>
             <div><dt>API Port</dt><dd className="mono">2785</dd></div>
+            {!status.connected && status.message && <div><dt>Reason</dt><dd>{status.message}</dd></div>}
           </dl>
         </section>
 
@@ -2278,7 +2601,7 @@ function IotBinSensors() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>IoT Radar Bin Sensors (Case 2 Facility Readiness)</h2>
+          <h2>IoT Radar Bin Sensors</h2>
           <p>Radar ultrasonic volume capacity tracking deployed at public trash bins.</p>
         </div>
         <Activity size={20} />
@@ -2376,15 +2699,15 @@ function CommandCenter({ onLogout }) {
         }),
       });
       const data = await response.json();
-      setToast(data.sent ? "WhatsApp alert sent for " + alert.truck_code : "OpenWA: " + data.message);
+      setToast(data.sent || data.partial ? data.message : "WhatsApp: " + (data.message || "send failed"));
     } catch {
-      setToast("OpenWA alert endpoint unavailable");
+      setToast("WhatsApp alert endpoint unavailable");
     }
     setTimeout(() => setToast(""), 4200);
   }
 
   return (
-    <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout}>
+    <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout} assistant={<AssistantPanel />}>
       {activeWorkspace === "fleet" && (
         <FleetOperations
           detailTab={fleetDetailTab}
@@ -2419,11 +2742,11 @@ function CommandCenter({ onLogout }) {
                     <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
                     <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
                     <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> TPS</label>
-                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Wajib Retribusi</label>
+                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Retribution registry</label>
                   </div>
                   <div className="playback-select-wrap">
                     <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
-                      <option value="">Trip playback…</option>
+                      <option value="">Trip playback...</option>
                       {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
@@ -2435,8 +2758,8 @@ function CommandCenter({ onLogout }) {
                   </div>
                   <details className="map-legend" open aria-label="Map legend">
                     <summary style={{ display: "none" }}>Legend</summary>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Wajib Retribusi <em className="legend-tag">REAL</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS locations <em className="legend-tag">REAL</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Retribution registry <em className="legend-tag">REAL</em></span>
                     <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> District waste risk <em className="legend-tag">MODEL</em></span>
                     <span><i className="legend-assigned" style={{ display: "inline-block" }} /> Assigned corridor <em className="legend-tag">SIM</em></span>
                     <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> Actual (clean) <em className="legend-tag">SIM</em></span>
@@ -2464,6 +2787,7 @@ function CommandCenter({ onLogout }) {
           )}
           alerts={null}
           rerouting={null}
+          routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
           queue={<><TpaQueuePanel /><StaggerSimulatorPanel /></>}
           fleetTable={<FleetTable trucks={snapshot.trucks} onOpenTripHistory={(code) => selectFleetTruck(code, true)} />}
           history={<FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />}
@@ -2481,7 +2805,7 @@ function CommandCenter({ onLogout }) {
               { label: "Peak rainfall", value: `${Math.round(Math.max(...snapshot.weather.forecast.map((day) => day.rainfall_mm)))} mm`, helper: "forecast driver", tone: "warning" },
               { label: "Planning status", value: "Ready", helper: "scenario handoff enabled" },
             ]}
-            forecast={<PredictionPanel predictions={snapshot.critical_predictions} />}
+            forecast={<PredictionPanel predictions={snapshot.critical_predictions} allPredictions={snapshot.predictions} />}
             weather={<WeatherPanel weather={snapshot.weather} />}
             events={<CrowdEventsPanel onSimulateEvent={(ev) => {
               setAttendance(ev.expected_attendance);
@@ -2491,7 +2815,6 @@ function CommandCenter({ onLogout }) {
               setActiveWorkspace("planning");
             }} />}
             districts={<KecamatanMapPanel />}
-            assistant={<AssistantPanel />}
             reportActions={<ReportActions />}
           />
         )}

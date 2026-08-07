@@ -4,6 +4,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 
@@ -27,13 +28,41 @@ class OpenWAClient:
     @classmethod
     def from_env(cls) -> "OpenWAClient":
         return cls(
-            base_url=os.getenv("OPENWA_BASE_URL", "http://localhost:2785/api").rstrip("/"),
+            base_url=os.getenv("OPENWA_BASE_URL", "http://127.0.0.1:2785/api").rstrip("/"),
             api_key=os.getenv("OPENWA_API_KEY", ""),
-            session_id=os.getenv("OPENWA_SESSION_ID", ""),
+            session_id=os.getenv("OPENWA_SESSION_ID", "default"),
+            timeout_seconds=float(os.getenv("OPENWA_TIMEOUT_SECONDS", "3")),
         )
 
     def is_configured(self) -> bool:
-        return bool(self.base_url and self.api_key and self.session_id)
+        return bool(self.base_url and self.session_id)
+
+    def health(self) -> dict[str, Any]:
+        if not self.is_configured():
+            return {
+                "provider": "openwa",
+                "configured": False,
+                "connected": False,
+                "message": "WhatsApp gateway is not configured.",
+            }
+        try:
+            with urlopen(f"{self.base_url}/health", timeout=self.timeout_seconds) as response:
+                body = response.read().decode("utf-8")
+            payload = json.loads(body) if body else {}
+            return {
+                "provider": payload.get("provider", "baileys"),
+                "configured": True,
+                "connected": bool(payload.get("connected")),
+                "message": payload.get("message", "WhatsApp gateway is reachable."),
+                "state": payload.get("state"),
+            }
+        except Exception as error:
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "connected": False,
+                "message": f"WhatsApp gateway is offline: {error}",
+            }
 
     def send_text(self, chat_id: str, text: str) -> dict[str, Any]:
         if not self.is_configured():
@@ -47,27 +76,46 @@ class OpenWAClient:
 
         url = f"{self.base_url}/sessions/{self.session_id}/messages/send-text"
         payload = {"chatId": chat_id, "text": text}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+
         request = Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "X-API-Key": self.api_key,
-            },
+            headers=headers,
             method="POST",
         )
         try:
             with urlopen(request, timeout=self.timeout_seconds) as response:
                 body = response.read().decode("utf-8")
+            response_payload = json.loads(body) if body else {}
+            sent = bool(response_payload.get("sent", 200 <= response.status < 300))
             return {
-                "provider": "openwa",
-                "sent": True,
+                "provider": response_payload.get("provider", "baileys"),
+                "sent": sent,
                 "status_code": response.status,
-                "response": json.loads(body) if body else {},
+                "message": response_payload.get("message") or response_payload.get("error") or (
+                    "WhatsApp message sent." if sent else "WhatsApp gateway rejected the message."
+                ),
+                "response": response_payload,
+            }
+        except HTTPError as error:
+            body = error.read().decode("utf-8", errors="replace")
+            try:
+                payload = json.loads(body) if body else {}
+            except json.JSONDecodeError:
+                payload = {"error": body}
+            return {
+                "provider": payload.get("provider", "baileys"),
+                "sent": False,
+                "status_code": error.code,
+                "message": payload.get("message") or payload.get("error") or str(error),
+                "response": payload,
             }
         except Exception as error:
             return {
-                "provider": "openwa",
+                "provider": "baileys",
                 "sent": False,
                 "message": str(error),
             }

@@ -1,0 +1,800 @@
+# Review package: 5ea859f..99aff5c
+
+## Commits
+99aff5c fix(ui): address planning flow review
+548fcea feat(ui): structure Integrated Planning decision flow
+
+## Files changed
+ jwis/frontend/e2e/workspace-layouts.spec.js        | 158 +++++++++++++
+ jwis/frontend/src/main.jsx                         | 109 ++++++---
+ jwis/frontend/src/styles/workspaces.css            | 254 +++++++++++++++++++++
+ .../frontend/src/workspaces/IntegratedPlanning.jsx |  41 ++++
+ 4 files changed, 526 insertions(+), 36 deletions(-)
+
+## Diff
+diff --git a/jwis/frontend/e2e/workspace-layouts.spec.js b/jwis/frontend/e2e/workspace-layouts.spec.js
+index 64b8f5d..18937ff 100644
+--- a/jwis/frontend/e2e/workspace-layouts.spec.js
++++ b/jwis/frontend/e2e/workspace-layouts.spec.js
+@@ -1,12 +1,40 @@
+ import { test, expect } from "@playwright/test";
+ 
++async function stubPlanningPrediction(page) {
++  await page.route("**/api/predictions/kecamatan?**", async (route) => {
++    await route.fulfill({
++      contentType: "application/json",
++      body: JSON.stringify({
++        total_predicted_tons: 24,
++        kecamatan_count: 42,
++        top_hotspots: [],
++      }),
++    });
++  });
++}
++
++async function stubFleetCarbon(page) {
++  await page.route("**/api/fleet/carbon", async (route) => {
++    await route.fulfill({
++      contentType: "application/json",
++      body: JSON.stringify({
++        total_fleet_distance_km: 216.9,
++        total_co2_emitted_kg: 206.06,
++        carbon_saved_today_kg: 17.58,
++        fuel_saved_equivalent_liters: 6.5,
++        compliance_rate_percent: 86,
++      }),
++    });
++  });
++}
++
+ test.beforeEach(async ({ page }) => {
+   await page.goto("/");
+   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+   await page.reload({ waitUntil: "domcontentloaded" });
+ });
+ 
+ test("Fleet Operations is the default map-led workspace", async ({ page }) => {
+   await expect(page.getByTestId("fleet-workspace")).toBeVisible();
+   await expect(page.getByTestId("fleet-map-stage")).toBeVisible();
+   const mapBox = await page.getByTestId("fleet-map-stage").evaluate((el) => el.getBoundingClientRect());
+@@ -24,20 +52,23 @@ test("fleet detail tabs reveal one operational surface at a time", async ({ page
+ test("dispatching a truck opens filtered Trip history", async ({ page }) => {
+   await page.getByRole("button", { name: "View T-047 trip history" }).click();
+ 
+   const historyTab = page.getByRole("tab", { name: "Trip history" });
+   await expect(historyTab).toHaveAttribute("aria-selected", "true");
+   await expect(page.getByTestId("fleet-history-surface")).toBeVisible();
+   await expect(page.getByLabel("Truck")).toHaveValue("T-047");
+ });
+ 
+ test("fleet detail tabs reveal Queue, Route evidence, and Carbon impact surfaces", async ({ page }) => {
++  await stubFleetCarbon(page);
++  await page.reload({ waitUntil: "domcontentloaded" });
++
+   for (const [label, surface] of [
+     ["TPA queue", "fleet-queue-surface"],
+     ["Route evidence", "fleet-evidence-surface"],
+     ["Carbon impact", "fleet-impact-surface"],
+   ]) {
+     const tab = page.getByRole("tab", { name: label });
+     await tab.click();
+     await expect(tab).toHaveAttribute("aria-selected", "true");
+     await expect(page.getByTestId(surface)).toBeVisible();
+     await expect(page.getByTestId(surface)).toHaveAttribute("aria-labelledby", await tab.getAttribute("id"));
+@@ -110,10 +141,137 @@ test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
+   await expect(page.getByRole("group", { name: "Forecast horizon" })).toHaveAttribute(
+     "aria-describedby",
+     "forecast-horizon-source-limit",
+   );
+   for (const label of ["14 days", "30 days"]) {
+     const horizon = page.getByRole("button", { name: label });
+     await expect(horizon).toBeDisabled();
+     await expect(horizon).toHaveAttribute("title", "Unavailable: source provides 7 days");
+   }
+ });
++
++test("Integrated Planning presents an ordered decision flow", async ({ page }) => {
++  await page.getByRole("button", { name: "Integrated Planning" }).click();
++  const workspace = page.getByTestId("planning-workspace");
++  await expect(workspace).toBeVisible();
++  for (const heading of ["Scenario inputs", "Recommended plan", "Evidence and approval"]) {
++    await expect(workspace.getByRole("heading", { name: heading, exact: true })).toHaveCount(1);
++  }
++
++  const stageHeadings = workspace.locator(":scope > .decision-stage > .decision-stage-header h2");
++  await expect(stageHeadings).toHaveCount(3);
++  expect(await stageHeadings.allTextContents()).toEqual([
++    "Scenario inputs",
++    "Recommended plan",
++    "Evidence and approval",
++  ]);
++  await expect(workspace.locator(".panel .panel")).toHaveCount(0);
++  await expect(workspace.getByText("Decision authority", { exact: true })).toHaveCount(1);
++  await expect(workspace.locator(".role-badge")).toHaveCount(1);
++
++  const workspaceFrame = await workspace.evaluate((element) => {
++    const styles = getComputedStyle(element);
++    return {
++      backgroundColor: styles.backgroundColor,
++      borderTopWidth: styles.borderTopWidth,
++      borderRadius: styles.borderRadius,
++      boxShadow: styles.boxShadow,
++    };
++  });
++  expect(workspaceFrame).toEqual({
++    backgroundColor: "rgba(0, 0, 0, 0)",
++    borderTopWidth: "0px",
++    borderRadius: "0px",
++    boxShadow: "none",
++  });
++
++  const markerContrast = await workspace.locator(".decision-stage-marker").first().evaluate((element) => {
++    const luminance = (color) => {
++      const channels = color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map((channel) => Number(channel) / 255);
++      const linear = channels.map((channel) => (channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4));
++      return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
++    };
++    const styles = getComputedStyle(element);
++    const foreground = luminance(styles.color);
++    const background = luminance(styles.backgroundColor);
++    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
++  });
++  expect(markerContrast).toBeGreaterThanOrEqual(4.5);
++});
++
++test("Integrated Planning keeps approval unavailable when constraints are unmet", async ({ page }) => {
++  await stubPlanningPrediction(page);
++  await page.route("**/api/operations/plan?**", async (route) => {
++    await route.fulfill({
++      contentType: "application/json",
++      body: JSON.stringify({
++        plan_id: "PLAN-BLOCKED",
++        status: "proposed",
++        assignments: [],
++        unmet_reasons: ["insufficient_capacity:tebet"],
++        total_demand_tons: 24,
++        total_assigned_tons: 0,
++        scenario: { rainfall_mm: 42, event_attendance: 85000, is_weekend: true },
++      }),
++    });
++  });
++
++  await page.getByRole("button", { name: "Integrated Planning" }).click();
++  await page.getByRole("button", { name: "Generate Dispatch Plan (CP-SAT)" }).click();
++
++  await expect(page.getByText("1 constraints unmet", { exact: true })).toBeVisible();
++  await expect(page.getByRole("button", { name: "Approve & Dispatch Plan" })).toHaveCount(0);
++});
++
++test("Integrated Planning exposes approval for a ready plan without duplicate optimizer requests", async ({ page }) => {
++  await stubPlanningPrediction(page);
++  let optimizerRequests = 0;
++  await page.route("**/api/operations/plan?**", async (route) => {
++    optimizerRequests += 1;
++    await route.fulfill({
++      contentType: "application/json",
++      body: JSON.stringify({
++        plan_id: "PLAN-READY",
++        status: "proposed",
++        assignments: [{
++          truck_code: "T-001",
++          area: "tebet",
++          assigned_tons: 24,
++          evidence: { capacity_tons: 24, permit_compliant: true },
++        }],
++        unmet_reasons: [],
++        total_demand_tons: 24,
++        total_assigned_tons: 24,
++        scenario: { rainfall_mm: 42, event_attendance: 85000, is_weekend: true },
++      }),
++    });
++  });
++
++  await page.getByRole("button", { name: "Integrated Planning" }).click();
++  await page.getByRole("button", { name: "Generate Dispatch Plan (CP-SAT)" }).click();
++
++  await expect(page.getByText("Ready for approval", { exact: true })).toBeVisible();
++  await expect(page.getByRole("button", { name: "Approve & Dispatch Plan" })).toBeVisible();
++  const planGroup = page.locator(".planning-workspace .optimizer-plan-card");
++  await expect(planGroup).toBeVisible();
++  const planGroupFrame = await planGroup.evaluate((element) => {
++    const styles = getComputedStyle(element);
++    return {
++      backgroundColor: styles.backgroundColor,
++      borderTopWidth: styles.borderTopWidth,
++      borderRadius: styles.borderRadius,
++      boxShadow: styles.boxShadow,
++    };
++  });
++  expect(planGroupFrame).toEqual({
++    backgroundColor: "rgba(0, 0, 0, 0)",
++    borderTopWidth: "0px",
++    borderRadius: "0px",
++    boxShadow: "none",
++  });
++  const statusRadius = await page.locator(".planning-workspace .plan-status-badge").evaluate((element) => (
++    Number.parseFloat(getComputedStyle(element).borderRadius)
++  ));
++  expect(statusRadius).toBeGreaterThanOrEqual(6);
++  expect(statusRadius).toBeLessThanOrEqual(8);
++  expect(optimizerRequests).toBe(1);
++});
+diff --git a/jwis/frontend/src/main.jsx b/jwis/frontend/src/main.jsx
+index eaf98e3..6c96abe 100644
+--- a/jwis/frontend/src/main.jsx
++++ b/jwis/frontend/src/main.jsx
+@@ -1,16 +1,17 @@
+ import React, { useEffect, useMemo, useState, useRef } from "react";
+ import { createRoot } from "react-dom/client";
+ import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
+ import FieldApp from "./field/FieldApp.jsx";
+ import { AppShell } from "./layout/AppShell.jsx";
+ import { FleetOperations } from "./workspaces/FleetOperations.jsx";
++import { IntegratedPlanning } from "./workspaces/IntegratedPlanning.jsx";
+ import { WasteForecast } from "./workspaces/WasteForecast.jsx";
+ import {
+   Activity,
+   AlertTriangle,
+   Check,
+   ChevronRight,
+   ClipboardList,
+   CloudRain,
+   MapPinned,
+   Radio,
+@@ -695,21 +696,59 @@ function AssistantPanel() {
+       {answer && (
+         <article className="assistant-answer">
+           <StatusPill tone={provider === "openai" ? "success" : "warning"}>{provider}</StatusPill>
+           <p>{answer}</p>
+         </article>
+       )}
+     </section>
+   );
+ }
+ 
+-function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng }) {
++function ScenarioPanel({ mode, children }) {
++  return <div className={`scenario-panel scenario-${mode}`}>{children}</div>;
++}
++
++function PlanningApproval({ plan, planLoading, approved, approvePlan, role }) {
++  const unmetCount = plan?.unmet_reasons?.length || 0;
++
++  return (
++    <div className="planning-approval">
++      <div className="planning-approval-head">
++        <strong>Decision authority</strong>
++        <span className="role-badge">Role: <b>{role}</b></span>
++      </div>
++      {!plan && <p className="planning-approval-note">Generate a dispatch plan to review approval evidence.</p>}
++      {plan && (
++        <dl className="approval-evidence-list">
++          <div><dt>Plan</dt><dd>{plan.plan_id}</dd></div>
++          <div><dt>Assigned demand</dt><dd>{plan.total_assigned_tons} / {plan.total_demand_tons} tons</dd></div>
++          <div><dt>Permit evidence</dt><dd>{plan.assignments.filter((assignment) => assignment.evidence.permit_compliant).length} compliant assignments</dd></div>
++        </dl>
++      )}
++      {plan?.status === "proposed" && unmetCount === 0 && (
++        <button className="primary-button approve-dispatch-btn" onClick={approvePlan} disabled={planLoading}>
++          {planLoading ? "Approving Plan..." : "Approve & Dispatch Plan"}
++        </button>
++      )}
++      {plan?.status === "proposed" && unmetCount > 0 && (
++        <p className="planning-approval-note planning-approval-blocked">Approval remains unavailable until every constraint warning is resolved.</p>
++      )}
++      {approved && (
++        <div className="optimizer-success">
++          <Check size={16} /> Plan approved. Dispatches generated & pushed to field app!
++        </div>
++      )}
++    </div>
++  );
++}
++
++function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng, summary, queue }) {
+   const [data, setData] = useState(null);
+   const [loading, setLoading] = useState(false);
+ 
+   // Operations Optimizer State (Case 2 -> Case 1 Bridge)
+   const [plan, setPlan] = useState(null);
+   const [planLoading, setPlanLoading] = useState(false);
+   const [approved, setApproved] = useState(false);
+   const [optimizerError, setOptimizerError] = useState("");
+ 
+   const role = localStorage.getItem("jwis_role") || "guest";
+@@ -799,21 +838,25 @@ function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, event
+   }
+ 
+   const top5 = (data?.top_hotspots || []).slice(0, 5);
+   const totalTons = data?.total_predicted_tons || 0;
+   const manHours = top5.reduce((s, k) => s + (k.man_hours_required || 0), 0);
+   const crews = top5.reduce((s, k) => s + (k.crews_required || 0), 0);
+   const trucks = top5.reduce((s, k) => s + (k.trucks_required || 0), 0);
+   const bins = top5.reduce((s, k) => s + (k.disposal_bins_required || 0), 0);
+ 
+   return (
+-    <section className="panel scenario-panel">
++    <IntegratedPlanning
++      summary={<ExecutiveSummary summary={summary} queue={queue} />}
++      scenario={{
++        inputs: (
++          <ScenarioPanel mode="inputs">
+       <div className="panel-title">
+         <div>
+           <h2>Event Scenario Simulator (Case 2)</h2>
+           <p>Skenario cuaca + keramaian dijalankan melalui model hybrid 42 kecamatan (live), bukan estimasi statis.</p>
+         </div>
+         <Users size={20} />
+       </div>
+       <div className="control-row">
+         <label>
+           <span>Event Attendance</span>
+@@ -832,25 +875,27 @@ function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, event
+       <div className="scenario-result">
+         <strong>Total prediksi {totalTons.toLocaleString("id-ID")} ton/hari ({data?.kecamatan_count || 42} kecamatan)</strong>
+         <span>Puncak: {top5[0]?.kecamatan || "…"} — {top5[0]?.predicted_tons?.toLocaleString("id-ID") || "…"} ton</span>
+       </div>
+       <div className="scenario-reqs">
+         <div className="req-chip"><b>{manHours}</b><span>man-hours (top 5)</span></div>
+         <div className="req-chip"><b>{crews}</b><span>field crews (top 5)</span></div>
+         <div className="req-chip"><b>{trucks}</b><span>trucks (top 5)</span></div>
+         <div className="req-chip"><b>{bins}</b><span>large bins (top 5)</span></div>
+       </div>
+-
++          </ScenarioPanel>
++        ),
++        recommendation: (
++          <ScenarioPanel mode="recommendation">
+       <div className="optimizer-section">
+         <div className="optimizer-head">
+           <h3>Operations Optimizer (Case 2 &rarr; Case 1 Handoff)</h3>
+-          <span className="role-badge" style={{ fontSize: "11px", color: "var(--text-muted)" }}>Role: <b>{role}</b></span>
+         </div>
+         
+         {!plan && (
+           <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading}>
+             {planLoading ? "Optimizing..." : "Generate Dispatch Plan (CP-SAT)"}
+           </button>
+         )}
+ 
+         {optimizerError && (
+           <div className="unmet-reasons-box" style={{ marginTop: "12px" }}>
+@@ -911,40 +956,37 @@ function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, event
+                       <span className="warn">No Permit</span>
+                     )}
+                   </div>
+                 </div>
+               ))}
+               {plan.assignments.length === 0 && (
+                 <p className="kec-note" style={{ textAlign: "center", margin: "10px 0" }}>No truck assignments generated.</p>
+               )}
+             </div>
+ 
+-            {plan.status === "proposed" && (
+-              <button 
+-                className="primary-button approve-dispatch-btn" 
+-                onClick={approvePlan} 
+-                disabled={planLoading}
+-                style={{ width: "100%", marginTop: "8px" }}
+-              >
+-                {planLoading ? "Approving Plan..." : "Approve & Dispatch Plan"}
+-              </button>
+-            )}
+-
+-            {approved && (
+-              <div className="optimizer-success">
+-                <Check size={16} /> Plan approved. Dispatches generated & pushed to field app!
+-              </div>
+-            )}
+           </div>
+         )}
+       </div>
+-    </section>
++          </ScenarioPanel>
++        ),
++      }}
++      evidence={(
++        <PlanningApproval
++          plan={plan}
++          planLoading={planLoading}
++          approved={approved}
++          approvePlan={approvePlan}
++          role={role}
++        />
++      )}
++      unmetCount={plan?.unmet_reasons?.length || 0}
++    />
+   );
+ }
+ 
+ 
+ 
+ function TpaQueuePanel() {
+   const [queue, setQueue] = useState(null);
+ 
+   async function fetchQueue() {
+     try {
+@@ -1639,35 +1681,30 @@ function CommandCenter({ onLogout }) {
+               setActiveWorkspace("planning");
+             }} />}
+             districts={<KecamatanMapPanel />}
+             assistant={<AssistantPanel />}
+             voice={<VoicePanel onCommand={handleVoiceCommand} />}
+             reportActions={<ReportActions />}
+           />
+         )}
+ 
+         {activeWorkspace === "planning" && (
+-          <>
+-            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
+-              <ExecutiveSummary summary={snapshot.executive_summary} queue={snapshot.tpa_queue} />
+-            </div>
+-            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
+-              <ScenarioPanel
+-                attendance={attendance}
+-                setAttendance={setAttendance}
+-                rainfall={rainfall}
+-                setRainfall={setRainfall}
+-                eventLat={eventLat}
+-                eventLng={eventLng}
+-              />
+-            </div>
+-          </>
++          <PlanningDecisionFlow
++            attendance={attendance}
++            setAttendance={setAttendance}
++            rainfall={rainfall}
++            setRainfall={setRainfall}
++            eventLat={eventLat}
++            eventLng={eventLng}
++            summary={snapshot.executive_summary}
++            queue={snapshot.tpa_queue}
++          />
+         )}
+       </section>
+       )}
+       {toast && <div className="toast"><Check size={16} /> {toast}</div>}
+     </AppShell>
+   );
+ }
+ 
+ function App() {
+   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem("jwis_auth") === "true");
+diff --git a/jwis/frontend/src/styles/workspaces.css b/jwis/frontend/src/styles/workspaces.css
+index c911188..f84ae77 100644
+--- a/jwis/frontend/src/styles/workspaces.css
++++ b/jwis/frontend/src/styles/workspaces.css
+@@ -194,20 +194,250 @@
+   flex: 1 1 260px;
+   margin: 0;
+   padding: 16px;
+   box-shadow: none;
+ }
+ 
+ .forecast-tools .assistant-panel {
+   flex-basis: 440px;
+ }
+ 
++.workspace-canvas:has(.planning-workspace) {
++  width: min(1500px, calc(100% - 32px));
++}
++
++.planning-workspace {
++  grid-column: 1 / -1;
++  display: grid;
++  grid-template-columns: minmax(250px, 0.85fr) minmax(340px, 1.15fr) minmax(280px, 0.95fr);
++  min-width: 0;
++}
++
++.decision-stage {
++  min-width: 0;
++  padding: 20px;
++  border-left: 1px solid var(--ui-border);
++  background: var(--ui-surface);
++}
++
++.decision-stage:first-child {
++  border-left: 0;
++}
++
++.decision-stage-header {
++  display: flex;
++  align-items: flex-start;
++  gap: 10px;
++  min-height: 38px;
++  margin-bottom: 18px;
++  padding-bottom: 14px;
++  border-bottom: 1px solid var(--ui-border);
++}
++
++.decision-stage-marker {
++  width: 28px;
++  height: 28px;
++  flex: 0 0 28px;
++  display: inline-grid;
++  place-items: center;
++  border-radius: 50%;
++  color: #ffffff;
++  background: var(--ui-accent);
++  font-size: 12px;
++  font-weight: 800;
++  font-variant-numeric: tabular-nums;
++}
++
++.decision-stage-header h2 {
++  margin: 3px 0 0;
++  color: var(--ui-ink);
++  font-size: 17px;
++  line-height: 1.3;
++}
++
++.decision-stage-title-row {
++  min-width: 0;
++  flex: 1;
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  flex-wrap: wrap;
++  gap: 8px;
++}
++
++.decision-stage-content,
++.scenario-panel {
++  min-width: 0;
++}
++
++.planning-workspace .panel-title h2 {
++  font-size: 15px;
++  line-height: 1.35;
++}
++
++.planning-workspace .scenario-panel .control-row {
++  grid-template-columns: 1fr;
++}
++
++.planning-workspace .scenario-reqs {
++  display: grid;
++  grid-template-columns: repeat(2, minmax(0, 1fr));
++}
++
++.planning-workspace .optimizer-section {
++  margin-top: 0;
++  padding-top: 0;
++  border-top: 0;
++}
++
++.planning-workspace .optimizer-head {
++  align-items: flex-start;
++  gap: 10px;
++}
++
++.planning-workspace .role-badge {
++  color: var(--ui-muted);
++  font-size: 11px;
++  white-space: nowrap;
++}
++
++.planning-workspace .optimizer-plan-card {
++  margin-top: 14px;
++  padding: 0;
++  border: 0;
++  border-radius: 0;
++  background: transparent;
++  box-shadow: none;
++}
++
++.planning-workspace .plan-header {
++  padding: 10px;
++  border-top: 1px solid var(--ui-border);
++  border-bottom: 1px solid var(--ui-border);
++  background: var(--ui-surface-muted);
++}
++
++.planning-workspace .plan-status-badge {
++  border-radius: var(--ui-radius-control);
++}
++
++.planning-workspace .assign-card {
++  gap: 10px;
++}
++
++.planning-workspace .optimizer-empty {
++  margin: 10px 0;
++  text-align: center;
++}
++
++.decision-evidence > .summary-panel {
++  width: 100%;
++  padding: 0;
++  border: 0;
++  border-radius: var(--ui-radius);
++  box-shadow: none;
++}
++
++.decision-evidence > .summary-panel:hover {
++  border-color: transparent;
++  box-shadow: none;
++  transform: none;
++}
++
++.planning-approval {
++  margin-top: 18px;
++  padding-top: 18px;
++  border-top: 1px solid var(--ui-border);
++}
++
++.planning-approval-head {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++}
++
++.planning-approval-note {
++  margin: 12px 0 0;
++  color: var(--ui-muted);
++  font-size: 13px;
++  line-height: 1.45;
++}
++
++.planning-approval-blocked {
++  padding: 10px;
++  border: 1px solid #efc1c1;
++  border-radius: var(--ui-radius-control);
++  color: var(--ui-danger);
++  background: #fff0f0;
++}
++
++.approval-evidence-list {
++  margin: 12px 0 16px;
++}
++
++.approval-evidence-list > div {
++  display: grid;
++  grid-template-columns: minmax(90px, 0.7fr) minmax(0, 1fr);
++  gap: 12px;
++  padding: 8px 0;
++  border-top: 1px solid var(--ui-border);
++}
++
++.approval-evidence-list dt,
++.approval-evidence-list dd {
++  margin: 0;
++  font-size: 12px;
++  line-height: 1.4;
++}
++
++.approval-evidence-list dt {
++  color: var(--ui-muted);
++}
++
++.approval-evidence-list dd {
++  color: var(--ui-ink);
++  font-weight: 700;
++  overflow-wrap: anywhere;
++}
++
++.planning-approval .approve-dispatch-btn {
++  width: 100%;
++}
++
++@media (max-width: 1180px) {
++  .planning-workspace {
++    grid-template-columns: 1fr;
++  }
++
++  .decision-stage {
++    border-top: 1px solid var(--ui-border);
++    border-left: 0;
++  }
++
++  .decision-stage:first-child {
++    border-top: 0;
++  }
++
++  .planning-workspace .scenario-panel .control-row {
++    grid-template-columns: repeat(2, minmax(0, 1fr));
++  }
++
++  .planning-workspace .scenario-panel .control-row .primary-button {
++    grid-column: 1 / -1;
++  }
++
++  .planning-workspace .scenario-reqs {
++    grid-template-columns: repeat(4, minmax(0, 1fr));
++  }
++}
++
+ @media (max-width: 980px) {
+   .forecast-analysis-grid {
+     grid-template-columns: 1fr;
+   }
+ 
+   .forecast-driver-rail {
+     display: grid;
+     grid-template-columns: repeat(2, minmax(0, 1fr));
+   }
+ }
+@@ -222,11 +452,35 @@
+   }
+ 
+   .forecast-horizon-control {
+     width: 100%;
+     align-items: stretch;
+   }
+ 
+   .forecast-driver-rail {
+     display: flex;
+   }
++
++  .workspace-canvas:has(.planning-workspace) {
++    width: min(calc(100% - 20px), 1500px);
++  }
++
++  .decision-stage {
++    padding: 16px;
++  }
++
++  .planning-workspace .scenario-panel .control-row,
++  .planning-workspace .scenario-reqs,
++  .planning-workspace .plan-stats-grid {
++    grid-template-columns: 1fr;
++  }
++
++  .planning-workspace .assign-card,
++  .planning-approval-head {
++    align-items: flex-start;
++    flex-direction: column;
++  }
++
++  .planning-workspace .assign-evidence {
++    text-align: left;
++  }
+ }
+diff --git a/jwis/frontend/src/workspaces/IntegratedPlanning.jsx b/jwis/frontend/src/workspaces/IntegratedPlanning.jsx
+new file mode 100644
+index 0000000..60d6d26
+--- /dev/null
++++ b/jwis/frontend/src/workspaces/IntegratedPlanning.jsx
+@@ -0,0 +1,41 @@
++import React from "react";
++import { StatusBadge } from "../ui/StatusBadge.jsx";
++
++const stages = [
++  { number: 1, title: "Scenario inputs", key: "inputs" },
++  { number: 2, title: "Recommended plan", key: "recommendation" },
++];
++
++export function IntegratedPlanning({ summary, scenario, evidence, unmetCount }) {
++  return (
++    <section className="planning-workspace" data-testid="planning-workspace">
++      {stages.map((stage) => (
++        <section className="decision-stage" key={stage.key} aria-labelledby={`planning-stage-${stage.number}`}>
++          <header className="decision-stage-header">
++            <span className="decision-stage-marker" aria-hidden="true">{stage.number}</span>
++            <h2 id={`planning-stage-${stage.number}`}>{stage.title}</h2>
++          </header>
++          <div className="decision-stage-content">{scenario[stage.key]}</div>
++        </section>
++      ))}
++
++      <section className="decision-stage" aria-labelledby="planning-stage-3">
++        <header className="decision-stage-header">
++          <span className="decision-stage-marker" aria-hidden="true">3</span>
++          <div className="decision-stage-title-row">
++            <h2 id="planning-stage-3">Evidence and approval</h2>
++            {unmetCount > 0 ? (
++              <StatusBadge tone="danger">{unmetCount} constraints unmet</StatusBadge>
++            ) : (
++              <StatusBadge tone="success">Ready for approval</StatusBadge>
++            )}
++          </div>
++        </header>
++        <div className="decision-stage-content decision-evidence">
++          {summary}
++          {evidence}
++        </div>
++      </section>
++    </section>
++  );
++}

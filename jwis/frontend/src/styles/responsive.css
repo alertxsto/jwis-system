@@ -157,7 +157,7 @@
   }
 
   .weather-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 }
 
@@ -259,6 +259,20 @@
     gap: 16px;
   }
 
+  .login-status-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .login-status-strip div {
+    min-height: 64px;
+    border-top: 1px solid var(--ui-border);
+    border-left: 0;
+  }
+
+  .login-status-strip div:first-child {
+    border-top: 0;
+  }
+
   .login-shell .login-proof-metrics {
     display: none;
   }
@@ -296,7 +310,7 @@
   }
 
   .weather-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .alert-actions {

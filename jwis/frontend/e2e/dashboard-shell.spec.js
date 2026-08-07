@@ -30,9 +30,9 @@ test("app shell provides three operational workspaces", async ({ page }) => {
 });
 
 test("weighbridge logs workspace renders weighing records", async ({ page }) => {
-  await page.getByRole("button", { name: "weighbridge Logs" }).click();
+  await page.getByRole("button", { name: "Weighbridge Logs" }).click();
 
-  await expect(page.getByRole("heading", { name: "weighbridge Weighing Records (Case 1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Weighbridge Weighing Records" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Net Weight" })).toBeVisible();
   await expect(page.getByText("T-001", { exact: true })).toBeVisible();
 });
@@ -43,11 +43,22 @@ test("dashboard exposes the professional design token contract", async ({ page }
     return {
       primary: css.getPropertyValue("--ui-primary").trim(),
       accent: css.getPropertyValue("--ui-accent").trim(),
-      success: css.getPropertyValue("--ui-success").trim(),
+      canvas: css.getPropertyValue("--ui-canvas").trim(),
+      surfaceMuted: css.getPropertyValue("--ui-surface-muted").trim(),
+      ink: css.getPropertyValue("--ui-ink").trim(),
       radius: css.getPropertyValue("--ui-radius").trim(),
+      cardRadius: css.getPropertyValue("--ui-radius-card").trim(),
     };
   });
-  expect(tokens).toEqual({ primary: "#6366e8", accent: "#6366e8", success: "#177a57", radius: "8px" });
+  expect(tokens).toEqual({
+    primary: "#121212",
+    accent: "#d97757",
+    canvas: "#f8f8f6",
+    surfaceMuted: "#efeeeb",
+    ink: "#121212",
+    radius: "8px",
+    cardRadius: "16px",
+  });
 });
 
 test("desktop and mobile have no document-level horizontal overflow", async ({ page }) => {
@@ -142,6 +153,7 @@ test("mobile shell controls meet minimum touch targets", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Open workspace navigation" });
 
   await expectMinimumTouchTarget(trigger);
+  await expectMinimumTouchTarget(page.getByRole("button", { name: "AI Assistant" }));
   await expectMinimumTouchTarget(page.getByRole("link", { name: "Field app" }));
   await expectMinimumTouchTarget(page.getByRole("button", { name: "Refresh command center" }));
   await trigger.click();
@@ -152,7 +164,61 @@ test("mobile shell controls meet minimum touch targets", async ({ page }) => {
   await expectMinimumTouchTarget(page.getByRole("button", { name: "Logout" }));
 });
 
-test("primary controls use indigo focus without a legacy outline", async ({ page }) => {
+test("AI assistant opens from the topbar instead of rendering as a forecast card", async ({ page }) => {
+  await page.route("**/api/assistant/query", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        provider: "openai",
+        answer: "**T-047 critical route deviation** — 9.3 km off corridor.\nSeverity: `critical`, confidence 0.8, flags: `off_corridor`, `far_off_corridor`\nSecondary risk: T-112 damaged (`is_damaged: true`).\n\nTindakan immediate:\n1. Contact driver now.\n2. Dispatch Route B recovery.\n3. Keep backup capacity ready.",
+      }),
+    });
+  });
+  await page.getByRole("button", { name: "Waste Forecast" }).click();
+
+  const assistantButton = page.getByRole("button", { name: "AI Assistant" });
+  const fieldApp = page.getByRole("link", { name: "Field app" });
+  await expect(assistantButton).toBeVisible();
+  await expect(fieldApp).toBeVisible();
+
+  const [assistantLeft, fieldLeft] = await Promise.all([
+    assistantButton.evaluate((element) => element.getBoundingClientRect().left),
+    fieldApp.evaluate((element) => element.getBoundingClientRect().left),
+  ]);
+  expect(assistantLeft).toBeLessThan(fieldLeft);
+  await expect(page.locator(".forecast-assistant-row")).toHaveCount(0);
+
+  await assistantButton.click();
+  const dialog = page.getByRole("dialog", { name: "Operational AI Assistant" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".assistant-chat-shell")).toBeVisible();
+  await expect(dialog.locator(".assistant-message.assistant")).toHaveCount(1);
+  await expect(dialog.locator(".assistant-quick-prompts button")).toHaveCount(2);
+  await expect(dialog.getByRole("heading", { name: "Ana" })).toBeVisible();
+  await expect(dialog.getByText("online")).toHaveCount(0);
+  await expect(dialog.getByText("ready")).toHaveCount(0);
+  await expect(dialog.getByPlaceholder("Ask Ana anything...")).toBeVisible();
+  await dialog.getByPlaceholder("Ask Ana anything...").fill("What is the highest operational risk today?");
+  await dialog.getByRole("button", { name: "Send message" }).click();
+  await expect(dialog.getByText("openai")).toHaveCount(0);
+  await expect(dialog.getByText("is_damaged")).toHaveCount(0);
+  await expect(dialog.getByText("flags:")).toHaveCount(0);
+  await expect(dialog.getByText("truck damage confirmed")).toBeVisible();
+  await expect(dialog.getByText("far_off_corridor")).toHaveCount(0);
+  await expect(dialog.locator(".assistant-bubble strong").first()).toBeVisible();
+  await expect(dialog.locator(".assistant-bubble ol li")).toHaveCount(3);
+  const avatarSizes = await dialog.locator(".assistant-message-avatar").evaluateAll((avatars) => (
+    avatars.map((avatar) => {
+      const box = avatar.getBoundingClientRect();
+      return { width: Math.round(box.width), height: Math.round(box.height) };
+    })
+  ));
+  expect(new Set(avatarSizes.map((size) => `${size.width}x${size.height}`)).size).toBe(1);
+  await dialog.getByRole("button", { name: "Close AI assistant" }).click();
+  await expect(dialog).toBeHidden();
+});
+
+test("primary controls use clay focus without a legacy outline", async ({ page }) => {
   const refresh = page.getByRole("button", { name: "Refresh command center" });
   await refresh.focus();
   const focusStyle = await refresh.evaluate((element) => {
@@ -165,7 +231,7 @@ test("primary controls use indigo focus without a legacy outline", async ({ page
   });
   expect(focusStyle.outlineStyle).toBe("none");
   expect(focusStyle.outlineWidth).toBe("0px");
-  expect(focusStyle.shadow).toContain("99, 102, 232");
+  expect(focusStyle.shadow).toContain("217, 119, 87");
 });
 
 test("legacy stylesheet contains no green focus source", async ({ page }) => {
@@ -227,15 +293,15 @@ test("desktop shell and operational surfaces match the professional reference sy
   });
 
   expect(shell.sidebar.width).toBeCloseTo(248, 0);
-  expect(shell.sidebar.background).toBe("rgb(255, 255, 255)");
+  expect(shell.sidebar.background).toBe("rgb(248, 248, 246)");
   expect(shell.topbar.height).toBeCloseTo(72, 0);
-  expect(shell.topbar.background).toBe("rgb(255, 255, 255)");
+  expect(shell.topbar.background).toBe("rgb(248, 248, 246)");
   expect(shell.topbar.borderWidth).toBe("1px");
-  expect(shell.canvas.background).toBe("rgb(255, 255, 255)");
-  expect(shell.panel.radius).toBeLessThanOrEqual(8);
+  expect(shell.canvas.background).toBe("rgb(248, 248, 246)");
+  expect(shell.panel.radius).toBe(16);
   expect(shell.panel.shadow).toBe("none");
-  expect(shell.activeNav).toBe("rgb(229, 230, 255)");
-  expect(shell.primary).toBe("rgb(99, 102, 232)");
+  expect(shell.activeNav).toBe("rgb(239, 238, 235)");
+  expect(shell.primary).toBe("rgb(18, 18, 18)");
 
   const metricGeometry = await page.locator(".metric-strip").evaluate((strip) => {
     const cells = [...strip.querySelectorAll(":scope > .metric-cell")];
@@ -248,7 +314,7 @@ test("desktop shell and operational surfaces match the professional reference sy
       shadow: style.boxShadow,
     };
   });
-  expect(metricGeometry).toEqual({ gap: 0, radius: 8, shadow: "none" });
+  expect(metricGeometry).toEqual({ gap: 0, radius: 16, shadow: "none" });
 
   await page.getByRole("tab", { name: "Trip history" }).click();
   const header = page.getByTestId("fleet-history-surface").locator("table thead th").first();
@@ -261,12 +327,58 @@ test("desktop shell and operational surfaces match the professional reference sy
       fontSize: style.fontSize,
     };
   });
-  expect(headerStyle.background).toBe("rgb(245, 245, 255)");
-  expect(headerStyle.height).toBeLessThanOrEqual(40);
+  expect(headerStyle.background).toBe("rgb(239, 238, 235)");
+  expect(headerStyle.height).toBeLessThanOrEqual(42);
   expect(headerStyle.fontSize).toBe("12px");
 });
 
-test("login and field surfaces share the indigo compact visual system", async ({ page }) => {
+test("visible dashboard copy is English-only for the recording path", async ({ page }) => {
+  for (const workspace of ["Waste Forecast", "Integrated Planning"]) {
+    await page.getByRole("button", { name: workspace }).click();
+    await expect(page.getByText(/Prediksi|Menghitung|Curah hujan|pengunjung|Tampilkan|Skenario|Peta Timbulan/i)).toHaveCount(0);
+  }
+});
+
+test("cards and typography keep a clean product hierarchy", async ({ page }) => {
+  const panelHeading = page.locator(".panel-title h2").first();
+  const panelHeadingStyle = await panelHeading.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      size: Number.parseFloat(style.fontSize),
+      weight: style.fontWeight,
+      lineHeight: Number.parseFloat(style.lineHeight),
+    };
+  });
+  expect(panelHeadingStyle.size).toBe(20);
+  expect(Number(panelHeadingStyle.weight)).toBeGreaterThanOrEqual(600);
+  expect(Number(panelHeadingStyle.weight)).toBeLessThanOrEqual(650);
+  expect(panelHeadingStyle.lineHeight).toBeGreaterThanOrEqual(22);
+
+  await page.getByRole("button", { name: "Waste Forecast" }).click();
+  const forecastPanelRadius = await page.locator(".forecast-primary-analysis > .panel").first().evaluate((element) => (
+    Number.parseFloat(getComputedStyle(element).borderRadius)
+  ));
+  expect(forecastPanelRadius).toBe(16);
+
+  await page.getByRole("button", { name: "Integrated Planning" }).click();
+  const planningSurface = await page.locator(".planning-workspace").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      radius: Number.parseFloat(style.borderRadius),
+      border: style.borderTopWidth,
+      background: style.backgroundColor,
+      overflow: style.overflow,
+    };
+  });
+  expect(planningSurface).toEqual({
+    radius: 24,
+    border: "1px",
+    background: "rgb(255, 255, 255)",
+    overflow: "hidden",
+  });
+});
+
+test("login and field surfaces share the Refero paper visual system", async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem("jwis_auth"));
   await page.goto("/");
 
@@ -279,7 +391,7 @@ test("login and field surfaces share the indigo compact visual system", async ({
       buttonBackground: buttonStyle.backgroundColor,
     };
   });
-  expect(login).toEqual({ radius: 8, shadow: "none", buttonBackground: "rgb(99, 102, 232)" });
+  expect(login).toEqual({ radius: 24, shadow: "none", buttonBackground: "rgb(18, 18, 18)" });
 
   await page.goto("/field");
   const field = await page.locator(".field-card").evaluate((card) => {
@@ -290,5 +402,5 @@ test("login and field surfaces share the indigo compact visual system", async ({
       background: style.backgroundColor,
     };
   });
-  expect(field).toEqual({ radius: 8, shadow: "none", background: "rgb(255, 255, 255)" });
+  expect(field).toEqual({ radius: 16, shadow: "none", background: "rgb(255, 255, 255)" });
 });

@@ -395,7 +395,7 @@ async def assistant_query(payload: AssistantRequest) -> dict:
             "answer": ""
         }
 
-    if result.get("provider") == "local-fallback":
+    if result.get("provider") == "local-fallback" and not result.get("answer"):
         from app.assistant import _top_prediction
         top = _top_prediction(snapshot)
         top_district = top.get("district", "Jakarta Barat")
@@ -492,8 +492,13 @@ def post_whatsapp_contacts(payload: dict):
 @app.get("/api/whatsapp/status")
 def whatsapp_status() -> dict:
     client = OpenWAClient.from_env()
+    health = client.health()
     return {
         "configured": client.is_configured(),
+        "connected": health.get("connected", False),
+        "message": health.get("message", ""),
+        "provider": health.get("provider", "baileys"),
+        "state": health.get("state"),
         "base_url": client.base_url,
         "session_id": client.session_id,
     }
@@ -508,6 +513,7 @@ def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
     plate_number = info.get("plate_number", "B 1234 CD")
     
     responses = {}
+    attempted = []
     
     # 1. Send to Driver
     if config.get("send_to_driver", True):
@@ -520,10 +526,12 @@ def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
         )
         res_driver = client.send_text(driver_jid, driver_msg)
         responses["driver"] = res_driver
+        attempted.append(("driver", res_driver))
         history_store.record_event("whatsapp_alert", {
             "recipient": f"Driver: {driver_name} ({driver_jid})",
             "truck_code": payload.truck_code,
             "sent": res_driver.get("sent", False),
+            "message": res_driver.get("message", ""),
             "msg": driver_msg
         })
         
@@ -538,14 +546,40 @@ def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
         )
         res_group = client.send_text(group_jid, group_msg)
         responses["group"] = res_group
+        attempted.append(("group", res_group))
         history_store.record_event("whatsapp_alert", {
             "recipient": f"Group: {group_jid}",
             "truck_code": payload.truck_code,
             "sent": res_group.get("sent", False),
+            "message": res_group.get("message", ""),
             "msg": group_msg
         })
         
-    return {"status": "processed", "results": responses}
+    if not attempted:
+        return {
+            "status": "skipped",
+            "sent": False,
+            "message": "WhatsApp routing is disabled. Enable driver or group delivery.",
+            "results": responses,
+        }
+
+    delivered = [name for name, result in attempted if result.get("sent")]
+    failed = [f"{name}: {result.get('message', 'send failed')}" for name, result in attempted if not result.get("sent")]
+    all_sent = len(delivered) == len(attempted)
+    if all_sent:
+        message = "WhatsApp alert delivered to " + ", ".join(delivered) + "."
+    elif delivered:
+        message = "WhatsApp alert partially delivered to " + ", ".join(delivered) + "; failed " + "; ".join(failed)
+    else:
+        message = "WhatsApp alert failed: " + "; ".join(failed)
+
+    return {
+        "status": "processed",
+        "sent": all_sent,
+        "partial": bool(delivered) and not all_sent,
+        "message": message,
+        "results": responses,
+    }
 
 
 @app.post("/api/whatsapp/alert/simulate")

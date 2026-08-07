@@ -1,26 +1,36 @@
 :root {
-  --ui-primary: #6366e8;
-  --ui-primary-hover: #4f46e5;
-  --ui-accent: #6366e8;
-  --ui-accent-foreground: #4f46e5;
-  --ui-accent-soft: #eef2ff;
-  --ui-canvas: #f8fafc;
+  --ui-primary: #121212;
+  --ui-primary-hover: #373734;
+  --ui-accent: #d97757;
+  --ui-accent-foreground: #121212;
+  --ui-accent-soft: #f4e4dc;
+  --ui-canvas: #f8f8f6;
   --ui-surface: #ffffff;
-  --ui-surface-muted: #f1f5f9;
-  --ui-border: #e2e8f0;
-  --ui-border-strong: #cbd5e1;
-  --ui-ink: #0f172a;
-  --ui-muted: #64748b;
+  --ui-surface-muted: #efeeeb;
+  --ui-border: #e7e6e1;
+  --ui-border-strong: #b7b7b5;
+  --ui-ink: #121212;
+  --ui-muted: #7b7974;
   --ui-success: #177a57;
   --ui-warning: #f59e0b;
   --ui-danger: #ef4444;
   --ui-info: #06b6d4;
   --ui-radius: 8px;
+  --ui-radius-card: 16px;
+  --ui-radius-elevated: 24px;
   --ui-radius-control: 8px;
   --ui-shadow: none;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 64px;
   --ui-sidebar-width: 248px;
   --ui-topbar-height: 72px;
-  --ui-focus: 0 0 0 3px rgba(99, 102, 232, 0.24);
+  --ui-focus: 0 0 0 3px rgba(217, 119, 87, 0.26);
   --z-dropdown: 20;
   --z-sticky: 30;
   --z-modal-backdrop: 40;
@@ -30,7 +40,7 @@
 
   /* Feature-level aliases retained while legacy modules are decomposed. */
   --green: var(--ui-success);
-  --green-light: #ecfdf5;
+  --green-light: #edf7f3;
   --green-dark: #047857;
   --red: var(--ui-danger);
   --red-light: #fef2f2;
@@ -42,12 +52,12 @@
   --surface: var(--ui-surface);
   --surface-soft: var(--ui-surface-muted);
   --ink: var(--ui-ink);
-  --text: #334155;
+  --text: #373734;
   --text-muted: var(--ui-muted);
   --border: var(--ui-border);
   --border-strong: var(--ui-border-strong);
   --radius: var(--ui-radius);
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
   --shadow: none;
-  --shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.04);
 }

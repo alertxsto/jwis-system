@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 
 const JAKARTA_CENTER = [106.8456, -6.2088];
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
-const API_URL = import.meta.env.VITE_API_URL || "/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8011/api";
 
 function toLngLat(point) {
   return [point.lng, point.lat];
@@ -85,6 +85,42 @@ function featureCollection(features) {
     type: "FeatureCollection",
     features,
   };
+}
+
+function normalizeLngLat(lngLat) {
+  if (!lngLat) return null;
+  if (Array.isArray(lngLat)) return lngLat;
+  return [lngLat.lng, lngLat.lat];
+}
+
+function focusMapPin(map, lngLat, popup, options = {}) {
+  const coordinates = normalizeLngLat(lngLat);
+  if (!map || !coordinates) return;
+  const currentZoom = typeof map.getZoom === "function" ? map.getZoom() : 10;
+  const zoom = Math.max(currentZoom, options.zoom ?? 15);
+
+  map.flyTo({
+    center: coordinates,
+    zoom,
+    duration: options.duration ?? 700,
+    essential: true,
+    offset: options.offset ?? [0, -80],
+  });
+
+  if (popup) {
+    popup.setLngLat(coordinates).addTo(map);
+  }
+}
+
+function attachFocusableMarker(element, map, getLngLat, getPopup, options = {}, afterFocus) {
+  element.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const lngLat = typeof getLngLat === "function" ? getLngLat() : getLngLat;
+    const popup = typeof getPopup === "function" ? getPopup() : getPopup;
+    focusMapPin(map, lngLat, popup, options);
+    if (typeof afterFocus === "function") afterFocus();
+  });
 }
 
 function routeFeature(id, coordinates, kind, truckCode) {
@@ -218,8 +254,21 @@ export function LiveFleetMap({
     setMapInstance(map);
 
     return () => {
-      Object.values(activeMarkersRef.current).forEach((m) => m.marker.remove());
+      Object.values(activeMarkersRef.current).forEach((m) => {
+        m.popup?.remove();
+        m.marker.remove();
+      });
       activeMarkersRef.current = {};
+      if (tpaMarkerRef.current) {
+        tpaMarkerRef.current.popup?.remove();
+        tpaMarkerRef.current.marker?.remove();
+        tpaMarkerRef.current = null;
+      }
+      unlicensedMarkersRef.current.forEach((m) => {
+        m.popup?.remove();
+        m.marker?.remove();
+      });
+      unlicensedMarkersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
       setMapInstance(null);
@@ -385,12 +434,13 @@ export function LiveFleetMap({
 
           const marker = new maplibregl.Marker({ element, anchor: "bottom", offset: [0, -8] })
             .setLngLat([ev.lng, ev.lat])
-            .setPopup(popup)
             .addTo(map);
+          attachFocusableMarker(element, map, [ev.lng, ev.lat], popup, { zoom: 15 });
 
           existing = {
             marker,
             element,
+            popup,
             coords: [ev.lng, ev.lat]
           };
         }
@@ -437,10 +487,6 @@ export function LiveFleetMap({
             element.type = "button";
             element.setAttribute("aria-label", `${truck.truck_code} ${truck.assigned_zone}`);
             element.innerHTML = `<span>${truck.truck_code}</span>`;
-            element.addEventListener("click", () => {
-              map.flyTo({ center: targetCoords, zoom: 14, duration: 800 });
-              if (typeof onSelectTruck === "function") onSelectTruck(truck.truck_code);
-            });
 
             const popup = new maplibregl.Popup({ offset: 18, closeButton: false }).setHTML(popupHtml);
             popup.on("open", () => {
@@ -452,15 +498,23 @@ export function LiveFleetMap({
 
             const marker = new maplibregl.Marker({ element, anchor: "bottom", offset: [0, -8] })
               .setLngLat(targetCoords)
-              .setPopup(popup)
               .addTo(map);
+            attachFocusableMarker(
+              element,
+              map,
+              () => marker.getLngLat(),
+              popup,
+              { zoom: 14.5 },
+              () => {
+                if (typeof onSelectTruck === "function") onSelectTruck(truck.truck_code);
+              },
+            );
 
-            nextMarkers[key] = { marker, element, coords: targetCoords };
+            nextMarkers[key] = { marker, element, popup, coords: targetCoords };
           } else {
             existing.element.className = `truck-marker ${statusClass}`;
-            const popup = existing.marker.getPopup();
-            if (popup) {
-              popup.setHTML(popupHtml);
+            if (existing.popup) {
+              existing.popup.setHTML(popupHtml);
             }
 
             // Digital twin smooth interpolation loop
@@ -493,7 +547,10 @@ export function LiveFleetMap({
         });
 
       // Remove active markers that are no longer in the current payload
-      Object.values(activeMarkersRef.current).forEach((m) => m.marker.remove());
+      Object.values(activeMarkersRef.current).forEach((m) => {
+        m.popup?.remove();
+        m.marker.remove();
+      });
       activeMarkersRef.current = nextMarkers;
 
       const jamData = featureCollection(jamFeatures);
@@ -510,6 +567,23 @@ export function LiveFleetMap({
             "circle-stroke-width": 3,
             "circle-stroke-color": "#ffffff",
           },
+        });
+        map.on("mouseenter", "jam-layer", () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", "jam-layer", () => {
+          map.getCanvas().style.cursor = "";
+        });
+        map.on("click", "jam-layer", (e) => {
+          const feature = e.features?.[0];
+          if (!feature) return;
+          const coordinates = feature.geometry.coordinates.slice();
+          const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
+            `<div class="map-popup"><h4>${feature.properties?.label || "Congestion point"}</h4>` +
+            `<p>Active A* rerouting hazard.</p>` +
+            `<p class="popup-src">SIMULATION · traffic scenario</p></div>`
+          );
+          focusMapPin(map, coordinates, popup, { zoom: 15.5 });
         });
       } else {
         map.getSource("jam-points").setData(jamData);
@@ -691,7 +765,8 @@ export function LiveFleetMap({
         const q = await response.json();
         if (q.lat == null || q.lng == null) return;
         if (tpaMarkerRef.current) {
-          tpaMarkerRef.current.remove();
+          tpaMarkerRef.current.popup?.remove();
+          tpaMarkerRef.current.marker?.remove();
         }
         const el = document.createElement("div");
         el.className = "tpa-marker";
@@ -705,9 +780,9 @@ export function LiveFleetMap({
         );
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat([q.lng, q.lat])
-          .setPopup(popup)
           .addTo(map);
-        tpaMarkerRef.current = marker;
+        attachFocusableMarker(el, map, [q.lng, q.lat], popup, { zoom: 15 });
+        tpaMarkerRef.current = { marker, popup };
       } catch {
         // TPmarker is non-critical
       }
@@ -716,7 +791,10 @@ export function LiveFleetMap({
     function renderUnlicensed() {
       const map = mapInstance;
       if (!map) return;
-      unlicensedMarkersRef.current.forEach((m) => m.remove());
+      unlicensedMarkersRef.current.forEach((m) => {
+        m.popup?.remove();
+        m.marker?.remove();
+      });
       unlicensedMarkersRef.current = [];
       (unlicensed || []).forEach((a) => {
         if (a.lat == null || a.lng == null) return;
@@ -729,8 +807,9 @@ export function LiveFleetMap({
           `<p class="popup-src">${a.data_class || "SIMULATED"} · registry match</p></div>`
         );
         const marker = new maplibregl.Marker({ element: el })
-          .setLngLat([a.lng, a.lat]).setPopup(popup).addTo(map);
-        unlicensedMarkersRef.current.push(marker);
+          .setLngLat([a.lng, a.lat]).addTo(map);
+        attachFocusableMarker(el, map, [a.lng, a.lat], popup, { zoom: 15.5 });
+        unlicensedMarkersRef.current.push({ marker, popup });
       });
     }
 
@@ -823,6 +902,23 @@ export function LiveFleetMap({
               map.getCanvas().style.cursor = "";
               popup.remove();
             });
+
+            map.on("click", "tps-layer", (e) => {
+              const feature = e.features?.[0];
+              if (!feature) return;
+              const coordinates = feature.geometry.coordinates.slice();
+              const props = feature.properties || {};
+              popup.remove();
+              const detailPopup = new maplibregl.Popup({ offset: 18 }).setHTML(`
+                <div class="map-popup">
+                  <h4>TPS: ${props.name || "Waste collection point"}</h4>
+                  <p>${props.kelurahan ? `Kelurahan ${props.kelurahan}` : "TPS location"}</p>
+                  <small>${props.kecamatan ? `Kecamatan ${props.kecamatan}` : ""}</small>
+                  <p class="popup-src">REAL · TPS coordinates</p>
+                </div>
+              `);
+              focusMapPin(map, coordinates, detailPopup, { zoom: 16 });
+            });
           } else {
             map.getSource("tps-points").setData(tpsData);
           }
@@ -914,13 +1010,11 @@ export function LiveFleetMap({
             // Click cluster zoom
             map.on("click", "wr-clusters", (e) => {
               const features = map.queryRenderedFeatures(e.point, { layers: ["wr-clusters"] });
+              if (!features.length) return;
               const clusterId = features[0].properties.cluster_id;
               map.getSource("wr-points").getClusterExpansionZoom(clusterId, (err, zoom) => {
                 if (err) return;
-                map.easeTo({
-                  center: features[0].geometry.coordinates,
-                  zoom: zoom
-                });
+                focusMapPin(map, features[0].geometry.coordinates, null, { zoom, duration: 650, offset: [0, 0] });
               });
             });
 
@@ -939,7 +1033,7 @@ export function LiveFleetMap({
                 .setHTML(`
                   <div style="color: #0f172a; padding: 4px; font-size: 11px; max-width: 200px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">WR: ${props.name}</strong>
-                    <span style="display: block; margin-bottom: 2px;">Tipe: ${props.type}</span>
+                    <span style="display: block; margin-bottom: 2px;">Type: ${props.type}</span>
                     <span style="display: block; color: #64748b; font-size: 10px;">${props.address || ""}</span>
                   </div>
                 `)
@@ -949,6 +1043,24 @@ export function LiveFleetMap({
             map.on("mouseleave", "wr-unclustered-point", () => {
               map.getCanvas().style.cursor = "";
               wrPopup.remove();
+            });
+
+            map.on("click", "wr-unclustered-point", (e) => {
+              const feature = e.features?.[0];
+              if (!feature) return;
+              const coordinates = feature.geometry.coordinates.slice();
+              const props = feature.properties || {};
+              wrPopup.remove();
+              const detailPopup = new maplibregl.Popup({ offset: 18 }).setHTML(`
+                <div class="map-popup">
+                  <h4>Retribution registry</h4>
+                  <p><b>${props.name || "Registered point"}</b></p>
+                  <small>${props.type || "Registry location"}</small>
+                  <small>${props.address || ""}</small>
+                  <p class="popup-src">REAL · registry coordinates</p>
+                </div>
+              `);
+              focusMapPin(map, coordinates, detailPopup, { zoom: 16 });
             });
           } else {
             map.getSource("wr-points").setData(wrData);
@@ -1017,6 +1129,12 @@ export function LiveFleetMap({
     const el = document.createElement("div");
     el.className = "playback-marker";
     const marker = new maplibregl.Marker({ element: el }).setLngLat([trail[0].lng, trail[0].lat]).addTo(map);
+    const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
+      `<div class="map-popup"><h4>${playbackTruck} playback</h4>` +
+      `<p>Trip movement replay marker.</p>` +
+      `<p class="popup-src">SIMULATION · breadcrumb trail</p></div>`
+    );
+    attachFocusableMarker(el, map, () => marker.getLngLat(), popup, { zoom: 15 });
     playbackMarkerRef.current = marker;
     let i = 0;
     const timer = setInterval(() => {
@@ -1024,7 +1142,12 @@ export function LiveFleetMap({
       if (i >= trail.length) { clearInterval(timer); return; }
       marker.setLngLat([trail[i].lng, trail[i].lat]);
     }, 700);
-    return () => { clearInterval(timer); marker.remove(); playbackMarkerRef.current = null; };
+    return () => {
+      clearInterval(timer);
+      popup.remove();
+      marker.remove();
+      playbackMarkerRef.current = null;
+    };
   }, [playbackTruck, breadcrumbs, mapInstance]);
 
   const playbackOptions = Object.keys(breadcrumbs);

@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 
+const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001";
+
 // Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker.
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
@@ -14,7 +16,11 @@ test("map canvas renders (not blank)", async ({ page }) => {
 
 test("actual routes colored by violation state", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.waitForTimeout(3000);
+  await page.waitForFunction(
+    () => (window.__jwisMapFeatures?.actualKinds || []).length > 0,
+    null,
+    { timeout: 15000 }
+  );
   const kinds = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
   // At least one clean (green) and, given T-047 deviates, one violation (red).
   expect(kinds).toContain("actual-clean");
@@ -65,26 +71,25 @@ test("map canvas has real color diversity (decoded pixels, not byte variance)", 
 });
 
 test("A* route anchors near T-047 marker (GPS)", async ({ page }) => {
-  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/astar-reroute?truck_code=T-047");
+  const res = await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`);
   const j = await res.json();
   const p0 = j.active_route.path[0];
-  const truck = await (await page.request.get("http://127.0.0.1:8001/api/fleet")).json();
-  const t047 = truck.find((t) => t.truck_code === "T-047").latest_position;
-  const dLat = Math.abs(p0.lat - t047.lat);
-  const dLng = Math.abs(p0.lng - t047.lng);
+  const origin = j.active_route.origin_position;
+  const dLat = Math.abs(p0.lat - origin.lat);
+  const dLng = Math.abs(p0.lng - origin.lng);
   // Within ~1km (~0.01 deg) of the marker — anchored, not 3km off.
   expect(dLat).toBeLessThan(0.01);
   expect(dLng).toBeLessThan(0.01);
 });
 
 test("A* route is road-following (many points)", async ({ page }) => {
-  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/astar-reroute?truck_code=T-047");
+  const res = await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`);
   const j = await res.json();
   expect(j.active_route.path.length).toBeGreaterThan(200);
 });
 
 test("breadcrumbs endpoint returns simulated trail", async ({ page }) => {
-  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/T-047/breadcrumbs");
+  const res = await page.request.get(`${API_BASE}/api/fleet/T-047/breadcrumbs`);
   expect(res.status()).toBe(200);
   const j = await res.json();
   expect(j.source).toBe("simulated");
@@ -100,7 +105,7 @@ test("mobile viewport renders map without horizontal overflow", async ({ page })
 });
 
 test("map-truth payload has road-following geometry and synced snapped GPS", async ({ page }) => {
-  const res = await page.request.get("http://127.0.0.1:8001/api/fleet/map-truth");
+  const res = await page.request.get(`${API_BASE}/api/fleet/map-truth`);
   expect(res.status()).toBe(200);
   const j = await res.json();
   const t = j.trucks.find((x) => x.truck_code === "T-047");

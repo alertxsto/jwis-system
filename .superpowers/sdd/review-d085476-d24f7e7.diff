@@ -1,0 +1,1302 @@
+# Review package: d085476..d24f7e7
+
+## Commits
+d24f7e7 feat(ui): add professional JWIS app shell
+
+## Files changed
+ jwis/frontend/e2e/dashboard-shell.spec.js |   8 +
+ jwis/frontend/src/layout/AppShell.jsx     |  34 ++++
+ jwis/frontend/src/main.jsx                | 166 ++++++++++--------
+ jwis/frontend/src/styles/components.css   | 120 ++++++++++++-
+ jwis/frontend/src/styles/legacy.css       | 269 -----------------------------
+ jwis/frontend/src/styles/shell.css        | 278 +++++++++++++++++++++++++++++-
+ jwis/frontend/src/ui/MetricStrip.jsx      |  15 ++
+ jwis/frontend/src/ui/StatusBadge.jsx      |   5 +
+ 8 files changed, 553 insertions(+), 342 deletions(-)
+
+## Diff
+diff --git a/jwis/frontend/e2e/dashboard-shell.spec.js b/jwis/frontend/e2e/dashboard-shell.spec.js
+index 7c58297..aead343 100644
+--- a/jwis/frontend/e2e/dashboard-shell.spec.js
++++ b/jwis/frontend/e2e/dashboard-shell.spec.js
+@@ -1,18 +1,26 @@
+ import { test, expect } from "@playwright/test";
+ 
+ test.beforeEach(async ({ page }) => {
+   await page.goto("/");
+   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+   await page.reload({ waitUntil: "domcontentloaded" });
+ });
+ 
++test("app shell provides three operational workspaces", async ({ page }) => {
++  const nav = page.getByTestId("workspace-navigation");
++  await expect(nav).toBeVisible();
++  await expect(nav.getByRole("button", { name: "Fleet Operations" })).toHaveAttribute("aria-current", "page");
++  await expect(nav.getByRole("button", { name: "Waste Forecast" })).toBeVisible();
++  await expect(nav.getByRole("button", { name: "Integrated Planning" })).toBeVisible();
++});
++
+ test("dashboard exposes the professional design token contract", async ({ page }) => {
+   const tokens = await page.locator("html").evaluate((el) => {
+     const css = getComputedStyle(el);
+     return {
+       primary: css.getPropertyValue("--ui-primary").trim(),
+       accent: css.getPropertyValue("--ui-accent").trim(),
+       radius: css.getPropertyValue("--ui-radius").trim(),
+     };
+   });
+   expect(tokens).toEqual({ primary: "#176b54", accent: "#6366e8", radius: "8px" });
+diff --git a/jwis/frontend/src/layout/AppShell.jsx b/jwis/frontend/src/layout/AppShell.jsx
+new file mode 100644
+index 0000000..b20af73
+--- /dev/null
++++ b/jwis/frontend/src/layout/AppShell.jsx
+@@ -0,0 +1,34 @@
++import React from "react";
++import { Activity, BarChart3, LogOut, RefreshCcw, Route, Truck, Workflow } from "lucide-react";
++import { StatusBadge } from "../ui/StatusBadge.jsx";
++
++const items = [
++  { id: "fleet", label: "Fleet Operations", icon: Truck },
++  { id: "forecast", label: "Waste Forecast", icon: BarChart3 },
++  { id: "planning", label: "Integrated Planning", icon: Workflow },
++];
++
++export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, children }) {
++  const current = items.find((item) => item.id === activeWorkspace) || items[0];
++
++  return (
++    <div className="dashboard-frame professional-shell">
++      <aside className="side-rail" aria-label="JWIS navigation">
++        <div className="side-brand"><span className="brand-mark"><Route size={19} /></span><div><strong>JWIS</strong><small>DLH Command</small></div></div>
++        <p className="nav-section-label">Operations</p>
++        <nav className="side-nav" data-testid="workspace-navigation">
++          {items.map(({ id, label, icon: Icon }) => <button key={id} type="button" className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`} aria-current={activeWorkspace === id ? "page" : undefined} onClick={() => onWorkspaceChange(id)}><Icon size={17} />{label}</button>)}
++        </nav>
++        <div className="side-system-state"><Activity size={15} /><span>System status</span><StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge></div>
++        <button className="side-logout" type="button" onClick={onLogout}><LogOut size={17} />Logout</button>
++      </aside>
++      <main className="app-shell" id="overview">
++        <header className="topbar">
++          <div className="breadcrumb"><span>JWIS</span><span>/</span><strong>{current.label}</strong></div>
++          <div className="top-actions"><StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge><a className="ghost-button" href="/field"><Truck size={16} />Field app</a><button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center"><RefreshCcw size={17} /></button></div>
++        </header>
++        <div className="workspace-canvas">{children}</div>
++      </main>
++    </div>
++  );
++}
+diff --git a/jwis/frontend/src/main.jsx b/jwis/frontend/src/main.jsx
+index f0ff513..4f4efed 100644
+--- a/jwis/frontend/src/main.jsx
++++ b/jwis/frontend/src/main.jsx
+@@ -1,14 +1,16 @@
+ import React, { useEffect, useMemo, useState, useRef } from "react";
+ import { createRoot } from "react-dom/client";
+ import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
+ import FieldApp from "./field/FieldApp.jsx";
++import { AppShell } from "./layout/AppShell.jsx";
++import { MetricStrip } from "./ui/MetricStrip.jsx";
+ import {
+   Activity,
+   AlertTriangle,
+   Check,
+   ChevronRight,
+   ClipboardList,
+   CloudRain,
+   MapPinned,
+   Radio,
+   RefreshCcw,
+@@ -306,31 +308,31 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
+       <div className="kpi-icon"><Icon size={20} /></div>
+       <div>
+         <p>{label}</p>
+         <strong>{value}</strong>
+         <span>{helper}</span>
+       </div>
+     </section>
+   );
+ }
+ 
+-function MapPanel({ trucks, onSelectTruck }) {
++function MapPanel({ trucks, attendance, rainfall, onSelectTruck }) {
+   return (
+     <section className="panel map-panel">
+       <div className="panel-title">
+         <div>
+           <h2>Live Fleet Supervision</h2>
+           <p>MapLibre tracking of assigned corridors, actual movement, and field status. Positions are simulated, not live GPS.</p>
+         </div>
+         <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
+       </div>
+-      <LiveFleetMap trucks={trucks} onSelectTruck={onSelectTruck} />
++      <LiveFleetMap trucks={trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={onSelectTruck} />
+     </section>
+   );
+ }
+ 
+ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
+   return (
+     <section className="panel">
+       <div className="panel-title">
+         <div>
+           <h2>Action Queue</h2>
+@@ -686,23 +688,21 @@ function AssistantPanel() {
+       {answer && (
+         <article className="assistant-answer">
+           <StatusPill tone={provider === "openai" ? "success" : "warning"}>{provider}</StatusPill>
+           <p>{answer}</p>
+         </article>
+       )}
+     </section>
+   );
+ }
+ 
+-function ScenarioPanel() {
+-  const [attendance, setAttendance] = useState(85000);
+-  const [rainfall, setRainfall] = useState(42);
++function ScenarioPanel({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng }) {
+   const [data, setData] = useState(null);
+   const [loading, setLoading] = useState(false);
+ 
+   // Operations Optimizer State (Case 2 -> Case 1 Bridge)
+   const [plan, setPlan] = useState(null);
+   const [planLoading, setPlanLoading] = useState(false);
+   const [approved, setApproved] = useState(false);
+   const [optimizerError, setOptimizerError] = useState("");
+ 
+   const role = localStorage.getItem("jwis_role") || "guest";
+@@ -712,44 +712,48 @@ function ScenarioPanel() {
+     setLoading(true);
+     setPlan(null);
+     setApproved(false);
+     setOptimizerError("");
+     try {
+       const params = new URLSearchParams({
+         rainfall_mm: String(rainfall),
+         event_attendance: String(attendance),
+         is_weekend: "true",
+       });
++      if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
++      if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
+       const res = await fetch(`${API_URL}/predictions/kecamatan?${params.toString()}`);
+       if (res.ok) setData(await res.json());
+     } catch {
+       setData(null);
+     }
+     setLoading(false);
+   }
+ 
+   useEffect(() => {
+     run();
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+-  }, []);
++  }, [attendance, rainfall, eventLat, eventLng]);
+ 
+   async function generatePlan() {
+     setPlanLoading(true);
+     setApproved(false);
+     setOptimizerError("");
+     try {
+       const params = new URLSearchParams({
+         rainfall_mm: String(rainfall),
+         event_attendance: String(attendance),
+         is_weekend: "true",
+         top_n: "5",
+       });
++      if (eventLat !== undefined && eventLat !== null) params.append("event_lat", String(eventLat));
++      if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
+       const response = await fetch(`${API_URL}/operations/plan?${params.toString()}`, {
+         method: "POST",
+       });
+       if (!response.ok) throw new Error("Failed to generate plan");
+       const planData = await response.json();
+       setPlan(planData);
+     } catch (err) {
+       setOptimizerError(err.message || "Failed to generate plan.");
+       setPlan(null);
+     } finally {
+@@ -990,21 +994,21 @@ function TpaQueuePanel() {
+               <span className={`status-badge ${log.status.toLowerCase()}`}>{log.status}</span>
+             </li>
+           ))}
+         </ul>
+       </div>
+     </section>
+   );
+ }
+ 
+ 
+-function CrowdEventsPanel() {
++function CrowdEventsPanel({ onSimulateEvent }) {
+   const [events, setEvents] = useState([]);
+ 
+   async function fetchEvents() {
+     try {
+       const res = await fetch(`${API_URL}/events/permits`);
+       if (res.ok) setEvents(await res.json());
+     } catch {}
+   }
+ 
+   useEffect(() => {
+@@ -1040,20 +1044,25 @@ function CrowdEventsPanel() {
+               </div>
+               <div className="event-metric">
+                 <span>Backup Fleet</span>
+                 <strong>{ev.backup_trucks_required} trucks</strong>
+               </div>
+               <div className="event-metric">
+                 <span>Large Bins</span>
+                 <strong>{ev.large_bins_required} unit</strong>
+               </div>
+             </div>
++            {onSimulateEvent && (
++              <button className="primary-button" style={{ marginTop: "12px", width: "100%" }} onClick={() => onSimulateEvent(ev)}>
++                <Zap size={14} /> Simulate event in Optimizer
++              </button>
++            )}
+           </div>
+         ))}
+       </div>
+     </section>
+   );
+ }
+ 
+ function AStarReroutingPanel() {
+   const [jamActive, setJamActive] = useState(false);
+   const [loading, setLoading] = useState(false);
+@@ -1496,20 +1505,26 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
+     </section>
+   );
+ }
+ 
+ // ── COMMAND CENTER (main dashboard) ──────────────────────────────────
+ 
+ function CommandCenter({ onLogout }) {
+   const { snapshot, online, refresh } = useSnapshot();
+   const [toast, setToast] = useState("");
+   const [filterTruck, setFilterTruck] = useState("ALL");
++  const [activeWorkspace, setActiveWorkspace] = useState("fleet");
++
++  const [attendance, setAttendance] = useState(85000);
++  const [rainfall, setRainfall] = useState(42);
++  const [eventLat, setEventLat] = useState(null);
++  const [eventLng, setEventLng] = useState(null);
+ 
+   function handleVoiceCommand(cmd) {
+     if (cmd.type === "refresh") refresh();
+     else if (cmd.type === "filter_truck") setFilterTruck(cmd.value);
+     else if (cmd.type === "scroll_carbon") {
+       const el = document.getElementById("carbon-panel");
+       if (el) el.scrollIntoView({ behavior: "smooth" });
+     } else if (cmd.type === "scroll_prediction") {
+       const el = document.querySelector(".prediction-list");
+       if (el) el.scrollIntoView({ behavior: "smooth" });
+@@ -1548,88 +1563,97 @@ function CommandCenter({ onLogout }) {
+       });
+       const data = await response.json();
+       setToast(data.sent ? "WhatsApp alert sent for " + alert.truck_code : "OpenWA: " + data.message);
+     } catch {
+       setToast("OpenWA alert endpoint unavailable");
+     }
+     setTimeout(() => setToast(""), 4200);
+   }
+ 
+   return (
+-    <div className="dashboard-frame">
+-      <aside className="side-rail" aria-label="JWIS navigation">
+-        <div className="side-brand">
+-          <span><ShieldCheck size={22} /></span>
+-          <div>
+-            <strong>JWIS</strong>
+-            <small>DLH Command</small>
+-          </div>
+-        </div>
+-        <nav className="side-nav">
+-          <a href="#overview"><Activity size={17} /> Overview</a>
+-          <a href="#map-panel"><MapPinned size={17} /> Fleet map</a>
+-          <a href="#history-panel"><History size={17} /> History</a>
+-          <a href="#carbon-panel"><Leaf size={17} /> Carbon</a>
+-        </nav>
+-        <button className="side-logout" onClick={onLogout}>
+-          <LogOut size={17} /> Logout
+-        </button>
+-      </aside>
+-      <main className="app-shell" id="overview">
+-      <header className="topbar">
+-        <div>
+-          <h1>Jakarta Waste Intelligence System</h1>
+-          <p className="topbar-subtitle">Professional command dashboard for predictive waste logistics, route compliance, and field dispatch.</p>
+-        </div>
+-        <div className="top-actions">
+-          <StatusPill tone={online ? "success" : "warning"}>{online ? "API connected" : "offline demo"}</StatusPill>
+-          <a className="ghost-button" href="/field"><Truck size={16} /> Field app</a>
+-          <button className="icon-button" onClick={refresh} aria-label="Refresh command center"><RefreshCcw size={18} /></button>
+-        </div>
+-      </header>
+-
+-      <section className="kpi-grid">
+-        <KpiCard icon={Truck} label="Active Trucks" value={snapshot.kpis.active_trucks} helper="live fleet in operation" />
+-        <KpiCard icon={AlertTriangle} label="Operational Issues" value={snapshot.kpis.trucks_with_issues} helper="deviation or damage" tone="danger" />
+-        <KpiCard icon={ClipboardList} label="Landfill Queue" value={`${snapshot.kpis.tpa_wait_minutes}m`} helper={`${snapshot.kpis.tpa_queue_trucks} trucks waiting`} tone="warning" />
+-        <KpiCard icon={Activity} label="Largest Waste Spike" value={`+${snapshot.kpis.predicted_spike_percent}%`} helper="next 7 days" tone="purple" />
+-      </section>
++    <AppShell activeWorkspace={activeWorkspace} onWorkspaceChange={setActiveWorkspace} online={online} onRefresh={refresh} onLogout={onLogout}>
++      <MetricStrip metrics={[
++        { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
++        { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
++        { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
++        { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "accent" },
++      ]} />
+ 
+       <section className="main-grid">
+-        <div id="map-panel" className="map-anchor"><MapPanel trucks={snapshot.trucks} onSelectTruck={(code, dispatch) => {
+-          setFilterTruck(code);
+-          if (dispatch) {
+-            const el = document.getElementById("history-panel");
+-            if (el) el.scrollIntoView({ behavior: "smooth" });
+-          }
+-        }} /></div>
+-        <FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />
+-        <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
+-        <RouteEvidencePanel route={snapshot.osrm_route} />
+-        <CarbonPanel />
+-        <PredictionPanel predictions={snapshot.critical_predictions} />
+-        <KecamatanMapPanel />
+-        <WeatherPanel weather={snapshot.weather} />
+-        <VoicePanel onCommand={handleVoiceCommand} />
+-        <AssistantPanel />
+-        <ScenarioPanel />
+-        <StaggerSimulatorPanel />
+-        <AStarReroutingPanel />
+-        <TpaQueuePanel />
+-        <CrowdEventsPanel />
+-        <ReportActions />
+-        <ExecutiveSummary summary={snapshot.executive_summary} queue={snapshot.tpa_queue} />
+-        <FleetTable trucks={snapshot.trucks} />
++        {activeWorkspace === "fleet" && (
++          <>
++            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
++              <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
++              <RouteEvidencePanel route={snapshot.osrm_route} />
++              <TpaQueuePanel />
++              <StaggerSimulatorPanel />
++              <CarbonPanel />
++            </div>
++            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
++              <div id="map-panel" className="map-anchor">
++                <MapPanel trucks={snapshot.trucks} attendance={attendance} rainfall={rainfall} onSelectTruck={(code, dispatch) => {
++                  setFilterTruck(code);
++                  if (dispatch) {
++                    const el = document.getElementById("history-panel");
++                    if (el) el.scrollIntoView({ behavior: "smooth" });
++                  }
++                }} />
++              </div>
++              <AStarReroutingPanel />
++              <FleetTable trucks={snapshot.trucks} />
++              <FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />
++            </div>
++          </>
++        )}
++
++        {activeWorkspace === "forecast" && (
++          <>
++            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
++              <WeatherPanel weather={snapshot.weather} />
++              <CrowdEventsPanel onSimulateEvent={(ev) => {
++                setAttendance(ev.expected_attendance);
++                setRainfall(10);
++                setEventLat(ev.lat);
++                setEventLng(ev.lng);
++                setActiveWorkspace("planning");
++              }} />
++              <AssistantPanel />
++              <VoicePanel onCommand={handleVoiceCommand} />
++            </div>
++            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
++              <KecamatanMapPanel />
++              <PredictionPanel predictions={snapshot.critical_predictions} />
++              <ReportActions />
++            </div>
++          </>
++        )}
++
++        {activeWorkspace === "planning" && (
++          <>
++            <div style={{ gridColumn: "span 4", display: "flex", flexDirection: "column", gap: "16px" }}>
++              <ExecutiveSummary summary={snapshot.executive_summary} queue={snapshot.tpa_queue} />
++            </div>
++            <div style={{ gridColumn: "span 8", display: "flex", flexDirection: "column", gap: "16px" }}>
++              <ScenarioPanel
++                attendance={attendance}
++                setAttendance={setAttendance}
++                rainfall={rainfall}
++                setRainfall={setRainfall}
++                eventLat={eventLat}
++                eventLng={eventLng}
++              />
++            </div>
++          </>
++        )}
+       </section>
+       {toast && <div className="toast"><Check size={16} /> {toast}</div>}
+-      </main>
+-    </div>
++    </AppShell>
+   );
+ }
+ 
+ function App() {
+   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem("jwis_auth") === "true");
+   const isField = useMemo(() => window.location.pathname.startsWith("/field"), []);
+   function logout() {
+     localStorage.removeItem("jwis_auth");
+     setAuthenticated(false);
+   }
+diff --git a/jwis/frontend/src/styles/components.css b/jwis/frontend/src/styles/components.css
+index e666c3c..849e8b9 100644
+--- a/jwis/frontend/src/styles/components.css
++++ b/jwis/frontend/src/styles/components.css
+@@ -1 +1,119 @@
+-/* Shared component styles are introduced in Task 2. */
++.status-badge {
++  min-height: 24px;
++  padding: 0 8px;
++  display: inline-flex;
++  align-items: center;
++  border: 1px solid transparent;
++  border-radius: 999px;
++  font-size: 12px;
++  font-weight: 700;
++  line-height: 1;
++  white-space: nowrap;
++}
++
++.status-success {
++  color: var(--ui-success);
++  border-color: #b9e2d1;
++  background: #eaf7f0;
++}
++
++.status-warning {
++  color: var(--ui-warning);
++  border-color: #ecd5a4;
++  background: #fff8e8;
++}
++
++.status-danger {
++  color: var(--ui-danger);
++  border-color: #efc1c1;
++  background: #fff0f0;
++}
++
++.metric-strip {
++  margin-bottom: 16px;
++  display: grid;
++  grid-template-columns: repeat(4, minmax(0, 1fr));
++  overflow: hidden;
++  border: 1px solid var(--ui-border);
++  border-radius: var(--ui-radius);
++  background: var(--ui-surface);
++  box-shadow: var(--ui-shadow);
++}
++
++.metric-cell {
++  min-width: 0;
++  min-height: 104px;
++  padding: 16px;
++  display: flex;
++  flex-direction: column;
++  justify-content: center;
++  border-left: 1px solid var(--ui-border);
++}
++
++.metric-cell:first-child {
++  border-left: 0;
++}
++
++.metric-cell span,
++.metric-cell small {
++  color: var(--ui-muted);
++}
++
++.metric-cell span {
++  font-size: 12px;
++  font-weight: 700;
++}
++
++.metric-cell strong {
++  margin: 4px 0;
++  color: var(--ui-ink);
++  font-size: 24px;
++  line-height: 1.15;
++  font-variant-numeric: tabular-nums;
++}
++
++.metric-cell small {
++  font-size: 12px;
++}
++
++.metric-danger strong {
++  color: var(--ui-danger);
++}
++
++.metric-warning strong {
++  color: var(--ui-warning);
++}
++
++.metric-accent strong {
++  color: var(--ui-accent);
++}
++
++@media (max-width: 860px) {
++  .metric-strip {
++    grid-template-columns: repeat(2, minmax(0, 1fr));
++  }
++
++  .metric-cell:nth-child(odd) {
++    border-left: 0;
++  }
++
++  .metric-cell:nth-child(n + 3) {
++    border-top: 1px solid var(--ui-border);
++  }
++}
++
++@media (max-width: 560px) {
++  .metric-strip {
++    grid-template-columns: 1fr;
++  }
++
++  .metric-cell {
++    min-height: 86px;
++    border-top: 1px solid var(--ui-border);
++    border-left: 0;
++  }
++
++  .metric-cell:first-child {
++    border-top: 0;
++  }
++}
+diff --git a/jwis/frontend/src/styles/legacy.css b/jwis/frontend/src/styles/legacy.css
+index 872d405..3422254 100644
+--- a/jwis/frontend/src/styles/legacy.css
++++ b/jwis/frontend/src/styles/legacy.css
+@@ -207,167 +207,29 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
+   line-height: 1.45;
+ }
+ 
+ .metric-label {
+   color: #526170;
+   font-size: 12px;
+   font-weight: 900;
+   text-transform: uppercase;
+ }
+ 
+-.dashboard-frame {
+-  min-height: 100dvh;
+-  display: grid;
+-  grid-template-columns: 232px minmax(0, 1fr);
+-}
+-
+-.side-rail {
+-  position: sticky;
+-  top: 0;
+-  height: 100dvh;
+-  padding: 20px 14px;
+-  display: flex;
+-  flex-direction: column;
+-  gap: 18px;
+-  border-right: 1px solid #d7e0e8;
+-  background: rgba(255, 255, 255, 0.94);
+-  backdrop-filter: blur(14px);
+-  box-shadow: 8px 0 24px rgba(15, 23, 42, 0.04);
+-}
+-
+-.side-brand {
+-  display: flex;
+-  align-items: center;
+-  gap: 12px;
+-  padding: 6px 8px 16px;
+-  border-bottom: 1px solid #e5ebf0;
+-}
+-
+-.side-brand strong, .side-brand small {
+-  display: block;
+-}
+-
+-.side-brand strong {
+-  color: #14202b;
+-  font-size: 18px;
+-}
+-
+-.side-brand small {
+-  color: #526170;
+-  margin-top: 2px;
+-}
+-
+-.side-nav {
+-  display: grid;
+-  gap: 6px;
+-}
+-
+-.side-nav a, .side-logout {
+-  min-height: 42px;
+-  border: 0;
+-  border-radius: 8px;
+-  display: flex;
+-  align-items: center;
+-  gap: 10px;
+-  padding: 0 12px;
+-  color: #344452;
+-  background: transparent;
+-  text-decoration: none;
+-  font-weight: 800;
+-  cursor: pointer;
+-}
+-
+-.side-nav a:hover, .side-logout:hover {
+-  background: #edf7f3;
+-  color: #176b54;
+-}
+-
+-.nav-tab-btn {
+-  min-height: 40px;
+-  border: 0;
+-  border-radius: 6px;
+-  display: flex;
+-  align-items: center;
+-  gap: 10px;
+-  padding: 0 12px;
+-  color: #5b6a78;
+-  background: transparent;
+-  text-decoration: none;
+-  font-weight: 600;
+-  cursor: pointer;
+-  width: 100%;
+-  text-align: left;
+-  transition: all 0.15s ease;
+-  font-size: 13.5px;
+-}
+-
+-.nav-tab-btn:hover {
+-  background: #edf7f3;
+-  color: #176b54;
+-}
+-
+-.nav-tab-btn.active {
+-  background: #176b54;
+-  color: #ffffff;
+-  font-weight: 700;
+-  box-shadow: 0 4px 12px rgba(23, 107, 84, 0.16);
+-}
+-
+-.side-logout {
+-  margin-top: auto;
+-  width: 100%;
+-  color: #b42318;
+-}
+-
+-.app-shell {
+-  width: min(1500px, calc(100% - 32px));
+-  margin: 0 auto;
+-  padding: 22px 0 40px;
+-}
+-
+ .eyebrow {
+   margin: 0 0 6px;
+   color: #526170;
+   font-size: 12px;
+   font-weight: 700;
+   letter-spacing: 0;
+   text-transform: uppercase;
+ }
+ 
+-.topbar {
+-  display: flex;
+-  align-items: center;
+-  justify-content: space-between;
+-  gap: 16px;
+-  margin-bottom: 16px;
+-  padding: 12px 18px;
+-  border: 1px solid #d7e0e8;
+-  border-radius: 8px;
+-  background: #ffffff;
+-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+-}
+-
+-.topbar h1 {
+-  font-size: 20px;
+-  font-weight: 700;
+-  margin: 0;
+-  color: #10202b;
+-}
+-
+-.topbar-subtitle {
+-  margin: 2px 0 0;
+-  max-width: 600px;
+-  color: #5b6a78;
+-  font-size: 13px;
+-  line-height: 1.35;
+-}
+-
+ h1 {
+   font-size: clamp(26px, 3.2vw, 38px);
+   line-height: 1.06;
+   letter-spacing: -0.022em;
+   font-weight: 700;
+   color: var(--ink);
+   text-wrap: balance;
+ }
+ 
+ h2 {
+@@ -386,28 +248,20 @@ h3 {
+ 
+ .kpi strong,
+ table td,
+ .kec-meta b,
+ .scenario-result strong,
+ .req-chip b {
+   font-variant-numeric: tabular-nums;
+   font-feature-settings: "tnum" 1;
+ }
+ 
+-.top-actions {
+-  display: flex;
+-  align-items: center;
+-  gap: 10px;
+-  flex-wrap: wrap;
+-  justify-content: flex-end;
+-}
+-
+ .primary-button, .ghost-button, .danger-button, .icon-button {
+   min-height: 44px;
+   border: 0;
+   display: inline-flex;
+   align-items: center;
+   justify-content: center;
+   gap: 8px;
+   border-radius: 8px;
+   cursor: pointer;
+   transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+@@ -445,27 +299,20 @@ table td,
+ }
+ 
+ .primary-button:hover, .ghost-button:hover, .danger-button:hover, .icon-button:hover {
+   transform: translateY(-1px);
+ }
+ 
+ .primary-button:active, .ghost-button:active, .danger-button:active, .icon-button:active {
+   transform: scale(0.98);
+ }
+ 
+-.kpi-grid {
+-  display: grid;
+-  grid-template-columns: repeat(4, minmax(0, 1fr));
+-  gap: 16px;
+-  margin-bottom: 16px;
+-}
+-
+ .kpi {
+   background: #ffffff;
+   border: 1px solid #e2e8f0;
+   border-radius: 10px;
+   box-shadow: 0 1px 3px rgba(16, 24, 40, 0.05);
+   min-height: 96px;
+   padding: 16px;
+   display: flex;
+   align-items: center;
+   gap: 16px;
+@@ -1684,101 +1531,39 @@ input[type="range"]::-webkit-slider-thumb:hover {
+   border-radius: 8px;
+   background: #eab308;
+   color: #3f2f00 !important;
+   box-shadow: 0 8px 18px rgba(120, 84, 0, 0.22);
+   font-size: 11px !important;
+   font-weight: 900 !important;
+   text-shadow: none !important;
+ }
+ 
+ @media (max-width: 1180px) {
+-  .dashboard-frame {
+-    grid-template-columns: 1fr;
+-  }
+-
+-  .side-rail {
+-    position: static;
+-    height: auto;
+-    flex-direction: row;
+-    align-items: center;
+-    padding: 12px 16px;
+-    border-right: 0;
+-    border-bottom: 1px solid #d7e0e8;
+-  }
+-
+-  .side-brand {
+-    padding: 0 14px 0 0;
+-    border-bottom: 0;
+-    border-right: 1px solid #e5ebf0;
+-  }
+-
+-  .side-nav {
+-    display: flex;
+-    gap: 6px;
+-    overflow-x: auto;
+-  }
+-
+-  .side-logout {
+-    width: auto;
+-    margin-left: auto;
+-    margin-top: 0;
+-  }
+-
+   .panel, .panel.wide {
+     grid-column: span 6;
+   }
+ 
+   .map-anchor, .panel.map-panel {
+     grid-column: span 12;
+   }
+ }
+ 
+ @media (max-width: 860px) {
+   .login-shell {
+     grid-template-columns: 1fr;
+     padding: 18px;
+   }
+ 
+   .login-proof {
+     display: none;
+   }
+ 
+-  .topbar {
+-    align-items: stretch;
+-    flex-direction: column;
+-  }
+-
+-  .app-shell {
+-    width: min(100% - 20px, 1500px);
+-  }
+-
+-  .side-rail {
+-    align-items: flex-start;
+-    flex-wrap: wrap;
+-  }
+-
+-  .side-nav {
+-    flex: 1 1 360px;
+-  }
+-
+-  .side-logout {
+-    margin-left: 0;
+-  }
+-
+-  .top-actions {
+-    justify-content: flex-start;
+-  }
+-
+-  .kpi-grid {
+-    grid-template-columns: repeat(2, minmax(0, 1fr));
+-  }
+-
+   .panel, .panel.wide, .map-anchor, .panel.map-panel {
+     grid-column: span 12;
+   }
+ 
+   .route-evidence-grid, .scenario-panel .control-row, .tpa-status-grid, .event-body {
+     grid-template-columns: 1fr;
+   }
+ 
+   .carbon-grid {
+     grid-template-columns: repeat(2, 1fr);
+@@ -1787,74 +1572,20 @@ input[type="range"]::-webkit-slider-thumb:hover {
+   .weather-strip {
+     grid-template-columns: repeat(4, minmax(0, 1fr));
+   }
+ }
+ 
+ @media (max-width: 560px) {
+   h1 {
+     font-size: clamp(30px, 10vw, 38px);
+   }
+ 
+-  .app-shell {
+-    width: min(100% - 20px, 1500px);
+-    padding-top: 12px;
+-  }
+-
+-  .side-rail {
+-    align-items: flex-start;
+-    flex-wrap: wrap;
+-  }
+-
+-  .side-brand {
+-    width: 100%;
+-    border-right: 0;
+-    border-bottom: 1px solid #e5ebf0;
+-    padding: 0 0 12px;
+-  }
+-
+-  .side-nav {
+-    width: 100%;
+-    display: grid;
+-    grid-template-columns: repeat(2, minmax(0, 1fr));
+-    overflow: visible;
+-  }
+-
+-  .side-nav a, .side-logout {
+-    min-height: 40px;
+-    padding: 0 10px;
+-    font-size: 14px;
+-    gap: 8px;
+-  }
+-
+-  .side-nav a svg, .side-logout svg {
+-    width: 16px;
+-    height: 16px;
+-    flex-shrink: 0;
+-  }
+-
+-  .side-logout {
+-    width: 100%;
+-    margin-left: 0;
+-  }
+-
+-  .topbar {
+-    padding: 16px;
+-  }
+-
+-  .topbar-subtitle {
+-    font-size: 15px;
+-  }
+-
+-  .kpi-grid {
+-    grid-template-columns: 1fr;
+-  }
+-
+   .maplibre-shell {
+     height: 360px;
+   }
+ 
+   .weather-strip {
+     grid-template-columns: repeat(2, minmax(0, 1fr));
+   }
+ 
+   .alert-actions, .field-actions, .scenario-reqs, .astar-stats, .stagger-compare {
+     grid-template-columns: 1fr;
+diff --git a/jwis/frontend/src/styles/shell.css b/jwis/frontend/src/styles/shell.css
+index b70fc59..4bbee91 100644
+--- a/jwis/frontend/src/styles/shell.css
++++ b/jwis/frontend/src/styles/shell.css
+@@ -1 +1,277 @@
+-/* Dashboard shell styles are introduced in Task 2. */
++.professional-shell {
++  min-height: 100dvh;
++  display: grid;
++  grid-template-columns: var(--ui-sidebar-width) minmax(0, 1fr);
++  background: var(--ui-canvas);
++}
++
++.side-rail {
++  position: sticky;
++  top: 0;
++  height: 100dvh;
++  padding: 20px 14px;
++  display: flex;
++  flex-direction: column;
++  gap: 18px;
++  border-right: 1px solid var(--ui-border);
++  background: var(--ui-surface);
++}
++
++.side-brand {
++  display: flex;
++  align-items: center;
++  gap: 12px;
++  padding: 6px 8px 16px;
++  border-bottom: 1px solid var(--ui-border);
++}
++
++.brand-mark {
++  width: 34px;
++  height: 34px;
++  display: inline-flex;
++  align-items: center;
++  justify-content: center;
++  border-radius: var(--ui-radius-control);
++  color: #ffffff;
++  background: var(--ui-primary);
++}
++
++.side-brand strong,
++.side-brand small {
++  display: block;
++}
++
++.side-brand strong {
++  color: var(--ui-ink);
++  font-size: 18px;
++}
++
++.side-brand small {
++  margin-top: 2px;
++  color: var(--ui-muted);
++}
++
++.nav-section-label {
++  margin: 2px 8px -8px;
++  color: var(--ui-muted);
++  font-size: 11px;
++  font-weight: 700;
++  text-transform: uppercase;
++}
++
++.side-nav {
++  display: grid;
++  gap: 6px;
++}
++
++.nav-tab-btn,
++.side-logout {
++  min-height: 42px;
++  border: 0;
++  border-radius: var(--ui-radius-control);
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  padding: 0 12px;
++  color: var(--ui-muted);
++  background: transparent;
++  font-weight: 700;
++  cursor: pointer;
++}
++
++.nav-tab-btn {
++  width: 100%;
++  text-align: left;
++}
++
++.nav-tab-btn:hover {
++  color: var(--ui-accent);
++  background: var(--ui-accent-soft);
++}
++
++.nav-tab-btn.active {
++  color: #ffffff;
++  background: var(--ui-accent);
++}
++
++.side-system-state {
++  margin-top: auto;
++  padding: 12px 8px;
++  display: flex;
++  align-items: center;
++  flex-wrap: wrap;
++  gap: 8px;
++  border-top: 1px solid var(--ui-border);
++  color: var(--ui-muted);
++  font-size: 12px;
++}
++
++.side-system-state .status-badge {
++  margin-left: auto;
++}
++
++.side-logout {
++  width: 100%;
++  color: var(--ui-danger);
++}
++
++.side-logout:hover {
++  color: var(--ui-danger);
++  background: #fff1f1;
++}
++
++.app-shell {
++  min-width: 0;
++}
++
++.topbar {
++  min-height: var(--ui-topbar-height);
++  padding: 0 24px;
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 16px;
++  border-bottom: 1px solid var(--ui-border);
++  background: var(--ui-surface);
++}
++
++.breadcrumb,
++.top-actions {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++}
++
++.breadcrumb {
++  min-width: 0;
++  color: var(--ui-muted);
++  font-size: 14px;
++}
++
++.breadcrumb strong {
++  overflow: hidden;
++  color: var(--ui-ink);
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.top-actions {
++  flex-wrap: wrap;
++  justify-content: flex-end;
++}
++
++.workspace-canvas {
++  width: min(1500px, calc(100% - 48px));
++  margin: 0 auto;
++  padding: 24px 0 40px;
++}
++
++@media (max-width: 1180px) {
++  .professional-shell {
++    grid-template-columns: 1fr;
++  }
++
++  .side-rail {
++    position: static;
++    height: auto;
++    flex-direction: row;
++    align-items: center;
++    padding: 12px 16px;
++    border-right: 0;
++    border-bottom: 1px solid var(--ui-border);
++  }
++
++  .side-brand {
++    padding: 0 14px 0 0;
++    border-right: 1px solid var(--ui-border);
++    border-bottom: 0;
++  }
++
++  .nav-section-label,
++  .side-system-state {
++    display: none;
++  }
++
++  .side-nav {
++    flex: 1 1 360px;
++    display: flex;
++    overflow-x: auto;
++  }
++
++  .nav-tab-btn {
++    width: auto;
++    flex: 0 0 auto;
++  }
++
++  .side-logout {
++    width: auto;
++    margin-left: auto;
++  }
++}
++
++@media (max-width: 860px) {
++  .side-rail {
++    align-items: flex-start;
++    flex-wrap: wrap;
++  }
++
++  .side-nav {
++    order: 3;
++    width: 100%;
++    flex-basis: 100%;
++  }
++
++  .topbar {
++    min-height: var(--ui-topbar-height);
++    padding: 12px 16px;
++  }
++
++  .workspace-canvas {
++    width: min(1500px, calc(100% - 32px));
++    padding-top: 16px;
++  }
++}
++
++@media (max-width: 560px) {
++  .side-rail {
++    display: grid;
++    grid-template-columns: minmax(0, 1fr) auto;
++    gap: 12px;
++    align-items: center;
++  }
++
++  .side-brand {
++    min-width: 0;
++    border-right: 0;
++  }
++
++  .side-nav {
++    grid-column: 1 / -1;
++    display: grid;
++    grid-template-columns: minmax(0, 1fr);
++    overflow: visible;
++  }
++
++  .nav-tab-btn {
++    width: 100%;
++  }
++
++  .side-logout {
++    margin-left: auto;
++  }
++
++  .topbar {
++    align-items: flex-start;
++    flex-direction: column;
++  }
++
++  .top-actions {
++    width: 100%;
++    justify-content: flex-start;
++  }
++
++  .workspace-canvas {
++    width: min(1500px, calc(100% - 20px));
++    padding-top: 12px;
++  }
++}
+diff --git a/jwis/frontend/src/ui/MetricStrip.jsx b/jwis/frontend/src/ui/MetricStrip.jsx
+new file mode 100644
+index 0000000..62ee9e1
+--- /dev/null
++++ b/jwis/frontend/src/ui/MetricStrip.jsx
+@@ -0,0 +1,15 @@
++import React from "react";
++
++export function MetricStrip({ metrics }) {
++  return (
++    <section className="metric-strip" data-testid="metric-strip">
++      {metrics.map(({ label, value, helper, tone = "neutral" }) => (
++        <article className={`metric-cell metric-${tone}`} data-testid="metric-cell" key={label}>
++          <span>{label}</span>
++          <strong>{value}</strong>
++          <small>{helper}</small>
++        </article>
++      ))}
++    </section>
++  );
++}
+diff --git a/jwis/frontend/src/ui/StatusBadge.jsx b/jwis/frontend/src/ui/StatusBadge.jsx
+new file mode 100644
+index 0000000..215c618
+--- /dev/null
++++ b/jwis/frontend/src/ui/StatusBadge.jsx
+@@ -0,0 +1,5 @@
++import React from "react";
++
++export function StatusBadge({ tone, children }) {
++  return <span className={`status-badge status-${tone}`} data-testid="status-badge">{children}</span>;
++}
