@@ -99,6 +99,10 @@ DOCUMENT_PATHS = [
     "frontend/DESIGN.md",
     "backend/driver_contacts.json",
     "backend/wa-gateway/package.json",
+    "docs/knowledge/01_OPERATIONS_AND_DECISION_LOGIC.md",
+    "docs/knowledge/02_MODULES_AND_WORKFLOW.md",
+    "docs/knowledge/03_DASHBOARD_OPERATOR_GUIDE.md",
+    "docs/knowledge/04_DEMO_NARRATIVE_AND_LIMITS.md",
 ]
 
 
