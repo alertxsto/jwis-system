@@ -9,6 +9,8 @@ from urllib.request import Request, urlopen
 from app.rag import format_rag_context, retrieve_jwis_context
 from app.tools import TOOL_SCHEMAS, run_tools_pass, ToolContext
 
+_GATEWAY_TIMEOUT = 45
+
 
 def _top_prediction(snapshot: dict[str, Any]) -> dict[str, Any]:
     predictions = snapshot.get("critical_predictions", [])
@@ -232,7 +234,7 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
                           headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
                                    "Content-Type": "application/json"}, method="POST")
         try:
-            with urlopen(request, timeout=15) as response:
+            with urlopen(request, timeout=_GATEWAY_TIMEOUT) as response:
                 body = response.read().decode("utf-8")
         except Exception as error:
             return {"provider": "local-fallback", "error": str(error), "answer": local_answer}
@@ -253,5 +255,23 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
         if not answer:
             return {"provider": "local-fallback", "wrong": "empty model content", "answer": local_answer}
         return {"provider": "openai", "model": model, "answer": answer, "tools_used": tools_used}
+
+    # Tool rounds exhausted: one final round WITHOUT tools so the model must
+    # answer using the tool results already accumulated in the conversation.
+    if tools_used:
+        payload.pop("tools", None)
+        payload.pop("tool_choice", None)
+        request = Request(url, data=json.dumps(payload).encode("utf-8"),
+                          headers={"Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                                   "Content-Type": "application/json"}, method="POST")
+        try:
+            with urlopen(request, timeout=_GATEWAY_TIMEOUT) as response:
+                body = response.read().decode("utf-8")
+        except Exception as error:
+            return {"provider": "local-fallback", "error": str(error), "answer": local_answer}
+        parsed = _parse_body(body)
+        final_answer = parsed.get("choices", [{}])[0].get("message", {}).get("content") or ""
+        if final_answer:
+            return {"provider": "openai", "model": model, "answer": final_answer, "tools_used": tools_used}
 
     return {"provider": "local-fallback", "answer": local_answer}

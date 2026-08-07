@@ -136,6 +136,50 @@ class AssistantTests(unittest.TestCase):
         self.assertTrue(all(m["role"] in {"user", "assistant"} for m in clean))
         self.assertLessEqual(len(clean[0]["content"]), 2000)
 
+    def test_answer_with_openai_answers_after_two_tool_rounds(self):
+        snapshot = {"kpis": {"active_trucks": 4, "trucks_with_issues": 3, "tpa_wait_minutes": 45}, "alerts": [], "predictions": [], "critical_predictions": []}
+        calls = []
+
+        def fake_urlopen(request, timeout=0):
+            import json as _json
+            payload = _json.loads(request.data.decode("utf-8"))
+            calls.append(payload)
+            round_no = len(calls)
+            if round_no <= 2:
+                body = _json.dumps({
+                    "choices": [{"message": {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": f"call-{round_no}",
+                            "type": "function",
+                            "function": {"name": "get_command_center_snapshot", "arguments": "{}"},
+                        }],
+                    }}]
+                }).encode()
+            else:
+                body = _json.dumps({"choices": [{"message": {"role": "assistant", "content": "jawaban final"}}]}).encode()
+            from unittest.mock import MagicMock
+            mock = MagicMock()
+            mock.read.return_value = body
+            mock.__enter__.return_value = mock
+            return mock
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "fake-key"}):
+            with patch("app.assistant.urlopen", side_effect=fake_urlopen):
+                from app.tools import ToolContext
+                result = answer_with_openai_if_configured(
+                    "kenapa status antrean TPA warning?",
+                    snapshot,
+                    tool_ctx=ToolContext(dispatch_center={}, history_store={}),
+                )
+
+        self.assertEqual(result["provider"], "openai")
+        self.assertEqual(result["answer"], "jawaban final")
+        self.assertEqual(len(calls), 3)
+        self.assertNotIn("tools", calls[2], "round final tidak boleh membawa tools")
+        self.assertNotIn("tool_choice", calls[2])
+
     def test_build_executive_summary_is_concise_and_actionable(self):
         snapshot = {
             "kpis": {"active_trucks": 5, "trucks_with_issues": 2, "tpa_wait_minutes": 116},
