@@ -104,6 +104,7 @@ app.add_middleware(
 
 class AssistantRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
+    history: list[dict] = Field(default_factory=list, max_length=8)
 
 class WhatsAppAlertRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
@@ -380,11 +381,15 @@ async def assistant_query(payload: AssistantRequest) -> dict:
     # Run everything synchronously on the main thread to avoid Session 0 threadpool deadlock
     print("SYNC STEP 1: Route start")
     try:
+        from app.tools import ToolContext
         weather = fetch_jakarta_weather_forecast()
         print("SYNC STEP 2: Weather done")
         snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=weather)
         print("SYNC STEP 3: Snapshot done")
-        result = answer_with_openai_if_configured(payload.question, snapshot)
+        tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
+        result = answer_with_openai_if_configured(
+            payload.question, snapshot, history=payload.history, tool_ctx=tool_ctx
+        )
         print("SYNC STEP 4: OpenAI done")
     except Exception as e:
         print("SYNC STEP ERROR:", str(e))

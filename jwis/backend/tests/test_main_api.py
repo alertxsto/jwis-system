@@ -83,6 +83,16 @@ class MainApiTests(unittest.TestCase):
                     "vehicle_status", "tpa_queue", "traffic", "permit", "recommendation"):
             self.assertIn(key, j)
 
+    def test_assistant_accepts_history_field(self):
+        response = self.client.post(
+            "/api/assistant/query",
+            json={"question": "berapa truk bermasalah?", "history": [{"role": "user", "content": "halo"}, {"role": "assistant", "content": "siap"}]},
+        )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("provider", body)
+        self.assertIn("answer", body)
+
     def test_route_decision_unknown_truck_404(self):
         r = self.client.get("/api/fleet/route-decision?truck_code=GHOST")
         self.assertEqual(r.status_code, 404)
