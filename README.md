@@ -1,146 +1,141 @@
 # JWIS — Jakarta Waste Intelligence System
 
-**AI Command Center untuk Pengelolaan Sampah Jakarta** — solusi lomba **AI Open Innovation Challenge 2026** dengan Case Provider **Dinas Lingkungan Hidup (DLH) DKI Jakarta**.
+**AI Command Center for Smart Waste Management** — solution built for the **AI Open Innovation Challenge 2026**, with the Jakarta Environmental Agency (DLH DKI Jakarta) as Case Provider.
 
-JWIS (Jakarta Waste Intelligence System) adalah purwarupa sistem command center AI yang menyelesaikan **dua kasus sekaligus** dari DLH sebagai case provider:
+JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prototype that addresses **both cases** issued by DLH Jakarta in a single, integrated platform:
 
-- **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System**: monitoring armada pengangkutan sampah secara real-time, deteksi pelanggaran, dan optimasi penjadwalan.
-- **Case 2 — Waste Volume Prediction System Berdasarkan Data Historis & Event**: prediksi volume dan lokasi sampah di area ramai secara prediktif (bukan reaktif).
-
-> Kompetisi: [AI Open Innovation Challenge 2026](https://ai-open.president.ac.id/) · Case Provider: DLH Jakarta · Tim JWIS (Team Dwi Candra dkk.)
+- **Case 1 — AI-Based Waste Transportation Monitoring & Supervision System:** real-time fleet tracking, violation detection, and route/schedule optimization.
+- **Case 2 — Waste Volume Prediction System Based on Historical Data & Events**: predictive (not reactive) estimation of waste generation and required resources in crowded areas.
 
 ---
 
-## Daftar Isi
+## Table of Contents
 
-- [Konteks Kasus](#konteks-kasus)
-  - [Case 1 — Monitoring & Supervision Angkutan Sampah](#case-1--monitoring--supervisi-angkutan-sampah)
-  - [Case 2 — Prediksi Volume Sampah](#case-2--prediksi-volume-sampah)
-- [Solusi Kami](#solusi-kami)
-- [Fitur](#fitur)
-- [Arsitektur](#arsitektur)
-- [Struktur Repositori](#struktur-repositori)
-- [Menjalankan Secara Lokal](#menjalankan-secara-lokal)
-- [Akun Demo](#akun-demo)
-- [Alur Demo](#alur-demo)
+- [The Two Cases](#the-two-cases)
+- [Solution Overview](#solution-overview)
+- [Key Features](#key-features)
+- [Architecture](#architecture)
+- [Repository Structure](#repository-structure)
+- [Getting Started](#getting-started)
+- [Demo Accounts](#demo-accounts)
+- [End-to-End Demo Flow](#end-to-end-demo-flow)
 - [Testing](#testing)
-- [Keamanan & Kredensial](#keamanan--kredensial)
-- [Dokumentasi](#dokumentasi)
+- [Security & Credentials](#security--credentials)
 
 ---
 
-## Konteks Kasus
+## The Two Cases
 
-### Kasus 1 — Monitoring & Supervisi Angkutan Sampah
+### Case 1 — Waste Transportation Monitoring & Supervision
 
-**Latar belakang:** Aktivitas pengumpulan sampah di DKI Jakarta menghadapi berbagai tantangan: armada tidak terpantau, rute tidak optimal, dan keberadaan pengumpul sampah ilegal. Pengawasan saat ini mengandalkan laporan manual dan inspeksi lapangan yang reaktif.
+**Background.** Waste collection activities in Jakarta face several challenges: unmonitored fleets, sub-optimal routes, and the presence of unlicensed collectors. Oversight today relies heavily on manual reports and reactive field inspections.
 
-**Tantangan utama:** Bagaimana memastikan seluruh proses pengumpulan sampah berjalan sesuai regulasi, transparan, dan dapat dimonitor secara real-time...
+**Main challenge.** How can the entire waste collection process be carried out lawfully, transparently, and monitored in real time — while making the on-field work of officers easier?
 
-**Ruang lingkup yang harus dipenuhi:**
-- Visualisasi live-tracking dilapisi (*overlay*) pada peta dasar.
-- Optimasi penjadwalan transportasi dengan mempertimbangkan estimasi waktu tempuh, status kerusakan armada, dan status antrean di TPA.
-- Rekomendasi rute alternatif yang mematuhi regulasi lalu lintas dan izin yang berlaku.
+**Scope & deliverables required by the case provider:**
+- Live-tracking visuals overlaid on a base map.
+- Transport scheduling optimized by estimated travel time, fleet condition, and landfill (TPA) queue status.
+- Alternative-route recommendations that respect traffic regulations and permits.
+- **Deliverables:** Model · Dashboard (live routes, fleet status, trip history, real-time TPA queue) · Simulator (scheduling, ETA, alternative routes) · Executive summary (optimized schedule, fewer landfill queues).
 
-**Output yang diminta:** Model, Dashboard (live route, kondisi armada, riwayat perjalanan, status antrean TPA real-time), Simulator (penjadwalan, estimasi waktu tempuh, rekomendasi rute alternatif), serta Executive Summary (optimasi jadwal dan pengurangan antrean di TPA).
+### Case 2 — Waste Volume Prediction (Historical & Events)
 
-### Case 2 — Prediksi Volume Sampah
+**Background case:** Waste volume spikes are common during the rainy season, major holidays, and special events — yet handling has always been **reactive**, waiting for the problem to appear instead of acting on measurable predictions.
 
-**Latar belakang:** Lonjakan volume sampah sering terjadi pada musim hujan, hari besar, atau acara khusus — namun penanganan selama ini dilakukan *setelah* masalah muncul, bukan berdasarkan prediksi yang terukur.
+**Expected outcome.** Shift waste management from reactive to **predictive**: estimate volume and location of waste **temporally and spatially**, and recommend fleet & facility readiness based on crowd-permit data.
 
-**Tugas utama:** Bagaimana mengubah pendekatan pengelolaan sampah darI *reaktif* menjadi *prediktif*.
-
-**Ruang lingkup yang harus dipenuhi:**
-- Estimasi lokasi dan volume sampah dimetakan secara temporal & spasial.
-- Estimasi kebutuhan dan lokasi fasilitas pembuangan serta armada transportasi di setiap area ramai, berbasis data izin keramaian (*crowd permit*).
-
-**Output yang diminta:** Model, Dashboard (estimasi lokasi & volume sampah di area ramai, kebutuhan *man-hour*), Simulator (lokasi keramaian, kebutuhan fasilitas & armada), Executive Summary (optimasi fasilitas, jam operasional, dan jadwal pengumpulan).
+**Scope & deliverables:**
+- Estimation mapped temporally and spatially in each crowded area.
+- Recommended facility needs (disposal & transport) per busy area, grounded on crowd-permit data.
+- **Deliverables:** Dashboard (location/volume estimates, man–hour requirements) · Simulator (crowd location, waste generation, facility & fleet needs) · Executive summary (optimized facilities, operating hours, and collection schedules).
 
 ---
 
-## Solusi Kami
+## Solution Overview
 
-JWIS adalah **AI Command Center** yang menggabungkan tiga lapisan kerja:
+JWIS is one integrated command center covering both cases — from live operations through AI forecasting to actionable alerts:
 
-| Lapisan | Teknologi | Untuk Apa |
+| Layer | Stack | Purpose |
 |---|---|---|
-| **Command Center** (Dashboard) | React + Vite + MapLibre GL | Visualisasi real-time: armada, rute, TPA, prediksi, kasus & laporan |
-| **AI & Optimization Engine** (Backend) | Python FastAPI · OR-Tools CP-SAT · Prophet · XGBoost | Penjadwalan optimasi, prediksi sampah, routing A*, asisten AI berbasis RAG |
-| **Alerting** (Skala Lapangan) | Node.js Express + WhatsApp Baileys | Kirim instruksi & peringatan langsung ke telepon petugas/driver |
+| **Command Center** | React + Vite · MapLibre GL · CSS variables | Real-time interactive dashboards: fleet, routes, landfill queue, forecast per sub-district |
+| **AI / Backend** | Python FastAPI · OR-Tools CP-SAT · Prophet · XGBoost · A\* | Route optimization, staggered scheduling, waste forecasting, RAG assistant |
+| **Field Alerting** | Node.js Express · WhatsApp (Baileys) | Sends reroute instructions & alerts straight to officers' phones |
 
-Keduanya kasus di atas diselesaikan **dalam satu sistem terpadu** — dashboard, simulator, dan model yang terkoneksi, dengan alur *dispatch → konfirmasi → audit* yang dapat dilacak oleh manajer / pemerintah.
-
----
-
-## Fitur
-
-### Kelola Armada (Kasus 1)
-- **Peta Armada Live (full-width)** — posisi GPS armada & status (on-corridor / off-corridor).
-- **Deteksi pelanggaran** — armada di luar koridor ditandai (contoh: `T-047` berwarna kuning).
-- **Simulasi Kemacetan (A\*)** — penghitungan ulang rute mengikuti jalan menuju TPA Bantargebang secara dinamis.
-- **Antrean TPA real-time** — status kuota masuk & jadwal kedatangan bergiliran (*staggered dispatch). 
-- **Alert WhatsApp** — instruksi reroute dikirim langsung ke armada via WhatsApp Gateway (Baileys).
-- **Field App** — tampilan `/field` untuk driver (username `driver`) untuk memeriksa & memconfirm perintah; sinkronisasi dengan dashboard secara instan.
-- **Riwayat perjalanan & bukti rute** — terlacak untuk pelaporan manajemen.
-
-### Prediksi & Asisten AI (Kasus 2)
-- **Prediksi volume sampah per Kecatman** — 42 Kecav Jakarta, dibandingkan dengan Prediksi waktu produksi, emisi karbon, jumlah kru, dan campuran armada yang dibutuhkan.
-- **Asisten AI Operasional (RAG)** — tanya-jawab berbasis pengetahuan domain pengelolaan sampah Jakarta via gateway 9Router (dengan `jwis/backend/app/rag.py`).
-- **Landfill Planning** — perencanaan terpadu (Constraints, pengesahan rencana antrean mingguan) dengan   **OR-Tools CP-SAT**.
-
-### Audit & Transparansi
-- **Audit Data & ML** — metrik akurasi model (WAPE, MAE), batas pelatihan, dan asal-usul data (provenance) dapat diaudit langsung dari dashboard.
+Every workflow is an auditable loop — `detect → dispatch → acknowledge → confirmed` — suitable for follow-up by managers or the government.
 
 ---
 
-## Arsitektur
+## Key Features
+
+### Fleet Operations (Fleet Case 1)
+- **Live Fleet Map** (full-width) — real-time GPS positions with on-/off-corridor status (e.g. `T-047` off-corridor, highlighted amber).
+- **A\* Reroute Simulator** — simulates a traffic jam, then computes a new street-following route for `T-047` to TPA Bantargebang dynamically.
+- **TPA Queue & Staggered Dispatch** — live landfill queue status with staggered dispatch slots.
+- **WhatsApp Alerts** — dispatch reroute instructions via the Baileys gateway straight to driver WhatsApp.
+- **Field App** (`/field`) — driver view to confirm instructions; confirmations sync to the dashboard in real time.
+- **Historical Trips & Reporting** — trip history and route evidence for officer/management follow-up.
+
+### Pr Forecasting & AI (Case 2)
+- **42-Subdistrict Forecast** — map/list of 42 Kecamatan; select one to expand a 3-column resource dashboard (predicted tonnage, fuel, carbon emissions, crew, fleet mix).
+- **Operational AI Assistant (RAG)** — ask domain questions; answers retrieved from the custom knowledge base via an OpenAI-compatible gateway.
+- **Integrated Planning** — constraint-aware weekly plan (OR-Tools CP-SAT) with an approve/deny flow.
+
+### Data & ML Audit
+- **WAPE / MAE accuracy** — model metrics, training limits, and data provenance reviewable straight from the dashboard.
+
+---
+
+## Architecture
 
 ```text
-┌──────────────────────────────────────────────────────────────┐
-│  Frontend (React + Vite, MapLibre GL)  · port 5175          │
-│  Command Center  ·  Field App (/field)  ·  Landing Page     │
-└───────────────┬──────────────────────────────┴─────────────┘
-                │ HTTP / JSON
-┌───────────────▼──────────────────────────────────────────────┐
-│  Backend (Python FastAPI)                      · port 8001   │
-│  • OR-Tools CP-SAT — perencanaan / constrained          │
-│  • Prophet + XGBoost — prediksi sampah (cache warming) │
-│  • Asisten AI (RAG) — via gateway 9Router (OpenAI)    │
-└───────────────┬──────────────────────────────┴─────────────┘
-                │ HTTP / JSON
-┌───────────────▼──────────────────────────────────────────────┐
-│  WhatsApp Gateway (Node.js + Baileys)          · port 2785        │
-│  QR autentikasi → notifikasi & perintah ke HP petugas          │
+┌───────────────────────────────────────────────────────────────┐
+│ FRONTEND — React + Vite + MapLibre GL            (5175)       │
+│                                                               │
+│   Fleet Ops                Waste Forecast / AI Ops            │
+│   Field App (/field)       Planning · Data & ML Audit         │
+└────────────────────────────┬──────────────────────────────────┘
+                             │  HTTP / JSON
+┌────────────────────────────▼──────────────────────────────────┐
+│ BACKEND — Python FastAPI                          (8001)      │
+│   • OR-Tools CP-SAT    · staggered dispatch & planning        │
+│   • Prophet + XGBoost  · 42-Kecamatan waste forecast          │
+│   • A* routing         · road-following reroute on jams       │
+│   • RAG assistant      · domain Q&A via OpenAI gateway        │
+└────────────────────────────┬──────────────────────────────────┘
+                             │  HTTP / JSON
+┌────────────────────────────▼──────────────────────────────────┐
+│ WHATSAPP GATEWAY — Node.js + Baileys            (2785)        │
+│   QR pairing → dispatch alerts & reroute instructions         │
 └───────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Struktur Repositori
+## Repository Structure
 
-```
+```text
 jwis-system/
-├── README.md                  ← Dokumen ini
-├── COMPETITION_CHECKLIST_STATUS.md
-├── START_JWIS.bat            ← One-click runner (Windows)
-├── jakarta_waste_ai_prd_v2.md ← PRD v2
-├── TASK_retrain_models.md    ← Catatan retraining model
-├── docs/superpowers/         ← Dokumentasi & rencana pengembangan
+├── README.md
+├── START_JWIS.bat            # One-click launcher (Windows)
+├── TASK_retrain_models.md    # Model retraining notes
 └── jwis/
-    ├── backend/              ← FastAPI + model + WA Gateway
-    │   ├── app/              (astar_routing, rag, whatsapp, main …)
-    │   ├── wa-gateway/       (node server Baileys)
-    │   ├── data/             ← dataset DLH & provenance
-    │   └── tests/
-    ├── frontend/             ← React + Vite dashboard + e2e tests
-    └── PRODUCT.md            ← spesifikasi produk
+    ├── backend/
+    │   ├── app/              # FastAPI routes (routing, RAG, forecast, WA)
+    │   ├── wa-gateway/       # WhatsApp Baileys gateway (Express)
+    │   ├── data/             # Datasets, models, provenance
+    │   └── tests/            # Backend test-suite
+    ├── frontend/
+    │   ├── src/              # React component code & workspaces
+    │   └── e2e/              # Playwright end-to-end tests
+    ├── PRODUCT.md            # Product specification
+    └── .env.example          # Environment template (no real secrets)
 ```
 
 ---
 
-## Menjalankan Secara Lokal
+## Getting Started
 
-> Prerequisite: Python 3.10+, Node.js 18+, npm.
+> Prerequisites: Python 3.10+, Node.js 18+, npm.
 
 ### 1. Backend API (FastAPI)
 
@@ -148,21 +143,13 @@ jwis-system/
 cd "jwis/backend"
 pip install -r requirements.txt
 
-# Salin/konfigurasi kredensial: buat file .env di folder ini
-# (jangan commit file tersebut — ia hanya local, sudah di-ignore)
-Set-Content -Path .env -Value @'
-OPENAI_API_KEY=your-9router-api-key
-OPENAI_BASE_URL=http://your-gateway:20128/v1
-OPENAI_MODEL=your-model
-OPENWA_BASE_URL=http://localhost:2785/api
-OPENWA_API_KEY=your-wa-api-key
-OPENWA_SESSION_ID=default
-'@
+# Copy the template (then fill in your real values)
+Copy-Item ..\.env.example .env
 
 python -m uvicorn app.main:app --port 8001
 ```
 
-Backend mem-warm cache prediksi Prophet + XGBoost saat start (±20–25 dtk) agar respons bisa instan.
+> On startup the backend warms every Prophet + XGBoost forecast cache (± 20–25 s) so dashboard responses are instant.
 
 ### 2. WhatsApp Gateway (Baileys)
 
@@ -172,9 +159,9 @@ npm install
 node server.js
 ```
 
-> QR Code akan tampil di terminal. Scan dengan WhatsApp (akun petugas/driver). Sesi tersimpan di `baileys_auth_info/` — **tidak masuk repository** (ignored).
+> A QR code is printed in the terminal; scan it with a driver's WhatsApp (e.g. `6289675877496`). Session files under `baileys_auth_info/` are regenerated at runtime and **never committed** (see Security below).
 
-### 3. Frontend (React + Vite)
+### 3. Frontend Web App
 
 ```powershell
 cd "jwis/frontend"
@@ -183,28 +170,26 @@ npm run build
 npm run preview -- --port 5175
 ```
 
-Buka **http://localhost:5175**
-
-> Ada juga `START_JWIS.bat` di root untuk menjalankan semuanya sekali jalan.
+Open **http://localhost:5175** — or use `START_JWIS.bat` at the repo root to launch everything at once.
 
 ---
 
-## Akun Demo
+## Demo Accounts
 
 | Role | Username | Password |
 |---|---|---|
-| Dispatcher (dash) | `dispatcher` | `dispatcher-demo-pass` |
-| Driver (field) | `driver` | — |
+| Dispatcher (command center) | `dispatcher` | `dispatcher-demo-pass` |
+| Driver (field app) | `driver` | — |
 
 ---
 
-## Alur Demo (End-to-End)
+## End-to-End Demo Flow
 
-1. Login `dispatcher` di dashboard.
-2. **Fleet Operations (Case 1):** lihat peta live, amati `T-047` di luar jalur (kuning) → klik **A\* Simulate Jam** → lihat `T-047` menghitung route baru ke TPA Bantargebang → periksa antrean TPA & slot pengiriman → klik **Send Alert** → buka `/field` di tab lain, login `driver`, konfirmasi instruksi → kembalil ke dashboard, konfirmasi sync instan.
-3. **Waste Forecast &amp; AI Assistant (Case 2):** buka **Waste Forecast**, saring/filter 42 Kecamatan, klik kecamatan untuk melihat dashboard optimasi sumber daya (prediksi tonase, bahan bakar, emisi, kru, armada). Gunakan **Operational AI Assistant** untuk bertanya — jawaban dari RAG domain via gateway.
-4. **Integrated Planning:** review batasan & approve rencana antrean mingguan.
-5. **Data & ML Audit:** audit metrik WAPE/MAE, limit training, dan asal-usul data.
+1. **Sign in** with `dispatcher` on the dashboard.
+2. **Fleet Operations (Case 1):** open the live fleet map and notice `T-047` off-corridor; click **A\* Simulate Jam** → watch it recompute a street-following route to TPA Bantargebang; inspect the TPA queue & staggered dispatch slots; click **Send Alert**; open `/field` in another tab, log in as `driver`, and confirm the instruction — the dashboard syncs instantly.
+3. **Waste Forecast & AI Assistant (Case 2):** browse the 42-Kecamatan list, select one, expand the resource-optimization view (tonnage, fuel, emission, crew, fleet mix), then ask the **Operational AI Assistant** a domain question and get a RAG-grounded answer.
+4. **Integrated Planning:** review the constraints, then approve the next weekly staggered-dispatch plan.
+5. **Data & ML Audit:** review WAPE / MAE accuracy, training limits, and data provenance of the forecasting models.
 
 ---
 
@@ -214,22 +199,26 @@ Buka **http://localhost:5175**
 cd "jwis/frontend"
 npx playwright test --workers 1
 ```
-E2E Playwright: **42 test** (headless).
+
+E2E suite: **42 tests**, headless, zero regressions.
 
 ---
 
-## Keamanan & Kredensial
+## Security & Credentials
 
-- **File `.env` TIDAK boleh masuk ke repo** — sudah di-`gitignore` (`git rm --cached` pada branch ini). Gunakan `.env.example` sebagai template nama key.
-- **Sesi WhatsApp Baileys** (`jwis/backend/wa-gateway/baileys_auth_info/`) berisi kredensial pribadi (initialKeys, token, nomor HP) — **tidak boleh di-push**. Sudah di-`gitignore` + untrack sejak branch ini.
-- **Log runtime** (`*.log`) juga di-ignore.
-- Jika API key / sesi pernah ter-push ke riwayat publik sebelumnya: **rotasikan kredensialnya** (generate key baru) agar aman. Riwayat lama tidak bisa dihapus tanpa *history rewrite* (force push) — sebaiknya hindari force push di repo ber-fork.
+The repository is **public** — handle sensitive material with care:
+
+- **`.env` files are `gitignore`d and must never be committed.** Use `.env.example` as the template; values live only on the runne machine.
+- **WhatsApp session store** (`jwis/backend/wa-gateway/baileys_auth_info/`) contains real session credentials — it is ignored/untracked and regenerated on every QR scan.
+- **Runtime logs** (`*.log`) are ignored & untracked.
+- ⚠️ **If a secret was ever pushed to public history, rotate it at the provider immediately.** History rewrites require force push and should be avoided in forked repos.
 
 ---
 
-## Riwayat Jalan
+## Built For
 
-- `84d8f87` … `997ecb0` — Bahkan PR "frontend refactor" bisa ada di main
-- Branch `development` ini = snap kerja lokal terbaru (RAG assistant baru, routing improvement, polish workspace/design) — **tanpa kredensial**.
+- **Competition:** AI Open Innovation Challenge 2026 — [ai-open.president.ac.id](https://ai-open.president.ac.id)
+- **Case Provider:** DLH DKI Jakarta (Environmental Agency)
+- **Team:** JWIS
 
-*Proyek original oleh **Tim JWIS** untuk AI Open Innovation Challenge 2026.*
+Copyright © 2026 JWIS Team · AI Open Innovation Challenge — non-commercial submission.

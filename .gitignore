@@ -40,6 +40,12 @@ jwis_history.db
 # WhatsApp (Baileys) session credentials — regenerated at runtime via QR scan
 jwis/backend/wa-gateway/baileys_auth_info/
 
+# --- Internal working documents (not part of the shipped product) ---
+**/.superpowers/
+**/docs/superpowers/
+COMPETITION_CHECKLIST_STATUS.md
+jakarta_waste_ai_prd_v2.md
+
 # Playwright artifacts
 test-results/
 playwright-report/
