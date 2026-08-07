@@ -1179,10 +1179,13 @@ function AssistantPanel() {
     setQuestion("");
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/assistant/query`, {
+const response = await fetch(`${API_URL}/assistant/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: prompt }),
+        body: JSON.stringify({
+          question: prompt,
+          history: messages.slice(-8).map((m) => ({ role: m.role, content: m.text })),
+        }),
       });
       const data = await response.json();
       setMessages((current) => [
@@ -1191,6 +1194,8 @@ function AssistantPanel() {
           role: "assistant",
           text: data.answer || "No answer returned.",
           provider: data.provider || "unknown",
+          model: data.model || "",
+          toolsUsed: data.tools_used || [],
         },
       ]);
     } catch {
@@ -1299,6 +1304,12 @@ function AssistantPanel() {
             </span>
             <div className="assistant-bubble">
               <div className="assistant-formatted-answer">{renderAssistantText(message.text)}</div>
+              {message.role === "assistant" && (message.model || message.provider) && (
+                <small className="assistant-source">
+                  {message.model ? `Ana · ${message.model}` : message.provider}
+                  {message.toolsUsed && message.toolsUsed.length > 0 ? ` · tools: ${message.toolsUsed.join(", ")}` : ""}
+                </small>
+              )}
             </div>
           </article>
         ))}

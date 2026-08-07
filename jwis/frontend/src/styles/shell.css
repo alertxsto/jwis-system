@@ -444,6 +444,14 @@
   padding-left: 2px;
 }
 
+.assistant-source {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.5;
+}
+
 .assistant-thinking {
   display: inline-flex;
   gap: 5px;
