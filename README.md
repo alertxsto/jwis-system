@@ -26,7 +26,7 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 
 ## The Two Cases
 
-### Case 1 — Waste Transportation Monitoring & Supervision
+### Case 1 — AI-Based Waste Transportation Monitoring & Supervision System
 
 **Background.** Waste collection activities in Jakarta face several challenges: unmonitored fleets, sub-optimal routes, and the presence of unlicensed collectors. Oversight today relies heavily on manual reports and reactive field inspections.
 
@@ -38,7 +38,7 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 - Alternative-route recommendations that respect traffic regulations and permits.
 - **Deliverables:** Model · Dashboard (live routes, fleet status, trip history, real-time TPA queue) · Simulator (scheduling, ETA, alternative routes) · Executive summary (optimized schedule, fewer landfill queues).
 
-### Case 2 — Waste Volume Prediction (Historical & Events)
+### Case 2 — Waste Volume Prediction System Based on Historical Data & Events
 
 **Background case:** Waste volume spikes are common during the rainy season, major holidays, and special events — yet handling has always been **reactive**, waiting for the problem to appear instead of acting on measurable predictions.
 
@@ -218,7 +218,5 @@ The repository is **public** — handle sensitive material with care:
 ## Built For
 
 - **Competition:** AI Open Innovation Challenge 2026 — [ai-open.president.ac.id](https://ai-open.president.ac.id)
-- **Case Provider:** DLH DKI Jakarta (Environmental Agency)
+- **Case Provider:** DLH DKI Jakarta
 - **Team:** JWIS
-
-Copyright © 2026 JWIS Team · AI Open Innovation Challenge — non-commercial submission.
