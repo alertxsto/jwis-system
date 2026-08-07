@@ -20,7 +20,7 @@ print("JWIS STARTUP API_KEY VALUE:", (key[:6] + "..." + key[-4:]) if key else "N
 print("JWIS STARTUP BASE_URL:", os.getenv("OPENAI_BASE_URL"))
 
 import json
-from datetime import datetime, date, timedelta
+from datetime import date
 from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException, Query, Header, Depends
@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.data import build_predictions, build_alerts, command_center_snapshot, TRUCKS, ROUTE_OPTIONS
+from app.data import build_predictions, build_alerts, command_center_snapshot, TRUCKS, ROUTE_OPTIONS, fleet_history_payload, tpa_queue_status_payload, events_permits_payload, unlicensed_collectors_payload
 from app.engine import (
     predict_waste_hybrid,
     list_hybrid_models,
@@ -39,7 +39,6 @@ from app.engine import (
 )
 from app.astar_routing import reroute_payload
 from app.gps_feed import latest_breadcrumbs
-from app.collector_registry import scan_observed_vehicles
 from app.map_truth import build_map_truth
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
@@ -747,53 +746,7 @@ def fleet_history(
     truck_code: str | None = Query(None, description="Filter history by truck code"),
     date: str | None = Query(None, description="Filter history by date (YYYY-MM-DD)"),
 ) -> list[dict[str, Any]]:
-    t_date = date or (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-    
-    mock_trips = [
-        {
-            "truck_code": "T-001",
-            "driver_name": "Budi Santoso",
-            "date": t_date,
-            "fuel_consumed_liters": 22.4,
-            "distance_km": 68.2,
-            "points": [
-                {"lat": -6.1455, "lng": 106.8550, "timestamp": f"{t_date}T08:12:00Z"},
-                {"lat": -6.1490, "lng": 106.8700, "timestamp": f"{t_date}T08:45:00Z"},
-                {"lat": -6.1540, "lng": 106.8780, "timestamp": f"{t_date}T09:15:00Z"},
-            ],
-            "deviations_detected": 0, "deviations_count": 0
-        },
-        {
-            "truck_code": "T-047",
-            "driver_name": "Agus Pratama",
-            "date": t_date,
-            "fuel_consumed_liters": 31.8,
-            "distance_km": 94.6,
-            "points": [
-                {"lat": -6.1649, "lng": 106.7415, "timestamp": f"{t_date}T07:44:00Z"},
-                {"lat": -6.1664, "lng": 106.7638, "timestamp": f"{t_date}T08:10:00Z"},
-                {"lat": -6.1949, "lng": 106.7898, "timestamp": f"{t_date}T08:35:00Z"},
-            ],
-            "deviations_detected": 1, "deviations_count": 1
-        },
-        {
-            "truck_code": "T-088",
-            "driver_name": "Joko Wijaya",
-            "date": t_date,
-            "fuel_consumed_liters": 19.5,
-            "distance_km": 54.1,
-            "points": [
-                {"lat": -6.2910, "lng": 106.7840, "timestamp": f"{t_date}T08:05:00Z"},
-                {"lat": -6.2900, "lng": 106.8070, "timestamp": f"{t_date}T08:38:00Z"},
-                {"lat": -6.2870, "lng": 106.8290, "timestamp": f"{t_date}T09:02:00Z"},
-            ],
-            "deviations_detected": 0, "deviations_count": 0
-        }
-    ]
-    
-    if truck_code:
-        mock_trips = [t for t in mock_trips if t["truck_code"] == truck_code]
-    return mock_trips
+    return fleet_history_payload(truck_code=truck_code, date=date)
 
 @app.get("/api/fleet/carbon")
 def fleet_carbon() -> dict[str, Any]:
@@ -818,93 +771,11 @@ def post_stagger_simulation(active_trucks: int = 5) -> dict[str, Any]:
 
 @app.get("/api/tpa/queue-status")
 def get_tpa_queue_status() -> dict[str, Any]:
-    """Live TPA queue status; wait time computed by the discrete-event simulation."""
-    import time
-    hour = time.localtime().tm_hour
-    # Arrival count is time-of-day driven (peak morning 8-10, afternoon 14-16).
-    base_trucks = 32 if (8 <= hour <= 10 or 14 <= hour <= 16) else 14
-
-    sim = simulate_queue(base_trucks, weighbridges=2, service_rate_per_hour=30.0, seed=42)
-    wait_time = sim["mean_wait_minutes"]
-    status_label = "CRITICAL (Antrian Padat)" if wait_time > 60 else "NORMAL (Lancar)" if wait_time < 30 else "WARNING (Padat Merayap)"
-
-    return {
-        "trucks_in_queue": base_trucks,
-        "lat": -6.3310,
-        "lng": 106.9910,
-        "facility_name": "TPST Bantargebang",
-        "avg_wait_minutes": wait_time,
-        "p95_wait_minutes": sim["p95_wait_minutes"],
-        "max_queue": sim["max_queue"],
-        "utilization": sim["utilization"],
-        "wait_ci95": sim["wait_ci95"],
-        "weighbridge_status": "OPERATIONAL" if wait_time < 80 else "DEGRADED (Overload)",
-        "processing_rate_tph": 120,
-        "status_label": status_label,
-        "method": "seeded discrete-event queue simulation",
-        "scale_logs": [
-            {"time": "15:30", "truck": "T-088", "weight_ton": 18.2, "status": "Cleared"},
-            {"time": "15:34", "truck": "T-112", "weight_ton": 17.5, "status": "Cleared"},
-            {"time": "15:42", "truck": "T-001", "weight_ton": 19.1, "status": "Weighing"},
-        ]
-    }
+    return tpa_queue_status_payload()
 
 @app.get("/api/events/permits")
 def get_events_permits() -> list[dict[str, Any]]:
-    # Dynamic crowd events with location coordinates, predicted waste, and required resources
-    events = [
-        {
-            "id": "EV-001",
-            "name": "Pesta Rakyat Monas",
-            "permit_number": "PR-2026-0899",
-            "location_name": "Kawasan Monas, Jakarta Pusat",
-            "lat": -6.1754,
-            "lng": 106.8272,
-            "expected_attendance": 45000,
-            "predicted_waste_tons": 54.0,
-            "man_hours_required": 144,
-            "crews_required": 18,
-            "backup_trucks_required": 3,
-            "large_bins_required": 12,
-            "status": "APPROVED",
-        },
-        {
-            "id": "EV-002",
-            "name": "Konser Musik GBK",
-            "permit_number": "PR-2026-1124",
-            "location_name": "Gelora Bung Karno, Senayan",
-            "lat": -6.2183,
-            "lng": 106.8022,
-            "expected_attendance": 65000,
-            "predicted_waste_tons": 78.5,
-            "man_hours_required": 208,
-            "crews_required": 26,
-            "backup_trucks_required": 5,
-            "large_bins_required": 18,
-            "status": "APPROVED",
-        },
-        {
-            "id": "EV-003",
-            "name": "Car Free Day Bundaran HI",
-            "permit_number": "PR-2026-CFD",
-            "location_name": "Bundaran HI - Jl. Sudirman",
-            "lat": -6.1950,
-            "lng": 106.8230,
-            "expected_attendance": 25000,
-            "predicted_waste_tons": 18.2,
-            "man_hours_required": 48,
-            "crews_required": 6,
-            "backup_trucks_required": 1,
-            "large_bins_required": 6,
-            "status": "ACTIVE_SUNDAY",
-        },
-    ]
-    # Fixture events: permit numbers/attendance are illustrative, not official
-    # DLH permit data. Label each so the UI never presents them as real permits.
-    for e in events:
-        e["data_class"] = "SIMULATED"
-        e["data_note"] = "Illustrative event; not official DLH permit data."
-    return events
+    return events_permits_payload()
 
 @app.get("/api/fleet/astar-reroute")
 def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
@@ -961,20 +832,7 @@ def fleet_map_truth() -> dict[str, Any]:
 
 @app.get("/api/fleet/unlicensed-collectors")
 def unlicensed_collectors() -> dict[str, Any]:
-    """Detect observed vehicles operating outside the DLH registry (Case 1 illegal activity)."""
-    observed = [
-        {"plate": "B 9876 XX", "lat": -6.1670, "lng": 106.7630},
-        {"plate": "Z 8842 KX", "lat": -6.1602, "lng": 106.8351},
-        {"plate": "F 5521 QN", "lat": -6.2410, "lng": 106.9012},
-    ]
-    alerts = scan_observed_vehicles(observed)
-    return {
-        "observed_count": len(observed),
-        "unauthorized_count": len(alerts),
-        "alerts": alerts,
-        "data_class": "SIMULATED",
-        "data_note": "Illustrative observed vehicles; registry match against real DLH fleet plates.",
-    }
+    return unlicensed_collectors_payload()
 
 @app.get("/api/fleet/{truck_code}/breadcrumbs")
 def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
