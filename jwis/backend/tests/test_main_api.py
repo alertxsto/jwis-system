@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -84,14 +85,27 @@ class MainApiTests(unittest.TestCase):
             self.assertIn(key, j)
 
     def test_assistant_accepts_history_field(self):
-        response = self.client.post(
-            "/api/assistant/query",
-            json={"question": "berapa truk bermasalah?", "history": [{"role": "user", "content": "halo"}, {"role": "assistant", "content": "siap"}]},
-        )
+        fake_openai = {"provider": "openai", "model": "guts", "answer": "jawaban", "tools_used": []}
+        with patch("app.main.answer_with_openai_if_configured", return_value=fake_openai):
+            response = self.client.post(
+                "/api/assistant/query",
+                json={"question": "berapa truk bermasalah?", "history": [{"role": "user", "content": "halo"}, {"role": "assistant", "content": "siap"}]},
+            )
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertIn("provider", body)
         self.assertIn("answer", body)
+
+    def test_assistant_returns_502_when_gateway_error(self):
+        fake_error = {"provider": "error", "error": "unreachable", "answer": ""}
+        with patch("app.main.answer_with_openai_if_configured", return_value=fake_error):
+            response = self.client.post(
+                "/api/assistant/query",
+                json={"question": "berapa truk bermasalah?"},
+            )
+        self.assertEqual(response.status_code, 502)
+        body = response.json()
+        self.assertIn("detail", body)
 
     def test_route_decision_unknown_truck_404(self):
         r = self.client.get("/api/fleet/route-decision?truck_code=GHOST")

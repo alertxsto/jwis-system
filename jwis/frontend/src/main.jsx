@@ -1188,6 +1188,17 @@ const response = await fetch(`${API_URL}/assistant/query`, {
         }),
       });
       const data = await response.json();
+      if (!response.ok) {
+        setMessages((current) => [
+          ...current,
+          {
+            role: "assistant",
+            text: `Ana tidak dapat menjawab saat ini. AI gateway error: ${data.detail || "unknown"}`,
+            provider: "error",
+          },
+        ]);
+        return;
+      }
       setMessages((current) => [
         ...current,
         {

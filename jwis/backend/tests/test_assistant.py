@@ -1,79 +1,20 @@
 import unittest
 from unittest.mock import patch
 
-from app.assistant import answer_operational_question, answer_with_openai_if_configured, build_executive_summary
+from app.assistant import answer_with_openai_if_configured, build_executive_summary
 
 
 class AssistantTests(unittest.TestCase):
-    def test_answer_operational_question_uses_snapshot_numbers(self):
-        snapshot = {
-            "kpis": {"active_trucks": 5, "trucks_with_issues": 2, "tpa_wait_minutes": 116},
-            "critical_predictions": [{"district": "Jakarta Barat", "spike_percent": 41}],
-            "alerts": [{"truck_code": "T-047", "title": "Route deviation"}],
-        }
+    def test_answer_with_openai_reports_error_without_api_key(self):
+        snapshot = {"kpis": {"active_trucks": 0, "trucks_with_issues": 0, "tpa_wait_minutes": 10}, "alerts": [], "predictions": [], "critical_predictions": []}
 
-        answer = answer_operational_question("apa masalah terbesar hari ini?", snapshot)
+        with patch.dict("os.environ", {}, clear=True):
+            result = answer_with_openai_if_configured("berapa truk?", snapshot, tool_ctx=None)
 
-        self.assertIn("Jakarta Barat", answer)
-        self.assertIn("T-047", answer)
-        self.assertIn("116", answer)
+        self.assertEqual(result["provider"], "error")
+        self.assertIn("OPENAI_API_KEY", result["error"])
 
-    def test_answer_operational_question_confirms_7_day_tonnage_forecast(self):
-        snapshot = {
-            "kpis": {"active_trucks": 5, "trucks_with_issues": 2, "tpa_wait_minutes": 116},
-            "predictions": [
-                {
-                    "district": "Jakarta Barat",
-                    "date": "2026-07-18",
-                    "predicted_tons": 489.4,
-                    "spike_percent": 34,
-                    "recommended_extra_trucks": 6,
-                    "recommended_extra_crews": 3,
-                },
-                {
-                    "district": "Jakarta Utara",
-                    "date": "2026-07-18",
-                    "predicted_tons": 443.1,
-                    "spike_percent": 22,
-                    "recommended_extra_trucks": 4,
-                    "recommended_extra_crews": 2,
-                },
-                {
-                    "district": "Jakarta Barat",
-                    "date": "2026-07-19",
-                    "predicted_tons": 501.0,
-                    "spike_percent": 41,
-                    "recommended_extra_trucks": 7,
-                    "recommended_extra_crews": 4,
-                },
-            ],
-            "critical_predictions": [{"district": "Jakarta Barat", "date": "2026-07-19", "predicted_tons": 501.0, "spike_percent": 41}],
-            "alerts": [],
-        }
-
-        answer = answer_operational_question("bisa prediksi tonase sampah 7 hari kedepan?", snapshot)
-
-        self.assertIn("Yes", answer)
-        self.assertIn("7 days", answer)
-        self.assertIn("2026-07-18", answer)
-        self.assertIn("932.5", answer)
-        self.assertIn("501.0", answer)
-
-    def test_answer_operational_question_uses_rag_for_general_jwis_questions(self):
-        snapshot = {
-            "kpis": {"active_trucks": 5, "trucks_with_issues": 2, "tpa_wait_minutes": 116},
-            "critical_predictions": [{"district": "Jakarta Barat", "spike_percent": 41}],
-            "alerts": [{"truck_code": "T-047", "title": "Route deviation"}],
-        }
-
-        answer = answer_operational_question("Apa saja fitur JWIS dan cara kerjanya?", snapshot)
-
-        self.assertIn("JWIS RAG", answer)
-        self.assertIn("Waste", answer)
-        self.assertIn("TPA Bantargebang", answer)
-        self.assertIn("T-047", answer)
-
-    def test_answer_with_openai_asks_model_when_api_configured(self):
+    def test_answer_with_openai_reports_gateway_failure(self):
         snapshot = {
             "kpis": {"active_trucks": 5, "trucks_with_issues": 2, "tpa_wait_minutes": 116},
             "predictions": [
@@ -97,8 +38,8 @@ class AssistantTests(unittest.TestCase):
                 result = answer_with_openai_if_configured("perkiraan total tonase sampah dki 7 hari kedepan", snapshot)
 
         self.assertIn("/chat/completions", called["url"])
-        self.assertEqual(result["provider"], "local-fallback")
-        self.assertIn("6,556.6", result["answer"])
+        self.assertEqual(result["provider"], "error")
+        self.assertEqual(result["answer"], "")
 
     def test_answer_with_openai_accepts_history(self):
         snapshot = {"kpis": {"active_trucks": 0, "trucks_with_issues": 0, "tpa_wait_minutes": 10}, "alerts": [], "predictions": [], "critical_predictions": []}

@@ -393,25 +393,10 @@ async def assistant_query(payload: AssistantRequest) -> dict:
         print("SYNC STEP 4: OpenAI done")
     except Exception as e:
         print("SYNC STEP ERROR:", str(e))
-        result = {
-            "provider": "local-fallback",
-            "error": str(e),
-            "answer": ""
-        }
+        raise HTTPException(status_code=502, detail=f"AI gateway error: {e}") from e
 
-    if result.get("provider") == "local-fallback" and not result.get("answer"):
-        from app.assistant import _top_prediction
-        top = _top_prediction(snapshot)
-        top_district = top.get("district", "Jakarta Barat")
-        top_spike = top.get("spike_percent", 41)
-        tpa_wait = snapshot["kpis"]["tpa_wait_minutes"]
-        result["answer"] = (
-            f"Berdasarkan Pusat Komando JWIS saat ini, risiko sampah terbesar diproyeksikan terjadi di daerah {top_district} "
-            f"dengan potensi lonjakan volume mencapai +{top_spike}% ({'critical' if top_spike >= 30 else 'high' if top_spike >= 20 else 'watch' if top_spike >= 10 else 'normal'} risk). Terdapat {snapshot['kpis']['trucks_with_issues']} armada "
-            f"truk mengalami kendala operasional (termasuk deviasi rute). Antrian TPA Bantargebang saat ini mencapai {tpa_wait} menit. "
-            f"Rekomendasi tindakan segera: Kirimkan instruksi pemulihan rute, tunda keberangkatan armada non-prioritas, "
-            f"dan siagakan kru cadangan di zona berisiko tinggi."
-        )
+    if result.get("provider") == "error":
+        raise HTTPException(status_code=502, detail=f"AI gateway error: {result.get('error', 'unknown')}")
 
     history_store.record_event(
         "assistant_query",
