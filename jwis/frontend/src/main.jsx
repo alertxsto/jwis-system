@@ -45,7 +45,7 @@ import {
 import { LiveFleetMap } from "./LiveFleetMap.jsx";
 import "./styles.css";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8011/api";
+const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
