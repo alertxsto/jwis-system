@@ -1,5 +1,7 @@
-const { default: makeWASocket, useMultiFileAuthState } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, Browsers } = require('@whiskeysockets/baileys');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
+const fs = require('fs');
 const express = require('express');
 const app = express();
 
@@ -7,6 +9,7 @@ app.use(express.json());
 
 let sock = null;
 let connectionState = 'starting';
+let latestQrDataUrl = null;
 
 function normalizeChatId(chatId) {
   if (!chatId || typeof chatId !== 'string') return '';
@@ -23,6 +26,7 @@ async function startWA() {
   
   sock = makeWASocket({
     auth: state,
+    browser: Browsers.macOS('Desktop'),
     printQRInTerminal: false
   });
 
@@ -34,6 +38,10 @@ async function startWA() {
       connectionState = 'qr';
       console.log("\nScan QR Code berikut dengan WhatsApp HP kamu:\n");
       qrcode.generate(qr, { small: true });
+      // Expose the QR as a PNG data URL so the dashboard can render it.
+      QRCode.toDataURL(qr, { width: 320, margin: 1 })
+        .then((url) => { latestQrDataUrl = url; })
+        .catch((err) => console.error("QR encode failed:", err));
     }
     if (connection === 'close') {
       connectionState = 'closed';
@@ -44,6 +52,7 @@ async function startWA() {
       }
     } else if (connection === 'open') {
       connectionState = 'open';
+      latestQrDataUrl = null;
       console.log('\n======================================');
       console.log('WhatsApp connection opened successfully!');
       console.log('======================================\n');
@@ -60,6 +69,50 @@ app.get('/api/health', (req, res) => {
       ? 'WhatsApp gateway is connected.'
       : `WhatsApp gateway is ${connectionState}. Scan QR or wait for reconnect.`,
   });
+});
+
+app.get('/api/qr', (req, res) => {
+  if (connectionState !== 'qr' || !latestQrDataUrl) {
+    return res.json({ state: connectionState, qr: null });
+  }
+  res.json({ state: 'qr', qr: latestQrDataUrl });
+});
+
+app.get('/api/groups', async (req, res) => {
+  if (!sock || connectionState !== 'open') {
+    return res.json({ connected: false, groups: [], message: `Socket not ready (${connectionState}).` });
+  }
+  try {
+    const groupList = await sock.groupFetchAllParticipating();
+    const groups = Object.entries(groupList || {}).map(([jid, meta]) => ({
+      jid,
+      subject: meta?.subject || jid
+    }));
+    groups.sort((a, b) => (a.subject || '').localeCompare(b.subject || ''));
+    res.json({ connected: true, groups, message: `${groups.length} groups found` });
+  } catch (err) {
+    res.status(500).json({ connected: true, groups: [], message: err.message });
+  }
+});
+
+app.post('/api/logout', (req, res) => {
+  try {
+    if (sock) {
+      sock.end();
+      sock = null;
+    }
+  } catch (err) {
+    console.error("Logout cleanup error:", err);
+  }
+  try {
+    fs.rmSync('baileys_auth_info', { recursive: true, force: true });
+  } catch (err) {
+    console.error("Auth folder cleanup error:", err);
+  }
+  connectionState = 'starting';
+  latestQrDataUrl = null;
+  startWA().catch((err) => console.error("Failed to restart socket:", err));
+  res.json({ logged_out: true, state: connectionState });
 });
 
 app.post('/api/sessions/:sessionId/messages/send-text', async (req, res) => {

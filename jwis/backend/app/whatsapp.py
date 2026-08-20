@@ -64,6 +64,102 @@ class OpenWAClient:
                 "message": f"WhatsApp gateway is offline: {error}",
             }
 
+    def qr(self) -> dict[str, Any]:
+        """Fetch the pairing QR as a PNG data URL from the gateway."""
+        if not self.is_configured():
+            return {
+                "provider": "baileys",
+                "configured": False,
+                "state": "unconfigured",
+                "qr": None,
+                "message": "WhatsApp gateway is not configured.",
+            }
+        try:
+            with urlopen(f"{self.base_url}/qr", timeout=self.timeout_seconds) as response:
+                body = response.read().decode("utf-8")
+            payload = json.loads(body) if body else {}
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "state": payload.get("state", "unknown"),
+                "qr": payload.get("qr"),
+                "message": payload.get("message"),
+            }
+        except Exception as error:
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "state": "gateway_offline",
+                "qr": None,
+                "message": f"WhatsApp gateway is offline: {error}",
+            }
+
+    def groups(self) -> dict[str, Any]:
+        """Fetch participating group chats (JID + subject) from the gateway."""
+        if not self.is_configured():
+            return {
+                "provider": "baileys",
+                "configured": False,
+                "groups": [],
+                "message": "WhatsApp gateway is not configured.",
+            }
+        try:
+            with urlopen(f"{self.base_url}/groups", timeout=self.timeout_seconds) as response:
+                body = response.read().decode("utf-8")
+            payload = json.loads(body) if body else {}
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "connected": bool(payload.get("connected")),
+                "groups": payload.get("groups", []),
+                "message": payload.get("message", ""),
+            }
+        except Exception as error:
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "connected": False,
+                "groups": [],
+                "message": f"WhatsApp gateway is offline: {error}",
+            }
+
+    def logout(self) -> dict[str, Any]:
+        """End the current session so the dashboard can pair a fresh QR."""
+        if not self.is_configured():
+            return {
+                "provider": "baileys",
+                "configured": False,
+                "logged_out": False,
+                "message": "WhatsApp gateway is not configured.",
+            }
+        request = Request(f"{self.base_url}/logout", method="POST")
+        try:
+            with urlopen(request, timeout=self.timeout_seconds) as response:
+                body = response.read().decode("utf-8")
+            payload = json.loads(body) if body else {}
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "logged_out": bool(payload.get("logged_out")),
+                "state": payload.get("state"),
+                "message": "WhatsApp session ended. Scan the new QR to re-link.",
+            }
+        except HTTPError as error:
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "logged_out": False,
+                "status_code": error.code,
+                "message": f"Logout failed: {error}",
+            }
+        except Exception as error:
+            return {
+                "provider": "baileys",
+                "configured": True,
+                "logged_out": False,
+                "message": str(error),
+            }
+
     def send_text(self, chat_id: str, text: str) -> dict[str, Any]:
         if not self.is_configured():
             return {
