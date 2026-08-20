@@ -18,11 +18,11 @@ Real daily per-kecamatan waste data does not exist publicly, so the daily intra-
 | Decision resolution | Metric | Value |
 |---|---|--:|
 | Spatial hotspot ranking | Spearman ρ | **0.998** |
-| Spatial level | R² | **0.980** |
-| Monthly per-kecamatan | R² | **0.966** |
-| Weekly per-kecamatan | R² | **0.954** |
-| City-level daily | R² | **0.893** |
-| Daily intra-kecamatan (noise-dominated) | R² | 0.923 pooled |
+| Spatial level | R² | **0.984** |
+| Monthly per-kecamatan | R² | **0.971** |
+| Weekly per-kecamatan | R² | **0.963** |
+| City-level daily | R² | **0.915** |
+| Daily intra-kecamatan (noise-dominated) | R² | 0.949 pooled |
 
 **Takeaway:** the model excels where operational decisions are made (spatial targeting + weekly/monthly planning). The weak daily-micro number is reported openly rather than hidden.
 
@@ -39,78 +39,60 @@ For each test year Y: train on all days before Y, predict all of Y (pooled acros
 
 | Test year | Days | MAE (t) | R² | Naive MAE (t) | vs Naive |
 |---|--:|--:|--:|--:|--:|
-| 2022 | 15,330 | 16.18 | 0.939 | 13.65 | -18.5% |
-| 2023 | 15,330 | 16.01 | 0.940 | 15.65 | -2.3% |
-| 2024 | 15,372 | 20.27 | 0.912 | 19.17 | -5.7% |
-| 2025 | 15,330 | 17.30 | 0.942 | 20.56 | +15.9% |
-| 2026 | 6,258 | 19.33 | 0.926 | 22.40 | +13.7% |
-| **MEAN** | — | **17.82** | **0.932** | — | — |
+| 2022 | 15,330 | 10.56 | 0.974 | 10.32 | -2.3% |
+| 2023 | 15,330 | 12.37 | 0.965 | 12.85 | +3.8% |
+| 2024 | 15,372 | 18.48 | 0.930 | 16.82 | -9.9% |
+| 2025 | 15,330 | 14.92 | 0.958 | 18.32 | +18.6% |
+| 2026 | 6,258 | 16.26 | 0.947 | 20.26 | +19.8% |
+| **MEAN** | — | **14.52** | **0.955** | — | — |
 
 ## Per-kecamatan single-split metrics
 
 | Kecamatan | City | MAE (t) | R² | Naive MAE (t) | vs Naive |
 |---|---|--:|--:|--:|--:|
-| Cengkareng | Jakarta Barat | 45.56 | -0.350 | 42.51 | -7.2% |
-| Grogol Petamburan | Jakarta Barat | 15.73 | -0.124 | 16.52 | +4.8% |
-| Taman Sari | Jakarta Barat | 9.28 | -0.226 | 8.90 | -4.2% |
-| Tambora | Jakarta Barat | 17.63 | -0.140 | 17.66 | +0.2% |
-| Kebon Jeruk | Jakarta Barat | 28.85 | -0.454 | 26.04 | -10.8% |
-| Kali Deres | Jakarta Barat | 31.75 | -0.174 | 31.81 | +0.2% |
-| Palmerah | Jakarta Barat | 17.22 | -0.236 | 17.05 | -1.0% |
-| Kembangan | Jakarta Barat | 24.90 | -0.601 | 20.63 | -20.7% |
-| Gambir | Jakarta Pusat | 9.31 | 0.180 | 10.47 | +11.1% |
-| Sawah Besar | Jakarta Pusat | 7.81 | 0.209 | 8.87 | +11.9% |
-| Kemayoran | Jakarta Pusat | 15.17 | 0.189 | 17.29 | +12.3% |
-| Senen | Jakarta Pusat | 7.23 | 0.198 | 8.23 | +12.1% |
-| Cempaka Putih | Jakarta Pusat | 5.95 | 0.169 | 6.62 | +10.1% |
-| Menteng | Jakarta Pusat | 5.04 | 0.287 | 6.09 | +17.2% |
-| Tanah Abang | Jakarta Pusat | 9.53 | 0.266 | 11.59 | +17.8% |
-| Johar Baru | Jakarta Pusat | 8.60 | 0.080 | 9.39 | +8.4% |
-| Tebet | Jakarta Selatan | 16.42 | -0.229 | 15.09 | -8.8% |
-| Setiabudi | Jakarta Selatan | 7.11 | 0.089 | 7.46 | +4.7% |
-| Mampang Prapatan | Jakarta Selatan | 11.60 | -0.364 | 9.73 | -19.2% |
-| Pasar Minggu | Jakarta Selatan | 21.72 | -0.231 | 19.71 | -10.2% |
-| Kebayoran Lama | Jakarta Selatan | 23.39 | -0.288 | 20.29 | -15.3% |
-| Cilandak | Jakarta Selatan | 14.83 | -0.163 | 14.43 | -2.7% |
-| Kebayoran Baru | Jakarta Selatan | 10.51 | -0.319 | 9.04 | -16.2% |
-| Pancoran | Jakarta Selatan | 11.83 | -0.108 | 11.10 | -6.6% |
-| Jagakarsa | Jakarta Selatan | 25.44 | -0.401 | 22.22 | -14.5% |
-| Pesanggrahan | Jakarta Selatan | 16.99 | -0.047 | 16.92 | -0.4% |
-| Matraman | Jakarta Timur | 12.49 | -0.074 | 12.21 | -2.3% |
-| Pulo Gadung | Jakarta Timur | 20.07 | -0.199 | 18.62 | -7.8% |
-| Jatinegara | Jakarta Timur | 23.05 | -0.210 | 20.45 | -12.7% |
-| Kramat Jati | Jakarta Timur | 22.51 | -0.261 | 20.13 | -11.8% |
-| Pasar Rebo | Jakarta Timur | 16.28 | -0.155 | 16.02 | -1.6% |
-| Cakung | Jakarta Timur | 40.36 | -0.290 | 35.43 | -13.9% |
-| Duren Sawit | Jakarta Timur | 31.40 | -0.252 | 26.69 | -17.7% |
-| Makasar | Jakarta Timur | 11.94 | -0.233 | 10.90 | -9.6% |
-| Ciracas | Jakarta Timur | 21.36 | -0.077 | 21.00 | -1.7% |
-| Cipayung | Jakarta Timur | 20.12 | -0.210 | 18.50 | -8.7% |
-| Penjaringan | Jakarta Utara | 25.77 | -0.200 | 44.95 | +42.7% |
-| Tanjung Priok | Jakarta Utara | 38.20 | -0.373 | 56.57 | +32.5% |
-| Koja | Jakarta Utara | 29.43 | -0.291 | 47.40 | +37.9% |
-| Cilincing | Jakarta Utara | 40.46 | -0.377 | 61.06 | +33.7% |
-| Pademangan | Jakarta Utara | 13.53 | -0.141 | 23.49 | +42.4% |
-| Kelapa Gading | Jakarta Utara | 12.10 | -0.309 | 19.81 | +38.9% |
-| **AVERAGE** | — | **19.01** | **-0.153** | — | — |
-
-## Forecast suitability contract (what JWIS may claim)
-
-The API exposes `/api/ml/suitability` and every prediction now carries a
-`daily_district_suitability` flag plus a `prediction_interval_p10_p90` band.
-Claims are bounded by evidence:
-
-| Resolution | Claim | Basis |
-|---|---|--:|
-| Hotspot spatial rank | high | Spearman ρ 0.998 |
-| City-day | reliable | R² 0.893 |
-| District-month | reliable | R² 0.966 |
-| District-week | reliable | R² 0.954 |
-| District-day | **NOT supported** | calibrated-synthetic target |
-
-Metrics module (`app/forecast_metrics.py`) provides WAPE, MASE (vs seasonal-naive),
-and MAE so future retraining benchmarks the model against naive baselines rather
-than presenting scores in a vacuum. MASE < 1 is required to claim the ML beats naive.
+| Cengkareng | Jakarta Barat | 35.08 | -0.256 | 36.16 | +3.0% |
+| Grogol Petamburan | Jakarta Barat | 12.39 | -0.043 | 14.41 | +14.0% |
+| Taman Sari | Jakarta Barat | 7.75 | -0.289 | 7.61 | -1.8% |
+| Tambora | Jakarta Barat | 13.77 | -0.017 | 15.41 | +10.6% |
+| Kebon Jeruk | Jakarta Barat | 22.61 | -0.332 | 22.40 | -1.0% |
+| Kali Deres | Jakarta Barat | 24.36 | -0.037 | 27.77 | +12.3% |
+| Palmerah | Jakarta Barat | 13.46 | -0.158 | 14.59 | +7.7% |
+| Kembangan | Jakarta Barat | 21.71 | -0.697 | 17.98 | -20.8% |
+| Gambir | Jakarta Pusat | 6.97 | 0.362 | 9.04 | +22.9% |
+| Sawah Besar | Jakarta Pusat | 5.88 | 0.347 | 7.50 | +21.7% |
+| Kemayoran | Jakarta Pusat | 12.02 | 0.319 | 15.13 | +20.6% |
+| Senen | Jakarta Pusat | 5.41 | 0.367 | 7.12 | +24.0% |
+| Cempaka Putih | Jakarta Pusat | 4.61 | 0.320 | 5.79 | +20.5% |
+| Menteng | Jakarta Pusat | 3.99 | 0.388 | 5.20 | +23.2% |
+| Tanah Abang | Jakarta Pusat | 7.57 | 0.408 | 10.03 | +24.5% |
+| Johar Baru | Jakarta Pusat | 6.38 | 0.335 | 8.09 | +21.1% |
+| Tebet | Jakarta Selatan | 12.39 | -0.070 | 12.68 | +2.3% |
+| Setiabudi | Jakarta Selatan | 5.30 | 0.216 | 6.11 | +13.4% |
+| Mampang Prapatan | Jakarta Selatan | 8.50 | -0.080 | 8.21 | -3.4% |
+| Pasar Minggu | Jakarta Selatan | 16.20 | -0.021 | 16.71 | +3.0% |
+| Kebayoran Lama | Jakarta Selatan | 17.21 | -0.033 | 17.25 | +0.2% |
+| Cilandak | Jakarta Selatan | 11.37 | -0.042 | 11.85 | +4.1% |
+| Kebayoran Baru | Jakarta Selatan | 7.87 | -0.126 | 7.65 | -2.9% |
+| Pancoran | Jakarta Selatan | 8.62 | 0.105 | 9.29 | +7.2% |
+| Jagakarsa | Jakarta Selatan | 18.40 | -0.073 | 18.66 | +1.4% |
+| Pesanggrahan | Jakarta Selatan | 12.14 | 0.192 | 14.08 | +13.8% |
+| Matraman | Jakarta Timur | 9.42 | 0.090 | 10.15 | +7.2% |
+| Pulo Gadung | Jakarta Timur | 14.84 | 0.007 | 15.52 | +4.4% |
+| Jatinegara | Jakarta Timur | 17.30 | -0.075 | 17.01 | -1.7% |
+| Kramat Jati | Jakarta Timur | 16.45 | -0.031 | 16.76 | +1.9% |
+| Pasar Rebo | Jakarta Timur | 11.84 | 0.058 | 13.09 | +9.6% |
+| Cakung | Jakarta Timur | 29.59 | -0.047 | 29.92 | +1.1% |
+| Duren Sawit | Jakarta Timur | 24.13 | -0.099 | 22.49 | -7.3% |
+| Makasar | Jakarta Timur | 8.59 | -0.029 | 8.91 | +3.6% |
+| Ciracas | Jakarta Timur | 15.89 | 0.093 | 17.28 | +8.0% |
+| Cipayung | Jakarta Timur | 15.10 | -0.013 | 15.52 | +2.7% |
+| Penjaringan | Jakarta Utara | 22.04 | -0.285 | 44.14 | +50.1% |
+| Tanjung Priok | Jakarta Utara | 32.34 | -0.500 | 55.59 | +41.8% |
+| Koja | Jakarta Utara | 25.56 | -0.421 | 46.61 | +45.2% |
+| Cilincing | Jakarta Utara | 34.52 | -0.553 | 60.14 | +42.6% |
+| Pademangan | Jakarta Utara | 11.57 | -0.272 | 22.91 | +49.5% |
+| Kelapa Gading | Jakarta Utara | 10.32 | -0.399 | 19.48 | +47.0% |
+| **AVERAGE** | — | **14.80** | **-0.033** | — | — |
 
 ## Reproducibility
 

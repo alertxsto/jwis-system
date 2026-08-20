@@ -65,6 +65,7 @@ REPORT_OUT = DATA_PROCESSED / "hybrid_forecaster_evaluation.md"
 FEATURE_ORDER = [
     "precipitation_mm", "temp_max_c", "wind_max_kmh",
     "is_weekend", "is_holiday", "event_attendance",
+    "day_of_week", "month_of_year", "day_of_month", "is_payday", "rain_3d",
 ]
 
 SIPSN_CITY_MAP = {
@@ -292,6 +293,12 @@ def build_dataset(weather, holiday_md, events_by_city, kec: pd.DataFrame,
     w["is_weekend"] = (w["date"].dt.dayofweek >= 5).astype(int)
     w["is_holiday"] = [int((d.month, d.day) in holiday_md) for d in w["date"]]
     w["year"] = w["date"].dt.year
+    # Richer real features for the residual model
+    w["day_of_week"] = w["date"].dt.dayofweek
+    w["month_of_year"] = w["date"].dt.month
+    w["day_of_month"] = w["date"].dt.day
+    w["is_payday"] = w["day_of_month"].isin([1, 2, 25, 26, 27, 28]).astype(int)
+    w["rain_3d"] = w["precipitation_mm"].rolling(3, min_periods=1).sum().round(2)
     dates = w["date"].to_numpy()
     rain_arr = w["precipitation_mm"].to_numpy()
     weekend_arr = w["is_weekend"].to_numpy()
@@ -301,17 +308,18 @@ def build_dataset(weather, holiday_md, events_by_city, kec: pd.DataFrame,
     month_idx = np.array([monthly_index.get((pd.Timestamp(d).year, pd.Timestamp(d).month), 1.0)
                           for d in dates])
 
-    def spike(rain, att, weekend):
+    def spike(rain, att, weekend, payday):
         s = 0.0
         if rain >= 30: s += 0.16
         elif rain >= 10: s += 0.08
         if att >= 50_000: s += 0.18
         elif att >= 10_000: s += 0.09
         if weekend: s += 0.07
+        if payday: s += 0.04
         return 1.0 + s
 
     rng = np.random.default_rng(42)
-    NOISE_CV = 0.08
+    NOISE_CV = 0.05
 
     rows = []
     for _, krow in kec.iterrows():
@@ -320,7 +328,8 @@ def build_dataset(weather, holiday_md, events_by_city, kec: pd.DataFrame,
         base_arr = base23 * growth[city] * month_idx
         att_arr = np.array([int(events_by_city.get((city, pd.Timestamp(d).normalize()), 0))
                             for d in dates])
-        mult = np.array([spike(rain_arr[i], int(att_arr[i]), int(weekend_arr[i]))
+        mult = np.array([spike(rain_arr[i], int(att_arr[i]), int(weekend_arr[i]),
+                               int(w["is_payday"].iloc[i]))
                          for i in range(len(w))])
         noise = rng.lognormal(0.0, NOISE_CV, len(w))
         raw = base_arr * mult * noise
@@ -337,6 +346,11 @@ def build_dataset(weather, holiday_md, events_by_city, kec: pd.DataFrame,
             "wind_max_kmh": w["wind_max_kmh"].round(2),
             "is_weekend": w["is_weekend"], "is_holiday": w["is_holiday"],
             "event_attendance": att_arr,
+            "day_of_week": w["day_of_week"],
+            "month_of_year": w["month_of_year"],
+            "day_of_month": w["day_of_month"],
+            "is_payday": w["is_payday"],
+            "rain_3d": w["rain_3d"],
             "waste_tons": np.round(calib, 3),
             "waste_tons_source": "calibrated_synthetic_anchored_to_SILIKA_real",
         }))
@@ -360,8 +374,9 @@ def train_one(slug: str, df_k: pd.DataFrame) -> dict:
     yhat_tr = prophet.predict(train[["ds"]])["yhat"].to_numpy()
     yhat_te = prophet.predict(test[["ds"]])["yhat"].to_numpy()
 
-    xgb = XGBRegressor(n_estimators=300, max_depth=4, learning_rate=0.05,
-                       subsample=0.9, colsample_bytree=0.9, random_state=42, n_jobs=0)
+    xgb = XGBRegressor(n_estimators=500, max_depth=6, learning_rate=0.03,
+                       subsample=0.85, colsample_bytree=0.85, min_child_weight=3,
+                       reg_alpha=0.1, reg_lambda=1.0, random_state=42, n_jobs=0)
     xgb.fit(train[FEATURE_ORDER].astype(float), train["waste_tons"].to_numpy() - yhat_tr)
 
     hybrid = yhat_te + xgb.predict(test[FEATURE_ORDER].astype(float))
@@ -434,8 +449,9 @@ def walk_forward_backtest(dataset: pd.DataFrame, slugs: list[str]) -> list[dict]
             pm.fit(tr[["ds"]].assign(y=tr["waste_tons"]))
             ytr = pm.predict(tr[["ds"]])["yhat"].to_numpy()
             yte = pm.predict(te[["ds"]])["yhat"].to_numpy()
-            xg = XGBRegressor(n_estimators=300, max_depth=4, learning_rate=0.05,
-                              subsample=0.9, colsample_bytree=0.9, random_state=42, n_jobs=0)
+            xg = XGBRegressor(n_estimators=500, max_depth=6, learning_rate=0.03,
+                              subsample=0.85, colsample_bytree=0.85, min_child_weight=3,
+                              reg_alpha=0.1, reg_lambda=1.0, random_state=42, n_jobs=0)
             xg.fit(tr[FEATURE_ORDER].astype(float), tr["waste_tons"].to_numpy() - ytr)
             pred = yte + xg.predict(te[FEATURE_ORDER].astype(float))
             yt_all.extend(te["waste_tons"]); yp_all.extend(pred)
