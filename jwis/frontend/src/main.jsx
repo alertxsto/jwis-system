@@ -1721,10 +1721,15 @@ function AssistantPanel() {
           onChange={handleFileSelect}
           style={{ display: "none" }}
         />
-        <label className="assistant-upload-button" title="Upload image or PDF">
-          <input type="button" onClick={() => fileInputRef.current?.click()} />
+        <button
+          type="button"
+          className="assistant-upload-button"
+          title="Upload image or PDF"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Attach photo or PDF"
+        >
           <Paperclip size={18} />
-        </label>
+        </button>
         <label className="sr-only" htmlFor="assistant-question">Ask Ana anything</label>
         <input
           id="assistant-question"

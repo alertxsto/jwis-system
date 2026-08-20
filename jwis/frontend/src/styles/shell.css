@@ -607,22 +607,79 @@
 
 .assistant-chat-input {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 42px;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px 16px;
   border-top: 1px solid var(--ui-border);
   background: var(--ui-canvas);
 }
 
-.assistant-chat-input input {
+.assistant-file-chip {
+  grid-column: 1 / -1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+  border: 1px solid var(--ui-border);
+  border-radius: 999px;
+  margin-bottom: 2px;
+}
+
+.assistant-file-chip button {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--ui-muted);
+}
+
+.assistant-file-chip button:hover {
+  color: var(--ui-danger);
+}
+
+.assistant-upload-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  border: 1px solid var(--ui-border-strong);
+  border-radius: 8px;
+  background: var(--ui-surface);
+  color: var(--ui-muted);
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.assistant-upload-button:hover {
+  color: var(--ui-ink);
+  border-color: var(--ui-accent);
+}
+
+.assistant-upload-button input {
+  display: none !important;
+}
+
+.assistant-chat-input input#assistant-question,
+.assistant-chat-input input[type="text"],
+.assistant-chat-input input:not([type="button"]):not([type="file"]) {
   width: 100%;
   min-height: 42px;
+  height: 42px;
   border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
   padding: 0 12px;
   color: var(--ui-ink);
   background: var(--ui-surface);
   outline: none;
+  font-size: 13px;
 }
 
 .assistant-chat-input input::placeholder {
@@ -635,13 +692,18 @@
 }
 
 .assistant-chat-input .primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 42px;
   min-width: 42px;
+  height: 42px;
   min-height: 42px;
   padding: 0;
   border-radius: 8px;
   color: #ffffff;
   background: var(--ui-accent);
+  cursor: pointer;
 }
 
 .assistant-chat-input .primary-button:disabled {
