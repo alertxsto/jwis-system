@@ -27,12 +27,13 @@ class ToolRegistryTests(unittest.TestCase):
     def test_execute_snapshot_tool(self):
         result = execute_tool("get_command_center_snapshot", {}, _ctx())
         self.assertIn("kpis", result)
-        self.assertIn("predictions", result)
+        self.assertIn("critical_predictions", result)
 
     def test_execute_fleet_status_tool(self):
         result = execute_tool("get_fleet_status", {"truck_code": "T-047"}, _ctx())
-        self.assertIsInstance(result, list)
-        self.assertTrue(any(t["truck_code"] == "T-047" for t in result))
+        self.assertIsInstance(result, dict)
+        self.assertIn("problem_trucks", result)
+        self.assertTrue(any(t["truck_code"] == "T-047" for t in result["trucks"]))
 
     def test_execute_truck_breadcrumbs(self):
         result = execute_tool("get_truck_breadcrumbs", {"truck_code": "T-047"}, _ctx())
