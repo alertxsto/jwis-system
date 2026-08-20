@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React from "react";
 import { MetricStrip } from "../ui/MetricStrip.jsx";
 import { SegmentedControl } from "../ui/SegmentedControl.jsx";
 
 const horizonOptions = [
   { value: "7d", label: "7 days" },
-  { value: "14d", label: "14 days", title: "Demo projection extends the 7-day weather baseline" },
-  { value: "30d", label: "30 days", title: "Demo projection extends the 7-day weather baseline" },
+  { value: "14d", label: "14 days" },
+  { value: "30d", label: "30 days" },
 ];
 
 export function WasteForecast({
@@ -15,9 +15,9 @@ export function WasteForecast({
   events,
   districts,
   reportActions,
+  horizon,
+  onHorizonChange,
 }) {
-  const [horizon, setHorizon] = useState("7d");
-
   return (
     <section className="forecast-workspace" data-testid="forecast-workspace">
       <div className="forecast-heading">
@@ -31,10 +31,11 @@ export function WasteForecast({
             describedBy="forecast-horizon-source-limit"
             value={horizon}
             options={horizonOptions}
-            onChange={setHorizon}
+            onChange={onHorizonChange}
           />
           <p id="forecast-horizon-source-limit" className="forecast-source-limit">
-            Projection view extends the 7-day source baseline for demo planning.
+            Live model series per day: weekday and national-holiday drivers vary by date;
+            rainfall and event scenario inputs are held constant across the horizon.
           </p>
         </div>
       </div>

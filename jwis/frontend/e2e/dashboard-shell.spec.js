@@ -25,7 +25,7 @@ test("app shell provides three operational workspaces", async ({ page }) => {
     await workspace.click();
     await expect(workspace).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".app-shell")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Refresh command center" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "AI Assistant" })).toBeVisible();
   }
 });
 
@@ -86,7 +86,7 @@ test("mobile navigation traps focus, blocks background focus, and restores the t
   const nav = page.getByTestId("workspace-navigation");
   const firstWorkspace = nav.getByRole("button", { name: "Fleet Operations" });
   const logout = page.getByRole("button", { name: "Logout" });
-  const refresh = page.getByRole("button", { name: "Refresh command center" });
+  const backgroundControl = page.getByRole("button", { name: "AI Assistant" });
 
   await trigger.click();
   await expect(firstWorkspace).toBeFocused();
@@ -96,8 +96,8 @@ test("mobile navigation traps focus, blocks background focus, and restores the t
   await expect(firstWorkspace).toBeFocused();
 
   await expect(page.locator(".app-shell")).toHaveAttribute("inert", "");
-  await refresh.evaluate((element) => element.focus());
-  await expect(refresh).not.toBeFocused();
+  await backgroundControl.evaluate((element) => element.focus());
+  await expect(backgroundControl).not.toBeFocused();
 
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
@@ -154,8 +154,6 @@ test("mobile shell controls meet minimum touch targets", async ({ page }) => {
 
   await expectMinimumTouchTarget(trigger);
   await expectMinimumTouchTarget(page.getByRole("button", { name: "AI Assistant" }));
-  await expectMinimumTouchTarget(page.getByRole("link", { name: "Field app" }));
-  await expectMinimumTouchTarget(page.getByRole("button", { name: "Refresh command center" }));
   await trigger.click();
 
   for (const control of await page.getByTestId("workspace-navigation").getByRole("button").all()) {
@@ -177,15 +175,15 @@ test("AI assistant opens from the topbar instead of rendering as a forecast card
   await page.getByRole("button", { name: "Waste Forecast" }).click();
 
   const assistantButton = page.getByRole("button", { name: "AI Assistant" });
-  const fieldApp = page.getByRole("link", { name: "Field app" });
+  const profile = page.locator(".profile-widget");
   await expect(assistantButton).toBeVisible();
-  await expect(fieldApp).toBeVisible();
+  await expect(profile).toBeVisible();
 
-  const [assistantLeft, fieldLeft] = await Promise.all([
+  const [assistantLeft, profileLeft] = await Promise.all([
     assistantButton.evaluate((element) => element.getBoundingClientRect().left),
-    fieldApp.evaluate((element) => element.getBoundingClientRect().left),
+    profile.evaluate((element) => element.getBoundingClientRect().left),
   ]);
-  expect(assistantLeft).toBeLessThan(fieldLeft);
+  expect(assistantLeft).toBeLessThan(profileLeft);
   await expect(page.locator(".forecast-assistant-row")).toHaveCount(0);
 
   await assistantButton.click();
@@ -219,9 +217,9 @@ test("AI assistant opens from the topbar instead of rendering as a forecast card
 });
 
 test("primary controls use clay focus without a legacy outline", async ({ page }) => {
-  const refresh = page.getByRole("button", { name: "Refresh command center" });
-  await refresh.focus();
-  const focusStyle = await refresh.evaluate((element) => {
+  const control = page.getByRole("button", { name: "AI Assistant" });
+  await control.focus();
+  const focusStyle = await control.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       outlineStyle: style.outlineStyle,
@@ -299,22 +297,24 @@ test("desktop shell and operational surfaces match the professional reference sy
   expect(shell.topbar.borderWidth).toBe("1px");
   expect(shell.canvas.background).toBe("rgb(248, 248, 246)");
   expect(shell.panel.radius).toBe(16);
-  expect(shell.panel.shadow).toBe("none");
-  expect(shell.activeNav).toBe("rgb(239, 238, 235)");
-  expect(shell.primary).toBe("rgb(18, 18, 18)");
+  expect(shell.panel.shadow).not.toBe("none");
+  expect(shell.activeNav).toBe("rgb(244, 228, 220)");
+  expect(shell.primary).toBe("rgb(217, 119, 87)");
 
   const metricGeometry = await page.locator(".metric-strip").evaluate((strip) => {
     const cells = [...strip.querySelectorAll(":scope > .metric-cell")];
     const first = cells[0].getBoundingClientRect();
     const second = cells[1].getBoundingClientRect();
-    const style = getComputedStyle(strip);
+    const cellStyle = getComputedStyle(cells[0]);
     return {
       gap: second.left - first.right,
-      radius: Number.parseFloat(style.borderRadius),
-      shadow: style.boxShadow,
+      radius: Number.parseFloat(cellStyle.borderRadius),
+      shadow: cellStyle.boxShadow,
     };
   });
-  expect(metricGeometry).toEqual({ gap: 0, radius: 16, shadow: "none" });
+  expect(metricGeometry.gap).toBeCloseTo(12, 0);
+  expect(metricGeometry.radius).toBe(16);
+  expect(metricGeometry.shadow).not.toBe("none");
 
   await page.getByRole("tab", { name: "Trip history" }).click();
   const header = page.getByTestId("fleet-history-surface").locator("table thead th").first();
@@ -391,7 +391,8 @@ test("login and field surfaces share the Refero paper visual system", async ({ p
       buttonBackground: buttonStyle.backgroundColor,
     };
   });
-  expect(login).toEqual({ radius: 24, shadow: "none", buttonBackground: "rgb(18, 18, 18)" });
+  expect(login).toEqual({ radius: 24, shadow: login.shadow, buttonBackground: "rgb(217, 119, 87)" });
+  expect(login.shadow).not.toBe("none");
 
   await page.goto("/field");
   const field = await page.locator(".field-card").evaluate((card) => {
@@ -402,5 +403,6 @@ test("login and field surfaces share the Refero paper visual system", async ({ p
       background: style.backgroundColor,
     };
   });
-  expect(field).toEqual({ radius: 16, shadow: "none", background: "rgb(255, 255, 255)" });
+  expect(field).toEqual({ radius: 16, shadow: field.shadow, background: "rgb(255, 255, 255)" });
+  expect(field.shadow).not.toBe("none");
 });

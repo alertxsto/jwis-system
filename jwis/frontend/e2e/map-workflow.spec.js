@@ -2,8 +2,17 @@ import { test, expect } from "@playwright/test";
 
 const API_BASE = process.env.PLAYWRIGHT_API_BASE_URL || "http://127.0.0.1:8001";
 
+// Necessary: the jam toggle tests mutate GLOBAL server-side state (simulate-jam
+// active flag) mid-test. Parallel workers raced: test 158's jam=true landed
+// while test 126 was reading map features, flipping T-047 to clean and failing
+// the violation precondition. Serializing the file (1 worker, ordered tests,
+// per-test beforeEach reset) makes the shared jam state deterministic.
+test.describe.configure({ mode: "serial" });
+
 // Map truthfulness E2E: render, deviation coloring, heatmap, TPA marker.
 test.beforeEach(async ({ page }) => {
+  // Global server-side jam state must be reset for deterministic tests.
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`);
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
 });
@@ -119,4 +128,101 @@ test("map-truth payload has road-following geometry and synced snapped GPS", asy
   // Snapped GPS is close to raw (map-matched), and provenance is labeled.
   expect(t.provenance.raw_gps).toBe("RAW_GPS_SIMULATED");
   expect(typeof t.deviation_m).toBe("number");
+});
+
+test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => (window.__jwisMapFeatures?.actualKinds || []).length > 0,
+    null,
+    { timeout: 15000 }
+  );
+
+  const before = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
+  expect(before).toContain("actual-violation");
+
+  await page.locator(".astar-panel .primary-button", { hasText: "Simulate Corridor Jam" }).click();
+  await expect(page.locator(".traffic-status-badge")).toContainText("Jam Active");
+  await expect(page.locator(".astar-stat-col strong", { hasText: "Diverted (A*)" })).toBeVisible();
+
+  const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+  expect(reroute.diversion_applied).toBe(true);
+  expect(reroute.abandoned_route.path.length).toBeGreaterThan(20);
+
+  const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+  const t = mt.trucks.find((x) => x.truck_code === "T-047");
+  expect(t.traffic.jam_active).toBe(true);
+  expect(t.abandoned_route.geometry.length).toBeGreaterThan(20);
+  expect(t.deviation_segments).not.toContain("violation");
+
+  await page.waitForFunction(
+    () => (window.__jwisMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
+    null,
+    { timeout: 15000 }
+  );
+});
+
+test("restore traffic returns T-047 to compliant and clears abandoned line", async ({ page }) => {
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(
+    () => (window.__jwisMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
+    null,
+    { timeout: 15000 }
+  );
+
+  await page.locator(".astar-panel .primary-button", { hasText: "Restore Traffic" }).click();
+  await expect(page.locator(".traffic-status-badge")).toContainText("Clear");
+
+  const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
+  expect(reroute.diversion_applied).toBe(false);
+
+  await page.waitForFunction(
+    () => !(window.__jwisMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
+    null,
+    { timeout: 15000 }
+  );
+});
+
+test("no GPS teleport across jam toggle (route-swap continuity)", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const snapped = async () => {
+    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+    return mt.trucks.find((x) => x.truck_code === "T-047").snapped_gps;
+  };
+  const a = await snapped();
+  await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`);
+  await page.waitForTimeout(1500);
+  const b = await snapped();
+  const dLat = Math.abs(b.lat - a.lat) * 111320;
+  const dLng = Math.abs(b.lng - a.lng) * 111320 * Math.cos((a.lat * Math.PI) / 180);
+  const meters = Math.hypot(dLat, dLng);
+  expect(meters).toBeLessThan(1500);
+});
+
+test("TPS and WR layers survive basemap switch", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(3000);
+  const satBtn = page.locator(".map-basemap button", { hasText: "Satellite" });
+  if (await satBtn.count()) await satBtn.click();
+  await page.waitForTimeout(2500);
+  const mapBtn = page.locator(".map-basemap button", { hasText: "Map" });
+  if (await mapBtn.count()) await mapBtn.click();
+  await page.waitForTimeout(2500);
+  const layerCheck = await page.evaluate(() => {
+    const m = document.querySelector("canvas")?.__maplibre_map || window.__jwisMap;
+    if (!m || !m.getLayer) return { error: "no map ref" };
+    return {
+      tps: !!m.getLayer("tps-layer"),
+      tpsCluster: !!m.getLayer("tps-clusters"),
+      wr: !!m.getLayer("wr-unclustered-point"),
+      wrCluster: !!m.getLayer("wr-clusters"),
+    };
+  });
+  if (!layerCheck.error) {
+    expect(layerCheck.tps).toBe(true);
+    expect(layerCheck.tpsCluster).toBe(true);
+    expect(layerCheck.wr).toBe(true);
+    expect(layerCheck.wrCluster).toBe(true);
+  }
 });

@@ -19,7 +19,8 @@
   --ui-radius-card: 16px;
   --ui-radius-elevated: 24px;
   --ui-radius-control: 8px;
-  --ui-shadow: none;
+  --ui-shadow: 0 1px 2px rgba(18, 18, 18, 0.05), 0 1px 3px rgba(18, 18, 18, 0.04);
+  --ui-shadow-hover: 0 4px 16px rgba(18, 18, 18, 0.08), 0 1px 3px rgba(18, 18, 18, 0.05);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -58,6 +59,6 @@
   --border-strong: var(--ui-border-strong);
   --radius: var(--ui-radius);
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
-  --shadow: none;
-  --shadow-hover: 0 4px 20px rgba(0, 0, 0, 0.04);
+  --shadow: 0 1px 2px rgba(18, 18, 18, 0.05), 0 1px 3px rgba(18, 18, 18, 0.04);
+  --shadow-hover: 0 6px 24px rgba(18, 18, 18, 0.09), 0 2px 6px rgba(18, 18, 18, 0.05);
 }

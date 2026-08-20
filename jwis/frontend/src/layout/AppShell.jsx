@@ -3,10 +3,10 @@ import {
   Activity,
   BarChart3,
   Bot,
+  Cctv,
   LogOut,
   Menu,
   MessageCircle,
-  RefreshCcw,
   Route,
   Search,
   Shield,
@@ -20,6 +20,7 @@ const items = [
   { id: "fleet", label: "Fleet Operations", icon: Truck, section: "Operations" },
   { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
   { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
+  { id: "surveillance", label: "Gate Surveillance", icon: Cctv, section: "Operations" },
   { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
   { id: "weighbridge", label: "Weighbridge Logs", icon: Workflow, section: "Logistics" },
   { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
@@ -203,10 +204,6 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
             <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
             <button className="ghost-button assistant-topbar-button" type="button" onClick={() => setAssistantOpen(true)}>
               <Bot size={16} />AI Assistant
-            </button>
-            <a className="ghost-button" href="/field"><Truck size={16} />Field app</a>
-            <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">
-              <RefreshCcw size={16} />
             </button>
             <div className="profile-widget">
               <span className="profile-avatar" aria-hidden="true">JW</span>

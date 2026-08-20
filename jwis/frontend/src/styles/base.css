@@ -49,17 +49,19 @@ h3 {
 }
 
 h1 {
-  font-family: Georgia, "Source Serif 4", Charter, serif;
-  font-size: 30px;
-  font-weight: 400;
-  line-height: 1.2;
+  font-family: "Plus Jakarta Sans", "Geist Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
 }
 
 h2 {
-  font-family: Georgia, "Source Serif 4", Charter, serif;
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 1.28;
+  font-family: "Plus Jakarta Sans", "Geist Sans", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
 }
 
 .panel-title h2,

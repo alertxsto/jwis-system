@@ -249,7 +249,7 @@ test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
   });
   expect(selectedHorizonContrast).toBeGreaterThanOrEqual(4.5);
   const sourceLimit = page.locator("#forecast-horizon-source-limit");
-  await expect(sourceLimit).toHaveText("Projection view extends the 7-day source baseline for demo planning.");
+  await expect(sourceLimit).toHaveText("Live model series per day: weekday and national-holiday drivers vary by date; rainfall and event scenario inputs are held constant across the horizon.");
   await expect(sourceLimit).toBeVisible();
   await expect(page.getByRole("group", { name: "Forecast horizon" })).toHaveAttribute(
     "aria-describedby",

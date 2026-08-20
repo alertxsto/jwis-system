@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import FieldApp from "./field/FieldApp.jsx";
 import { AppShell } from "./layout/AppShell.jsx";
@@ -41,8 +43,12 @@ import {
   Database,
   Shield,
   Cpu,
+  Cctv,
+  Factory,
+  Paperclip,
 } from "lucide-react";
-import { LiveFleetMap } from "./LiveFleetMap.jsx";
+import { lazy, Suspense } from "react";
+const LiveFleetMap = lazy(() => import("./LiveFleetMap.jsx").then((m) => ({ default: m.LiveFleetMap })));
 import "./styles.css";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
@@ -236,14 +242,21 @@ function useSnapshot() {
   const [online, setOnline] = useState(false);
 
   async function load() {
+    // Necessary: 15s cap covers the server's cold-start command-center build
+    // (~10s: weather fetch + per-truck snap/reroute) while still preventing an
+    // unbounded fetch from hanging the UI (and the e2e fetch-settle checks).
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`${API_URL}/command-center`);
+      const response = await fetch(`${API_URL}/command-center`, { signal: controller.signal });
       if (!response.ok) throw new Error("API unavailable");
       setSnapshot(normalizeCommandSnapshot(await response.json()));
       setOnline(true);
     } catch {
       setSnapshot(normalizeCommandSnapshot(fallbackSnapshot));
       setOnline(false);
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -328,8 +341,6 @@ function LoginPage({ onLogin }) {
             </button>
           </form>
           <div className="login-demo-note">
-            <strong>Demo access</strong>
-            <span>dispatcher, supervisor, or auditor</span>
             <code>dispatcher-demo-pass</code>
           </div>
         </div>
@@ -387,7 +398,7 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
   );
 }
 
-function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded }) {
+function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded, jamActive }) {
   return (
     <section className="panel map-panel">
       <div className="panel-title">
@@ -397,20 +408,65 @@ function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbac
         </div>
         <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
       </div>
-      <LiveFleetMap 
-        trucks={trucks} 
-        attendance={attendance} 
-        rainfall={rainfall} 
-        onSelectTruck={onSelectTruck} 
-        layers={layers}
-        playbackTruck={playbackTruck}
-        onBreadcrumbsLoaded={onBreadcrumbsLoaded}
-      />
+      <Suspense fallback={<div className="map-loading-fallback">Loading map…</div>}>
+        <LiveFleetMap 
+          trucks={trucks} 
+          attendance={attendance} 
+          rainfall={rainfall} 
+          onSelectTruck={onSelectTruck} 
+          layers={layers}
+          playbackTruck={playbackTruck}
+          onBreadcrumbsLoaded={onBreadcrumbsLoaded}
+          jamActive={jamActive}
+        />
+      </Suspense>
     </section>
   );
 }
 
 function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
+  const [followUps, setFollowUps] = useState({});
+  const [notes, setNotes] = useState({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/alert/follow-ups`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((records) => {
+        if (cancelled) return;
+        const map = {};
+        for (const rec of records) {
+          if (rec.payload?.alert_id) map[rec.payload.alert_id] = { ...rec.payload, updated_at: rec.created_at };
+        }
+        setFollowUps(map);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  async function recordFollowUp(alert, status, noteOverride) {
+    const note = noteOverride !== undefined ? noteOverride : (notes[alert.id] || "").trim();
+    const payload = {
+      alert_id: alert.id,
+      status,
+      operator: localStorage.getItem("jwis_role") || "dispatcher",
+      note,
+    };
+    setFollowUps((s) => ({ ...s, [alert.id]: { ...payload, updated_at: new Date().toISOString() } }));
+    setNotes((s) => ({ ...s, [alert.id]: "" }));
+    try {
+      await fetch(`${API_URL}/alert/follow-up`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+} catch (error) {
+      console.warn("Follow-up sync failed; kept local only", error);
+    }
+  }
+
+  const activeCount = alerts.filter((a) => (followUps[a.id]?.status || "OPEN") !== "RESOLVED").length;
+
   return (
     <section className="panel">
       <div className="panel-title">
@@ -418,11 +474,13 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
           <h2>Action Queue</h2>
           <p>Alerts are linked to route recommendations and field instructions.</p>
         </div>
-        <StatusPill tone="danger">{alerts.length} active</StatusPill>
+        <StatusPill tone="danger">{activeCount} active</StatusPill>
       </div>
       <div className="alert-list">
         {alerts.map((alert) => {
           const recommendedRoute = alert.recommended_routes?.[0];
+          const status = followUps[alert.id]?.status || "OPEN";
+          const statusClass = status === "RESOLVED" ? "success" : status === "DISPATCHED" ? "warning" : "danger";
           return (
             <article className="alert-item" key={alert.id}>
               <div className="alert-head">
@@ -431,6 +489,7 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
                   <strong>{alert.title}</strong>
                   <p>{alert.description}</p>
                 </div>
+                <span className={`pill ${statusClass}`}>{status}</span>
               </div>
               <div className={`route-rec ${recommendedRoute ? "" : "route-rec-empty"}`}>
                 {recommendedRoute ? (
@@ -448,14 +507,32 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
                   </div>
                 )}
               </div>
-              <div className="alert-actions">
-                <button className="primary-button" onClick={() => onDispatch(alert)}>
-                  <Send size={16} /> Approve &amp; Dispatch
-                </button>
-                <button className="ghost-button alert-wa-button" onClick={() => onWhatsApp(alert)}>
-                  <MessageCircle size={16} /> WA Alert
-                </button>
-              </div>
+              {status !== "RESOLVED" ? (
+                <div className="alert-actions">
+                  <button className="primary-button" onClick={() => { onDispatch(alert); recordFollowUp(alert, "DISPATCHED", `Routed via ${recommendedRoute?.name || "backup route"}`); }}>
+                    <Send size={16} /> Approve &amp; Dispatch
+                  </button>
+                  <button className="ghost-button alert-wa-button" onClick={() => onWhatsApp(alert)}>
+                    <MessageCircle size={16} /> WA Alert
+                  </button>
+                  <div className="alert-resolve-row">
+                    <input
+                      type="text"
+                      className="fu-note-input"
+                      value={notes[alert.id] || ""}
+                      onChange={(e) => setNotes((s) => ({ ...s, [alert.id]: e.target.value }))}
+                      placeholder="Note (e.g. T-012 handled by supervisor)"
+                    />
+                    <button className="ghost-button" onClick={() => recordFollowUp(alert, "RESOLVED")} disabled={!notes[alert.id]?.trim()}>
+                      <Check size={16} /> Mark Resolved
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="alert-resolved-note">
+                  <Check size={14} /> Resolved by <b>{followUps[alert.id]?.operator}</b>: {followUps[alert.id]?.note || "closed"}
+                </div>
+              )}
             </article>
           );
         })}
@@ -591,7 +668,200 @@ function PredictionPanel({ predictions, allPredictions = predictions }) {
   );
 }
 
-function KecamatanMapPanel() {
+const PERMIT_VENUE_PRESETS = [
+  { key: "gbk", label: "GBK Senayan", lat: -6.2183, lng: 106.8022 },
+  { key: "monas", label: "Kawasan Monas", lat: -6.1754, lng: 106.8272 },
+  { key: "jiexpo", label: "JIExpo Kemayoran", lat: -6.1448, lng: 106.8487 },
+  { key: "ancol", label: "Ancol", lat: -6.1260, lng: 106.8450 },
+  { key: "istora", label: "Istora Senayan", lat: -6.2270, lng: 106.7990 },
+  { key: "cfd", label: "Bundaran HI (CFD)", lat: -6.1950, lng: 106.8230 },
+];
+
+function PermitSubmissionPanel({ onPermitSubmitted }) {
+  const [name, setName] = useState("");
+  const [locationName, setLocationName] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [attendance, setAttendanceLocal] = useState(50000);
+  const [lat, setLat] = useState(-6.2183);
+  const [lng, setLng] = useState(106.8022);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  function applyPreset(key) {
+    const preset = PERMIT_VENUE_PRESETS.find((p) => p.key === key);
+    if (!preset) return;
+    setLat(preset.lat);
+    setLng(preset.lng);
+    if (!locationName) setLocationName(preset.label);
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await fetch(`${API_URL}/events/permits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name, location_name: locationName, event_date: eventDate,
+          expected_attendance: Number(attendance), lat: Number(lat), lng: Number(lng),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setResult(json);
+      onPermitSubmitted?.(json.permit);
+    } catch (err) {
+      setError("Submission failed — backend offline or invalid input.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <section className="panel wide" data-testid="permit-submission-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Event Permit Intake</h2>
+          <p>Submit an event permit — the system estimates waste generation, resources, and affected districts instantly.</p>
+        </div>
+        <Calendar size={20} />
+      </div>
+
+      <form className="permit-form" onSubmit={submit}>
+        <label>Event name
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required minLength={3} placeholder="e.g. Konser Musik GBK" />
+        </label>
+        <label>Venue preset
+          <select defaultValue="gbk" onChange={(e) => applyPreset(e.target.value)} aria-label="Venue preset">
+            {PERMIT_VENUE_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
+        </label>
+        <label>Location
+          <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} required minLength={3} placeholder="Venue / area name" />
+        </label>
+        <label>Event date
+          <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
+        </label>
+        <label>Expected attendance: <b>{Number(attendance).toLocaleString("en-US")}</b>
+          <input type="range" min="1000" max="200000" step="1000" value={attendance} onChange={(e) => setAttendanceLocal(e.target.value)} />
+        </label>
+        <div className="permit-coords">
+          <label>Lat <input type="number" step="0.0001" value={lat} onChange={(e) => setLat(e.target.value)} required /></label>
+          <label>Lng <input type="number" step="0.0001" value={lng} onChange={(e) => setLng(e.target.value)} required /></label>
+        </div>
+        <button className="primary-button" type="submit" disabled={submitting}>
+          {submitting ? "Submitting…" : "Submit permit & estimate impact"}
+        </button>
+        {error && <p className="permit-error">{error}</p>}
+      </form>
+
+      {result && (
+        <div className="permit-impact" data-testid="permit-impact">
+          <h3>Estimated impact — {result.permit.name}</h3>
+          <div className="facility-summary">
+            <div><b>{result.impact.predicted_waste_tons} t</b><span>predicted waste</span></div>
+            <div><b>{result.impact.backup_trucks_required}</b><span>backup trucks</span></div>
+            <div><b>{result.impact.crews_required}</b><span>field crews</span></div>
+            <div><b>{result.impact.man_hours_required}</b><span>man-hours</span></div>
+            <div><b>{result.impact.large_bins_required}</b><span>large bins</span></div>
+          </div>
+          <p className="permit-affected">
+            Affected districts: {result.affected_kecamatan.map((a) => a.kecamatan).join(", ") || "nearest district assigned"}.
+          </p>
+          <p className="kec-note">{result.permit.data_note} Basis: {result.impact.resource_basis}.</p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function FacilityGapPanel({ rainfall = 0, attendance = 0 }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    setLoading(true);
+    const params = new URLSearchParams({
+      rainfall_mm: String(rainfall),
+      event_attendance: String(attendance),
+    });
+    fetch(`${API_URL}/facilities/gap-analysis?${params.toString()}`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => setData(json))
+      .catch(() => setData(null))
+      .finally(() => { clearTimeout(timer); setLoading(false); });
+  }, [rainfall, attendance]);
+
+  const areas = data?.areas || [];
+  const summary = data?.summary || {};
+  const shown = showAll ? areas : areas.slice(0, 6);
+  const sevColor = { critical: "#dc2626", watch: "#d97706", ok: "#16a34a", unknown: "#64748b" };
+
+  return (
+    <section className="panel wide" data-testid="facility-gap-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Facility Readiness &amp; Gap Analysis</h2>
+          <p>
+            Predicted demand vs TPS capacity proxy — where disposal and transport
+            facilities are missing, and where to site them.
+          </p>
+        </div>
+        <Factory size={20} />
+      </div>
+
+      {loading && <p className="panel-loading">Preparing facility gap analysis…</p>}
+      {!loading && !data && <p className="panel-loading">Gap analysis unavailable.</p>}
+
+      {data && (
+        <>
+          <div className="facility-summary">
+            <div><b>{summary.critical_count}</b><span>critical districts</span></div>
+            <div><b>{summary.total_gap_ton_per_day?.toLocaleString("en-US")} t</b><span>daily capacity gap</span></div>
+            <div><b>{summary.total_extra_trucks_needed}</b><span>extra trips/day</span></div>
+            <div><b>{summary.total_new_tps_sites_needed}</b><span>new TPS sites (bounded share)</span></div>
+            <div><b>{Math.round((summary.citywide_proxy_coverage_ratio || 0) * 100)}%</b><span>proxy coverage</span></div>
+          </div>
+
+          <div className="facility-list">
+            {shown.map((a) => (
+              <article key={a.slug} className="facility-row">
+                <div className="facility-head">
+                  <strong>{a.kecamatan}</strong>
+                  <span className="facility-sev" style={{ color: sevColor[a.severity] }}>{a.severity}</span>
+                </div>
+                <div className="facility-meta">
+                  <span>demand {a.predicted_tons_per_day.toLocaleString("en-US")} t/day vs capacity {a.tps_capacity_proxy_ton_per_day ?? "?"} t</span>
+                  <span>gap <b>{a.gap_ton_per_day ?? "?"} t</b> · +{a.recommended_extra_trips_per_day} trips/day · {a.recommended_new_tps_sites} new TPS</span>
+                </div>
+                {a.siting_candidates?.length > 0 && (
+                  <div className="facility-siting">
+                    Site near: {a.siting_candidates.map((c) => `${c.kelurahan} (${c.predicted_tons} t, ${c.existing_tps_sites} TPS)`).join(" · ")}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+
+          {areas.length > 6 && (
+            <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
+              {showAll ? "Show fewer" : `Show all (${areas.length} districts)`}
+            </button>
+          )}
+          <p className="kec-note">{data.assumptions?.coverage_note}</p>
+        </>
+      )}
+    </section>
+  );
+}
+
+function KecamatanMapPanel({ horizon = "7d" }) {
   const [data, setData] = useState(null);
   const [rain, setRain] = useState(0);
   const [attendance, setAttendance] = useState(0);
@@ -601,19 +871,28 @@ function KecamatanMapPanel() {
   const [search, setSearch] = useState("");
   const [cityFilter, setCityFilter] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const horizonDays = Math.max(2, Math.min(30, parseInt(horizon, 10) || 7));
 
   async function load() {
+    // Necessary: 15s cap covers the server's cold-start per-kecamatan build
+    // (42 model predicts, ~1-3s warm, up to ~10s on first cold call) while
+    // still preventing an unbounded fetch from hanging the forecast panel.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
     try {
       const params = new URLSearchParams({
         rainfall_mm: String(rain),
         event_attendance: String(attendance),
         is_weekend: String(weekend),
+        horizon_days: String(horizonDays),
       });
-      const res = await fetch(`${API_URL}/predictions/kecamatan?${params.toString()}`);
+      const res = await fetch(`${API_URL}/predictions/kecamatan?${params.toString()}`, { signal: controller.signal });
       setData(await res.json());
     } catch (e) {
       setData(null);
+    } finally {
+      clearTimeout(timer);
     }
     setLoading(false);
   }
@@ -621,7 +900,7 @@ function KecamatanMapPanel() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [horizonDays]);
 
   const rows = data?.kecamatan || [];
   const maxTons = rows.length ? rows[0].predicted_tons : 1;
@@ -645,7 +924,7 @@ function KecamatanMapPanel() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>District Waste Forecast Map</h2>
+          <h2>District Waste Forecast</h2>
           <p>
             Hybrid Prophet+XGBoost forecast for {data?.kecamatan_count || 42} DKI districts,
             anchored to official SILIKA DLH 2023 baseline. Total forecast:{" "}
@@ -772,6 +1051,52 @@ function KecamatanMapPanel() {
             </div>
           </div>
           
+          {Array.isArray(selectedKec.daily_series) && selectedKec.daily_series.length > 1 && (
+            <div className="kec-series" data-testid="kec-daily-series">
+              <h4>Daily series — next {selectedKec.daily_series.length} days (live model)</h4>
+              <div className="kec-series-chart" role="img" aria-label={`Daily forecast series for ${selectedKec.kecamatan}`}>
+                {selectedKec.daily_series.map((d) => {
+                  const max = Math.max(...selectedKec.daily_series.map((x) => x.predicted_tons), 1);
+                  const pct = Math.max(4, Math.round((d.predicted_tons / max) * 100));
+                  return (
+                    <div key={d.date} className={`kec-series-bar${d.is_weekend ? " weekend" : ""}${d.is_holiday ? " holiday" : ""}`}
+                      title={`${d.date}: ${d.predicted_tons} t${d.is_weekend ? " (weekend)" : ""}${d.is_holiday ? " (holiday)" : ""}`}>
+                      <span style={{ height: `${pct}%` }} />
+                      <small>{d.date.slice(5)}</small>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="kec-series-note">
+                Peak {selectedKec.horizon_peak_date}: {Math.round(selectedKec.horizon_peak_tons)} t ·
+                Horizon total {Math.round(selectedKec.horizon_total_tons).toLocaleString("en-US")} t.
+                Weekend/holiday bars are highlighted; weather scenario held constant.
+              </p>
+            </div>
+          )}
+
+          {selectedKec.factor_attribution && (
+            <div className="kec-attribution" data-testid="kec-attribution">
+              <h4>Driver attribution (tons, leave-one-out on residual model)</h4>
+              <div className="kec-attribution-grid">
+                {[
+                  ["Prophet baseline", selectedKec.factor_attribution.prophet_baseline_tons],
+                  ["Rainfall", selectedKec.factor_attribution.rainfall_tons],
+                  ["Event crowd", selectedKec.factor_attribution.event_tons],
+                  ["Weekend", selectedKec.factor_attribution.weekend_tons],
+                  ["Holiday", selectedKec.factor_attribution.holiday_tons],
+                ].map(([label, val]) => (
+                  <div key={label} className="kec-attribution-item">
+                    <span>{label}</span>
+                    <b style={{ color: val > 0 ? "#ea580c" : "var(--ui-muted)" }}>
+                      {val > 0 ? `+${Number(val).toLocaleString("en-US")}` : Number(val || 0).toLocaleString("en-US")} t
+                    </b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selectedKec.factors && selectedKec.factors.length > 0 && (
             <div className="kec-details-drivers">
               <h4>Spike drivers</h4>
@@ -803,6 +1128,11 @@ function KecamatanMapPanel() {
             <div className="kec-meta">
               <b>{k.predicted_tons.toLocaleString("en-US")} t</b>
               <span>{k.trucks_required} trucks / {k.crews_required} crews / {k.man_hours_required} m-hr</span>
+              {k.horizon_total_tons != null && (
+                <span className="kec-horizon">
+                  {horizonDays}d total {Math.round(k.horizon_total_tons).toLocaleString("en-US")} t · peak {k.horizon_peak_date} ({Math.round(k.horizon_peak_tons)} t)
+                </span>
+              )}
               <span className="kec-facility" style={{ color: readinessColor[k.facility_readiness] }}>
                 {k.facility_over_capacity ? "Warning: TPS over-capacity" : "TPS " + k.facility_readiness}
               </span>
@@ -1086,12 +1416,15 @@ function WeatherPanel({ weather }) {
 }
 
 function FleetTable({ trucks, onOpenTripHistory }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? trucks : trucks.slice(0, 12);
+  const damagedCount = trucks.filter((t) => t.is_damaged).length;
   return (
     <section className="panel wide">
       <div className="panel-title">
         <div>
           <h2>Fleet State</h2>
-          <p>Each row is directly actionable and audit-ready.</p>
+          <p>{trucks.length} units tracked · {damagedCount} with open damage status. Each row is directly actionable and audit-ready.</p>
         </div>
       </div>
       <div className="table-wrap">
@@ -1102,13 +1435,14 @@ function FleetTable({ trucks, onOpenTripHistory }) {
               <th>Driver</th>
               <th>Zone</th>
               <th>Status</th>
+              <th>Activity</th>
               <th>Speed</th>
               <th>Deviation</th>
               <th>History</th>
             </tr>
           </thead>
           <tbody>
-            {trucks.map((truck) => (
+            {shown.map((truck) => (
               <tr key={truck.truck_code}>
                 <td><b>{truck.truck_code}</b><span>{truck.plate_number}</span></td>
                 <td>{truck.driver_name}</td>
@@ -1117,11 +1451,12 @@ function FleetTable({ trucks, onOpenTripHistory }) {
                   {truck.deviation?.violated ? (
                     <StatusPill tone="danger">Route violation</StatusPill>
                   ) : truck.is_damaged ? (
-                    <StatusPill tone="warning">Damaged</StatusPill>
+                    <StatusPill tone="warning">{truck.damage_status?.state === "breakdown" ? "Breakdown" : "Maintenance"}</StatusPill>
                   ) : (
                     <StatusPill tone="success">Normal</StatusPill>
                   )}
                 </td>
+                <td>{truck.activity?.label || "—"}</td>
                 <td>{truck.latest_position?.speed_kmh} km/h</td>
                 <td>{Math.round(truck.deviation?.distance_meters || 0)} m</td>
                 <td>
@@ -1134,13 +1469,29 @@ function FleetTable({ trucks, onOpenTripHistory }) {
           </tbody>
         </table>
       </div>
+      {trucks.length > 12 && (
+        <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
+          {showAll ? "Show fewer" : `Show all (${trucks.length} units)`}
+        </button>
+      )}
     </section>
   );
 }
 
 function ExecutiveSummary({ summary, queue }) {
+  const [impact, setImpact] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/reports/executive-summary`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (!cancelled && data?.queue_impact) setImpact(data.queue_impact); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   return (
-    <section className="panel summary-panel">
+    <section className="panel">
       <div className="panel-title">
         <div>
           <h2>Executive Summary</h2>
@@ -1157,6 +1508,27 @@ function ExecutiveSummary({ summary, queue }) {
         <span>{queue.trucks_waiting} trucks waiting - {queue.estimated_wait_minutes} min estimated delay</span>
         <p>{queue.recommendation}</p>
       </div>
+      {impact && (
+        <div className="exec-impact">
+          <div className="exec-impact-head"><strong>Optimization Impact — Staggered Dispatch</strong></div>
+          <div className="exec-impact-grid">
+            <div className="exec-impact-col">
+              <span className="exec-impact-label">Baseline (all trucks peak)</span>
+              <strong>{impact.baseline_queue_trucks} trucks · {impact.baseline_wait_minutes} min wait</strong>
+              <small>p95 {impact.baseline_p95_minutes} min</small>
+            </div>
+            <div className="exec-impact-arrow" aria-hidden="true">→</div>
+            <div className="exec-impact-col">
+              <span className="exec-impact-label">With staggered dispatch</span>
+              <strong>{impact.optimized_queue_trucks} trucks · {impact.optimized_wait_minutes} min wait</strong>
+              <small>p95 {impact.optimized_p95_minutes} min</small>
+            </div>
+            <div className="exec-impact-delta">
+              <strong>−{impact.queue_reduction_percent}% wait</strong>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1166,26 +1538,56 @@ function AssistantPanel() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      text: "Hi, I am Ana. Ask me about route deviation, rainfall risk, TPA queue, dispatch priority, or waste forecast spikes.",
+      text: "Hi, I am Ana. Ask me about route deviation, rainfall risk, TPA queue, dispatch priority, or waste forecast spikes. You can also upload a photo or PDF for analysis.",
     },
   ]);
   const [loading, setLoading] = useState(false);
+  const [attachedFile, setAttachedFile] = useState(null);
+  const fileInputRef = useRef(null);
+
+  function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const isPdf = file.type === "application/pdf";
+    const fileType = isPdf ? "pdf" : "image";
+    const reader = new FileReader();
+    reader.onload = () => {
+      let dataUrl = reader.result;
+      if (isPdf && dataUrl instanceof ArrayBuffer) {
+        const bytes = new Uint8Array(dataUrl);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        dataUrl = "data:application/pdf;base64," + btoa(binary);
+      }
+      setAttachedFile({ data: dataUrl, type: fileType, name: file.name });
+    };
+    if (isPdf) reader.readAsArrayBuffer(file);
+    else reader.readAsDataURL(file);
+    event.target.value = "";
+  }
 
   async function askAssistant(promptOverride) {
     const prompt = (promptOverride || question).trim();
-    if (!prompt || loading) return;
-
-    setMessages((current) => [...current, { role: "user", text: prompt }]);
+    if ((!prompt && !attachedFile) || loading) return;
+    const fileMeta = attachedFile ? ` [${attachedFile.name}]` : "";
+    setMessages((current) => [...current, { role: "user", text: (prompt || "Analyze this file") + fileMeta }]);
+    const currentFile = attachedFile;
     setQuestion("");
+    setAttachedFile(null);
     setLoading(true);
     try {
-const response = await fetch(`${API_URL}/assistant/query`, {
+      const body = {
+        question: prompt || "Analyze this file/image and tell me what you see related to JWIS waste operations.",
+        history: messages.slice(-8).map((m) => ({ role: m.role, content: m.text })),
+      };
+      if (currentFile) {
+        body.file_data = currentFile.data;
+        body.file_type = currentFile.type;
+      }
+      const response = await fetch(`${API_URL}/assistant/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question: prompt,
-          history: messages.slice(-8).map((m) => ({ role: m.role, content: m.text })),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -1223,76 +1625,33 @@ const response = await fetch(`${API_URL}/assistant/query`, {
     }
   }
 
-  function normalizeAssistantText(text) {
+  function humanizeAssistantAnswer(text) {
+    if (!text) return text;
+    const humanPhrases = {
+      is_damaged: "truck damage confirmed",
+      off_corridor: "off the assigned corridor",
+      far_off_corridor: "far off the assigned corridor",
+    };
     return text
-      .replace(/\r/g, "")
-      .replace(/[—–�]/g, " - ")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/\bis_damaged:\s*true\b/gi, "truck damage confirmed")
-      .replace(/\bis_damaged:\s*false\b/gi, "truck damage not reported")
-      .replace(/\bRisis\b/gi, "Risk")
-      .replace(/,?\s*flags:\s*[^\n.]+[.]?/gi, "")
-      .replace(/Severity:\s*critical,\s*confidence\s*([\d.]+),?\s*/gi, "Severity: critical with high confidence. ");
+      .replace(/flags\s*:\s*([^\n]+)/gi, (match, list) => {
+        const cleaned = list
+          .split(",")
+          .map((item) => item.trim().replace(/^`|`$/g, "").trim())
+          .filter(Boolean)
+          .map((key) => humanPhrases[key] || key)
+          .join(", ");
+        return `Risks: ${cleaned}`;
+      })
+      .replace(/`?([a-z_]+)\s*:\s*(?:true|false|yes|no)`?/gi, (match, key) => humanPhrases[key] || match);
   }
 
   function renderAssistantText(text) {
-    const cleanText = normalizeAssistantText(text);
-    const renderInline = (line) => {
-      const parts = line.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
-      return parts.map((part, index) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-          return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
-        }
-        return <React.Fragment key={`${part}-${index}`}>{part}</React.Fragment>;
-      });
-    };
-
-    const lines = cleanText.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-    const blocks = [];
-    let bullets = [];
-    let numbers = [];
-
-    const flushBullets = () => {
-      if (!bullets.length) return;
-      blocks.push(
-        <ul key={`list-${blocks.length}`}>
-          {bullets.map((line, index) => <li key={`${line}-${index}`}>{renderInline(line)}</li>)}
-        </ul>,
-      );
-      bullets = [];
-    };
-
-    const flushNumbers = () => {
-      if (!numbers.length) return;
-      blocks.push(
-        <ol key={`ordered-${blocks.length}`}>
-          {numbers.map((line, index) => <li key={`${line}-${index}`}>{renderInline(line)}</li>)}
-        </ol>,
-      );
-      numbers = [];
-    };
-
-    lines.forEach((line) => {
-      const bullet = line.match(/^[-*]\s+(.+)/);
-      if (bullet) {
-        flushNumbers();
-        bullets.push(bullet[1]);
-        return;
-      }
-      const ordered = line.match(/^\d+\.\s+(.+)/);
-      if (ordered) {
-        flushBullets();
-        numbers.push(ordered[1]);
-        return;
-      }
-      flushBullets();
-      flushNumbers();
-      blocks.push(<p key={`paragraph-${blocks.length}`}>{renderInline(line)}</p>);
+    if (!text) return null;
+    const rawHtml = marked.parse(humanizeAssistantAnswer(text), { gfm: true, breaks: true });
+    return DOMPurify.sanitize(rawHtml, {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ["style", "script", "iframe", "form", "input"],
     });
-
-    flushBullets();
-    flushNumbers();
-    return blocks;
   }
 
   return (
@@ -1314,13 +1673,7 @@ const response = await fetch(`${API_URL}/assistant/query`, {
               {message.role === "assistant" ? "AI" : "ME"}
             </span>
             <div className="assistant-bubble">
-              <div className="assistant-formatted-answer">{renderAssistantText(message.text)}</div>
-              {message.role === "assistant" && (message.model || message.provider) && (
-                <small className="assistant-source">
-                  {message.model ? `Ana · ${message.model}` : message.provider}
-                  {message.toolsUsed && message.toolsUsed.length > 0 ? ` · tools: ${message.toolsUsed.join(", ")}` : ""}
-                </small>
-              )}
+              <div className="assistant-formatted-answer" dangerouslySetInnerHTML={{ __html: renderAssistantText(message.text) }} />
             </div>
           </article>
         ))}
@@ -1352,15 +1705,35 @@ const response = await fetch(`${API_URL}/assistant/query`, {
           askAssistant();
         }}
       >
+        {attachedFile && (
+          <div className="assistant-file-chip">
+            <Paperclip size={14} />
+            <span>{attachedFile.name}</span>
+            <button type="button" aria-label="Remove file" onClick={() => setAttachedFile(null)}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={handleFileSelect}
+          style={{ display: "none" }}
+        />
+        <label className="assistant-upload-button" title="Upload image or PDF">
+          <input type="button" onClick={() => fileInputRef.current?.click()} />
+          <Paperclip size={18} />
+        </label>
         <label className="sr-only" htmlFor="assistant-question">Ask Ana anything</label>
         <input
           id="assistant-question"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
-          placeholder="Ask Ana anything..."
+          placeholder={attachedFile ? "Ask about this file..." : "Ask Ana anything..."}
           autoComplete="off"
         />
-        <button className="primary-button" type="submit" aria-label="Send message" disabled={loading || !question.trim()}>
+        <button className="primary-button" type="submit" aria-label="Send message" disabled={loading || (!question.trim() && !attachedFile)}>
           <Send size={16} />
         </button>
       </form>
@@ -1672,19 +2045,20 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
 
 function TpaQueuePanel() {
   const [queue, setQueue] = useState(null);
+  const [scenario, setScenario] = useState("peak");
 
-  async function fetchQueue() {
+  async function fetchQueue(sc = scenario) {
     try {
-      const res = await fetch(`${API_URL}/tpa/queue-status`);
+      const res = await fetch(`${API_URL}/tpa/queue-status?scenario=${sc}`);
       if (res.ok) setQueue(await res.json());
     } catch {}
   }
 
   useEffect(() => {
-    fetchQueue();
-    const interval = setInterval(fetchQueue, 6000);
+    fetchQueue(scenario);
+    const interval = setInterval(() => fetchQueue(scenario), 6000);
     return () => clearInterval(interval);
-  }, []);
+  }, [scenario]);
 
   if (!queue) return null;
 
@@ -1695,8 +2069,16 @@ function TpaQueuePanel() {
           <h2>Bantargebang Landfill Queue Status</h2>
           <p>Real-time visualization of weighbridge throughput and final-disposal truck queues.</p>
         </div>
+        <div className="tpa-scenario-toggle" role="group" aria-label="Arrival scenario">
+          {[["peak", "Peak hour"], ["live", "Live clock"]].map(([id, label]) => (
+            <button key={id} className={scenario === id ? "active" : ""} onClick={() => setScenario(id)}>{label}</button>
+          ))}
+        </div>
         <Clock size={20} />
       </div>
+      {queue.arrival_profile && (
+        <p className="tpa-scenario-note">Arrival profile: {queue.arrival_profile} · {queue.method}</p>
+      )}
 
       <div className="tpa-status-grid">
         <div className="tpa-status-card">
@@ -1797,15 +2179,24 @@ function CrowdEventsPanel({ onSimulateEvent }) {
   );
 }
 
-function AStarReroutingPanel() {
-  const [jamActive, setJamActive] = useState(false);
+function AStarReroutingPanel({ jamActive, onJamToggle }) {
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState(null);
 
   async function fetchRerouteInfo() {
     try {
       const res = await fetch(`${API_URL}/fleet/astar-reroute`);
-      if (res.ok) setInfo(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setInfo(data);
+        if (
+          typeof onJamToggle === "function" &&
+          typeof data.jam_active === "boolean" &&
+          data.jam_active !== jamActive
+        ) {
+          onJamToggle(data.jam_active);
+        }
+      }
     } catch {}
   }
 
@@ -1819,11 +2210,11 @@ function AStarReroutingPanel() {
     try {
       const res = await fetch(`${API_URL}/fleet/astar-simulate-jam?active=${nextState}`, { method: "POST" });
       if (res.ok) {
-        setJamActive(nextState);
+        if (typeof onJamToggle === "function") onJamToggle(nextState);
         await fetchRerouteInfo();
       }
     } catch {
-      setJamActive(nextState); // Local demo fallback
+      if (typeof onJamToggle === "function") onJamToggle(nextState);
     }
     setLoading(false);
   }
@@ -1856,9 +2247,11 @@ function AStarReroutingPanel() {
         <div className="astar-info-card">
           <p className="astar-msg">
             <b>Logistics Status:</b>{" "}
-            {info.jam_active
+            {info.diversion_applied
               ? "Corridor congestion detected. JWIS is diverting trucks through the active A* recovery route."
-              : "Traffic is normal. Trucks are following the shortest approved route to Bantargebang."}
+              : info.jam_active
+                ? "Corridor congestion detected outside the active truck route. Route stays unchanged."
+                : "Traffic is normal. Trucks are following the shortest approved route to Bantargebang."}
           </p>
           <div className="astar-stats">
             <div className="astar-stat-col">
@@ -1871,8 +2264,8 @@ function AStarReroutingPanel() {
             </div>
             <div className="astar-stat-col">
               <span>Route Status</span>
-              <strong className={info.jam_active ? "text-diverted" : "text-normal"}>
-                {info.jam_active ? "Diverted (A*)" : "Corridor Compliant"}
+              <strong className={info.diversion_applied ? "text-diverted" : "text-normal"}>
+                {info.diversion_applied ? "Diverted (A*)" : info.jam_active ? "Unchanged (Jam Outside)" : "Corridor Compliant"}
               </strong>
             </div>
           </div>
@@ -2072,19 +2465,65 @@ function ReportActions() {
   async function downloadSummaryPdf() {
     const response = await fetch(`${API_URL}/reports/executive-summary`);
     const data = await response.json();
+    const impact = data.queue_impact || {};
+    const impactHtml = impact.baseline_wait_minutes !== undefined
+      ? `
+      <h2>Queue Optimization Impact (Case 1)</h2>
+      <p>Baseline (all trucks at peak): <b>${impact.baseline_queue_trucks} trucks, ${impact.baseline_wait_minutes} min wait</b> (p95 ${impact.baseline_p95_minutes} min)</p>
+      <p>With staggered dispatch: <b>${impact.optimized_queue_trucks} trucks, ${impact.optimized_wait_minutes} min wait</b> (p95 ${impact.optimized_p95_minutes} min)</p>
+      <p>Queue wait reduction: <b>-${impact.queue_reduction_percent}%</b> (${impact.method})</p>
+      `
+      : "";
+    const hotspots = Array.isArray(data.top_hotspots) ? data.top_hotspots : [];
+    const hotspotRows = hotspots.map((h) => `
+      <tr>
+        <td>${h.kecamatan}</td><td>${h.city}</td>
+        <td>${h.predicted_tons} t/day</td><td>${h.trucks_required}</td>
+        <td>${h.crews_required}</td><td>${h.man_hours_required}</td>
+      </tr>`).join("");
+    const hotspotsHtml = hotspotRows ? `
+      <h2>Predicted Hotspots &amp; Resource Readiness (Case 2)</h2>
+      <table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse;font-size:12px;">
+        <thead><tr><th>District</th><th>City</th><th>Forecast</th><th>Trucks</th><th>Crews</th><th>Man-hours</th></tr></thead>
+        <tbody>${hotspotRows}</tbody>
+      </table>` : "";
+    const fs = data.fleet_status || {};
+    const activityLine = fs.by_activity
+      ? Object.entries(fs.by_activity).map(([k, v]) => `${k.replaceAll("_", " ")}: ${v}`).join(" · ")
+      : "";
+    const fleetHtml = fs.total_trucks
+      ? `
+      <h2>Fleet Condition (Case 1)</h2>
+      <p><b>${fs.total_trucks} units</b> tracked — ${fs.damaged_count} with open damage status.</p>
+      <p>Activity: ${activityLine}</p>
+      `
+      : "";
+    const gap = data.facility_summary || {};
+    const gapHtml = gap.kecamatan_total
+      ? `
+      <h2>Facility Gap Analysis (Case 2)</h2>
+      <p>${gap.critical_count} critical districts · total gap <b>${gap.total_gap_ton_per_day} t/day</b> ·
+      +${gap.total_extra_trucks_needed} trips/day recommended · ${gap.total_new_tps_sites_needed} new TPS sites (bounded share).</p>
+      `
+      : "";
     const node = document.createElement("section");
     node.className = "pdf-report";
     node.innerHTML = `
       <h1>JWIS Executive Summary</h1>
       <p class="pdf-date">Generated by Jakarta Waste Intelligence System</p>
       <p>${data.summary}</p>
-      <h2>Demo Evidence</h2>
+      ${impactHtml}
+      ${fleetHtml}
+      ${hotspotsHtml}
+      ${gapHtml}
+      <h2>Audit &amp; Evidence Trail</h2>
       <ul>
-        <li>AI route deviation detection and OSRM route recommendation</li>
-        <li>Open-Meteo weather risk integration</li>
-        <li>Subdistrict waste-risk heatmap layer</li>
-        <li>Field dispatch loop with confirmation</li>
+        <li>AI route deviation detection (Isolation Forest + corridor geometry) with follow-up trail (OPEN &rarr; DISPATCHED &rarr; RESOLVED)</li>
+        <li>Permit-compliant A* rerouting with computed alternative corridors (JORR bypass, coastal toll)</li>
+        <li>Prophet+XGBoost forecast over real SILIKA/SIPSN/Open-Meteo data; hotspot rank Spearman 0.998</li>
+        <li>Field dispatch loop with driver confirmation and offline sync</li>
       </ul>
+      <p style="font-size:11px;color:#666;">${data.model_suitability_note || ""}</p>
     `;
     try {
       const { default: html2pdf } = await import("html2pdf.js");
@@ -2387,9 +2826,49 @@ function WhatsAppGateway() {
     send_to_driver: true
   });
   const [logs, setLogs] = useState([]);
+  const [followUps, setFollowUps] = useState([]);
   const [status, setStatus] = useState({ configured: false, connected: false, base_url: "", session_id: "", message: "" });
+  const [qrState, setQrState] = useState({ state: "unknown", qr: null });
   const [loading, setLoading] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [groups, setGroups] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupsFilter, setGroupsFilter] = useState("");
+
+  const driverDisplay = (jid) => {
+    if (!jid) return "";
+    const digits = jid.replace(/\D/g, "");
+    return digits.startsWith("62") && digits.length > 2 ? "0" + digits.slice(2) : jid;
+  };
+
+  const groupLabel = (g) => {
+    const dupes = groups.filter((x) => x.subject === g.subject);
+    return dupes.length > 1 ? `${g.subject} (…${g.jid.slice(-4)})` : g.subject;
+  };
+
+  const groupDisplay = (jid) => {
+    if (!jid) return "";
+    const match = groups.find((g) => g.jid === jid);
+    if (match) return groupLabel(match);
+    if (!jid.endsWith("@g.us")) return jid;
+    return "";
+  };
+
+  const loadGroups = async () => {
+    setGroupsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/whatsapp/groups`);
+      const data = await res.json();
+      setGroups(Array.isArray(data.groups) ? data.groups : []);
+    } catch (err) {
+      console.error("Failed to load WA groups", err);
+      setGroups([]);
+    } finally {
+      setGroupsLoading(false);
+    }
+  };
 
   const fetchConfig = async () => {
     try {
@@ -2409,6 +2888,47 @@ function WhatsAppGateway() {
     } catch (err) {
       console.error("Failed to load WA status", err);
     }
+  };
+
+  const fetchQr = async () => {
+    let result = null;
+    try {
+      const res = await fetch(`${API_URL}/whatsapp/qr`);
+      result = await res.json();
+      setQrState(result);
+    } catch (err) {
+      console.error("Failed to load WA QR", err);
+    }
+    return result;
+  };
+
+  const waitForFreshQr = async () => {
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 2500));
+      fetchStatus();
+      const next = await fetchQr();
+      if (next && next.state === "qr" && next.qr) break;
+    }
+  };
+
+  const handleLogout = async () => {
+    setBusy(true);
+    setQrState({ state: "starting", qr: null });
+    try {
+      await fetch(`${API_URL}/whatsapp/logout`, { method: "POST" });
+    } catch (err) {
+      console.error("Failed to logout WA session", err);
+    }
+    await waitForFreshQr();
+    setBusy(false);
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchStatus();
+    fetchQr();
+    fetchLogs();
+    setTimeout(() => setRefreshing(false), 800);
   };
 
   const fetchLogs = async () => {
@@ -2433,10 +2953,29 @@ function WhatsAppGateway() {
     }
   };
 
+  const fetchFollowUps = async () => {
+    try {
+      const res = await fetch(`${API_URL}/alert/follow-ups`);
+      if (!res.ok) return;
+      const records = await res.json();
+      setFollowUps(records);
+    } catch (err) {
+      console.error("Failed to load follow-ups", err);
+    }
+  };
+
   useEffect(() => {
     fetchConfig();
     fetchStatus();
+    fetchQr();
     fetchLogs();
+    fetchFollowUps();
+    loadGroups();
+    const interval = setInterval(() => {
+      fetchStatus();
+      fetchQr();
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleSave = async (e) => {
@@ -2452,6 +2991,7 @@ function WhatsAppGateway() {
       if (res.ok) {
         setSaveStatus("success");
         setTimeout(() => setSaveStatus(""), 3000);
+        fetchConfig();
       } else {
         setSaveStatus("error");
       }
@@ -2465,28 +3005,69 @@ function WhatsAppGateway() {
   return (
     <div className="wa-workspace">
       <div className="wa-config-stack">
-        <section className="panel">
+<section className="panel">
           <div className="panel-title">
             <div>
               <h2>Connection State</h2>
               <p>WhatsApp Gateway status.</p>
             </div>
-            <MessageCircle size={20} />
+            <button type="button" className="ghost-button" onClick={handleRefresh} title="Refresh status & QR now" disabled={refreshing || busy}>
+              <RefreshCcw size={16} /> Refresh
+            </button>
           </div>
           <dl className="approval-evidence-list mt-16">
             <div><dt>Gateway</dt><dd>Baileys WhatsApp Gateway</dd></div>
             <div>
               <dt>Status</dt>
               <dd>
-                <span className={`pill ${status.connected ? "success" : "warning"}`}>
-                  {status.connected ? "CONNECTED" : "DISCONNECTED"}
-                </span>
+                {status.connected ? (
+                  <span className="wa-live-badge"><span className="wa-live-dot" /> CONNECTED</span>
+                ) : (
+                  <span className={`pill ${qrState.state === "qr" ? "success" : qrState.state === "gateway_offline" ? "danger" : "warning"}`}>
+                    {qrState.state === "qr" ? "SCAN QR" : qrState.state === "gateway_offline" ? "GATEWAY OFFLINE" : qrState.state === "starting" ? "CONNECTING..." : "DISCONNECTED"}
+                  </span>
+                )}
               </dd>
             </div>
+            <div><dt>Gateway state</dt><dd className="mono">{qrState.state || status.state || "unknown"}</dd></div>
             <div><dt>Session JID</dt><dd className="mono">{status.session_id || "default"}@c.us</dd></div>
-            <div><dt>API Port</dt><dd className="mono">2785</dd></div>
             {!status.connected && status.message && <div><dt>Reason</dt><dd>{status.message}</dd></div>}
           </dl>
+
+          {!status.connected && (
+            <div className="wa-pairing">
+              {qrState.state === "qr" && qrState.qr ? (
+                <>
+                  <img className="wa-qr-image" src={qrState.qr} alt="WhatsApp pairing QR" />
+                  <ol className="wa-qr-steps">
+                    <li>Open WhatsApp on the operator phone.</li>
+                    <li>Go to <b>Settings → Linked Devices → Link a Device</b>.</li>
+                    <li>Point the phone at this QR code.</li>
+                    <li>Wait — the status above turns <b>CONNECTED</b> automatically.</li>
+                  </ol>
+                </>
+              ) : (
+                <p className="text-muted small">
+                  {qrState.state === "starting" || qrState.state === "closed"
+                    ? "Waiting for a fresh QR from the gateway — this can take a few seconds after logout."
+                    : "No QR available yet. Make sure the WhatsApp gateway is running (npm start in backend/wa-gateway) and not already paired."}
+                </p>
+              )}
+              {busy && <p className="text-muted small">Re-pairing — waiting for a fresh QR...</p>}
+            </div>
+          )}
+
+          <div className="wa-connection-actions">
+            {status.connected ? (
+              <button type="button" className="ghost-button wa-logout-button wa-danger-button" onClick={handleLogout} disabled={busy}>
+                {busy ? "Logging out..." : <><LogOut size={16} /> Disconnect & Unlink</>}
+              </button>
+            ) : (
+              <button type="button" className="ghost-button wa-logout-button" onClick={handleLogout} disabled={busy}>
+                {busy ? "Re-creating session..." : <><RefreshCcw size={16} /> Reset & Get New QR</>}
+              </button>
+            )}
+          </div>
         </section>
 
         <section className="panel">
@@ -2517,32 +3098,62 @@ function WhatsAppGateway() {
               </label>
             </div>
 
-            <div className="wa-field-stack">
+<div className="wa-field-stack">
               <strong>Driver Phone Numbers:</strong>
               {Object.keys(config.drivers).map((driverName) => (
                 <div key={driverName} className="wa-driver-row">
                   <span>{driverName}</span>
                   <input
                     type="text"
-                    value={config.drivers[driverName]}
+                    value={driverDisplay(config.drivers[driverName])}
                     onChange={(e) => {
                       const newDrivers = { ...config.drivers, [driverName]: e.target.value };
                       setConfig({ ...config, drivers: newDrivers });
                     }}
-                    placeholder="e.g. 6289675877496@c.us"
+                    placeholder="e.g. 081234567890"
                   />
                 </div>
               ))}
             </div>
 
             <div className="wa-field-stack">
-              <strong>Coordination Group JID:</strong>
+              <strong>Coordination Group:</strong>
               <input
                 type="text"
-                value={config.group_jid}
+                value={groupDisplay(config.group_jid)}
                 onChange={(e) => setConfig({ ...config, group_jid: e.target.value })}
-                placeholder="e.g. 6285229890542-1620000000@g.us"
+                placeholder="08123... atau pilih dari daftar"
               />
+              <div className="wa-group-tools">
+                <button type="button" className="ghost-button" onClick={loadGroups} disabled={groupsLoading || status.connected === false}>
+                  {groupsLoading ? "Loading..." : "Load My Groups"}
+                </button>
+                {groups.length > 0 && (
+                  <>
+                    <input
+                      type="text"
+                      className="wa-group-search"
+                      value={groupsFilter}
+                      onChange={(e) => setGroupsFilter(e.target.value)}
+                      placeholder="Cari grup (mis. JWIS)..."
+                    />
+                    <select
+                      className="wa-group-select"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) setConfig({ ...config, group_jid: e.target.value });
+                      }}
+                    >
+                      <option value="">Pilih grup WhatsApp...</option>
+                      {groups
+                        .filter((g) => !groupsFilter || (g.subject || "").toLowerCase().includes(groupsFilter.toLowerCase()))
+                        .map((g) => (
+                          <option key={g.jid} value={g.jid}>{groupLabel(g)}</option>
+                        ))}
+                    </select>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="wa-form-actions">
@@ -2563,9 +3174,9 @@ function WhatsAppGateway() {
             <p>Real-time log of automated messages dispatched to drivers &amp; groups.</p>
           </div>
           <Activity size={20} />
-          <button 
+<button 
             type="button"
-            onClick={() => { fetchLogs(); fetchStatus(); }} 
+            onClick={() => { fetchLogs(); fetchStatus(); fetchFollowUps(); }} 
             className="ghost-button" 
             title="Refresh logs"
           >
@@ -2606,6 +3217,37 @@ function WhatsAppGateway() {
             </tbody>
           </table>
         </div>
+        {followUps.length > 0 && (
+          <div className="table-wrap wa-log-table fu-trail-table">
+            <h3 className="fu-trail-title">Follow-up Trail (supervisor actions)</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Alert ID</th>
+                  <th>Status</th>
+                  <th>Operator</th>
+                  <th>Note</th>
+                </tr>
+              </thead>
+              <tbody>
+                {followUps.map((rec, idx) => {
+                  const p = rec.payload || {};
+                  const statusCls = p.status === "RESOLVED" ? "success" : p.status === "DISPATCHED" ? "warning" : "danger";
+                  return (
+                    <tr key={idx}>
+                      <td><span className="mono">{new Date(rec.created_at).toLocaleString()}</span></td>
+                      <td><span className="mono">{p.alert_id}</span></td>
+                      <td><span className={`pill ${statusCls}`}>{p.status}</span></td>
+                      <td><b className="wa-recipient">{p.operator}</b></td>
+                      <td><span className="wa-message-cell">{p.note || "—"}</span></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -2658,6 +3300,109 @@ function IotBinSensors() {
 
 // ── COMMAND CENTER (main dashboard) ──────────────────────────────────
 
+function LiveSurveillancePanel() {
+  const [feed, setFeed] = useState(null);
+  const [error, setError] = useState("");
+
+  async function fetchFeed() {
+    try {
+      const res = await fetch(`${API_URL}/cv/surveillance-feed`);
+      if (res.ok) {
+        setFeed(await res.json());
+        setError("");
+      }
+    } catch {
+      setError("CV feed endpoint unavailable");
+    }
+  }
+
+  useEffect(() => {
+    fetchFeed();
+    const interval = setInterval(fetchFeed, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const events = feed?.events || [];
+  const last = events[0] || null;
+  const streaming = feed?.status === "streaming";
+
+  return (
+    <section className="panel wide" data-testid="live-surveillance-panel">
+      <div className="panel-title">
+        <div>
+          <h2>Live Surveillance — ANPR Gate Feed</h2>
+          <p>
+            {feed?.source === "simulated"
+              ? "Simulated gate camera feed: YOLO detects trucks, OCR reads plates, DLH whitelist verifies."
+              : "Automatic Number-Plate Recognition at operational gates."}
+          </p>
+        </div>
+        <Cctv size={20} />
+      </div>
+
+      <div className="tpa-status-grid">
+        <div className="tpa-status-card">
+          <span>Feed</span>
+          <strong className={streaming ? "text-success" : "text-danger"}>
+            {streaming ? "STREAMING" : (feed?.status || "OFFLINE").toUpperCase()}
+          </strong>
+        </div>
+        <div className="tpa-status-card">
+          <span>Inference Device</span>
+          <strong>{feed?.device === "cuda" ? "GPU (CUDA)" : (feed?.device || "—")}</strong>
+        </div>
+        <div className="tpa-status-card">
+          <span>Plates Read</span>
+          <strong>{feed?.plates_read ?? "—"}</strong>
+        </div>
+      </div>
+
+      {error && <p className="text-danger">{error}</p>}
+      {feed?.error && <p className="text-danger">Feed error: {feed.error}</p>}
+      {feed && !feed.error && (
+        <p className="text-muted small">
+          {feed.trucks_detected} trucks detected · {feed.frames_processed} frames processed · {feed.video}
+        </p>
+      )}
+
+      {last && (
+        <div className={`cv-last-event ${last.severity === "critical" ? "cv-event-critical" : "cv-event-ok"}`}>
+          <div>
+            <span className={`pill ${last.severity === "critical" ? "danger" : "success"}`}>
+              {last.authorized ? "AUTHORIZED" : "UNLICENSED"}
+            </span>
+            <strong className="cv-plate">{last.plate}</strong>
+          </div>
+          <p>{last.reason}</p>
+          <p className="text-muted small">
+            confidence {Math.round(last.confidence * 100)}% · {last.timestamp}
+          </p>
+        </div>
+      )}
+
+      <div className="tpa-logs">
+        <h3>Recent Plate Verifications</h3>
+        {events.length === 0 ? (
+          <p className="text-muted small">No plate events yet — feed waiting for a truck with a readable plate.</p>
+        ) : (
+          <ul>
+            {events.map((ev, i) => (
+              <li key={i}>
+                <span className="time">{ev.timestamp}</span>
+                <span className="truck">{ev.plate}</span>
+                <span className={`status-badge ${ev.severity === "critical" ? "critical" : "ok"}`}>
+                  {ev.authorized ? "AUTHORIZED" : "UNLICENSED"}
+                </span>
+                <span className="text-muted small">conf {Math.round(ev.confidence * 100)}%</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function CommandCenter({ onLogout }) {
   const { snapshot, online, refresh } = useSnapshot();
   const [toast, setToast] = useState("");
@@ -2670,11 +3415,13 @@ function CommandCenter({ onLogout }) {
   const [rainfall, setRainfall] = useState(42);
   const [eventLat, setEventLat] = useState(null);
   const [eventLng, setEventLng] = useState(null);
+  const [forecastHorizon, setForecastHorizon] = useState("7d");
 
   // Map state lifted from LiveFleetMap
   const [layers, setLayers] = useState({ heatmap: false, osrm: true, unlicensed: true, tps: true, wr: true });
   const [playbackTruck, setPlaybackTruck] = useState(null);
   const [playbackOptions, setPlaybackOptions] = useState([]);
+  const [jamActive, setJamActive] = useState(false);
 
   useEffect(() => {
     if (!historyScrollRequest || fleetDetailTab !== "history") return;
@@ -2750,6 +3497,7 @@ function CommandCenter({ onLogout }) {
                 layers={layers}
                 playbackTruck={playbackTruck}
                 onBreadcrumbsLoaded={setPlaybackOptions}
+                jamActive={jamActive}
               />
             </div>
           )}
@@ -2802,7 +3550,7 @@ function CommandCenter({ onLogout }) {
                   <UnlicensedCollectorAlerts />
                 </div>
                 <div className="inspector-col">
-                  <AStarReroutingPanel />
+                  <AStarReroutingPanel jamActive={jamActive} onJamToggle={setJamActive} />
                 </div>
               </div>
             </>
@@ -2829,15 +3577,27 @@ function CommandCenter({ onLogout }) {
             ]}
             forecast={<PredictionPanel predictions={snapshot.critical_predictions} allPredictions={snapshot.predictions} />}
             weather={<WeatherPanel weather={snapshot.weather} />}
-            events={<CrowdEventsPanel onSimulateEvent={(ev) => {
-              setAttendance(ev.expected_attendance);
-              setRainfall(10);
-              setEventLat(ev.lat);
-              setEventLng(ev.lng);
-              setActiveWorkspace("planning");
-            }} />}
-            districts={<KecamatanMapPanel />}
+            events={<>
+              <CrowdEventsPanel onSimulateEvent={(ev) => {
+                setAttendance(ev.expected_attendance);
+                setRainfall(10);
+                setEventLat(ev.lat);
+                setEventLng(ev.lng);
+                setActiveWorkspace("planning");
+              }} />
+            </>}
+            districts={<>
+              <KecamatanMapPanel horizon={forecastHorizon} />
+              <PermitSubmissionPanel onPermitSubmitted={(permit) => {
+                setAttendance(permit.expected_attendance);
+                setEventLat(permit.lat);
+                setEventLng(permit.lng);
+              }} />
+              <FacilityGapPanel rainfall={rainfall} attendance={attendance} />
+            </>}
             reportActions={<ReportActions />}
+            horizon={forecastHorizon}
+            onHorizonChange={setForecastHorizon}
           />
         )}
 
@@ -2863,6 +3623,12 @@ function CommandCenter({ onLogout }) {
         {activeWorkspace === "weighbridge" && (
           <div className="grid-col-12">
             <WeighbridgeLogs />
+          </div>
+        )}
+
+        {activeWorkspace === "surveillance" && (
+          <div className="grid-col-12">
+            <LiveSurveillancePanel />
           </div>
         )}
 
