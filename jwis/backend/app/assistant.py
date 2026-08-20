@@ -49,16 +49,26 @@ SYSTEM_PROMPT = (
     "- Konteks RAG JWIS adalah sumber utama untuk fitur, arsitektur, data, model, workflow, dan batasan demo (lomba).\n"
     "- Untuk angka live (berapa truk, ton, antrean, prediksi), WAJIB pakai hasil tool. Jangan mengarang angka; jika tidak "
     "diketahui, katakan tidak tahu.\n"
+    "- Panggil MAKSIMAL 2 tool yang paling relevan per pertanyaan; jangan panggil tool yang sama berulang.\n"
+    "- AKURASI DI ATAS SEGALANYA: (a) status truk jangan digabung — truk rusak (is_damaged) BUKAN berarti deviasi rute; "
+    "(b) jawab pada granularity yang ditanya — kecamatan BUKAN kota, kelurahan BUKAN kecamatan; (c) pakai angka dari tool "
+    "apa adanya (trucks_required, crews_required), jangan hitung ulang dengan asumsi sendiri; (d) jangan mengarang detail "
+    "yang tidak ada di hasil tool.\n"
     "- Jelaskan LOGIKA KEPUTUSAN: kenapa sistem merekomendasikan ini (ambang TPA 45/90 menit; hujan +16% di >=30mm; event "
     "+18% >=50.000 orang; weekend +7%; skor rute ETA/traffic/flood; stagger 15 menit).\n"
     "\n"
     "FORMAT JAWABAN\n"
+    "- Gunakan Markdown kaya (rich) agar jawaban rapi seperti asisten AI modern: **bold** untuk penekanan, *italic* untuk "
+    "istilah asing, bullet dan numbered list untuk langkah, ### heading kecil untuk bagian, dan Tabel markdown (| kolom | ) "
+    "saat membandingkan angka (misal perbandingan antar truk, kecamatan, atau skenario). Tabel hanya jika memang "
+    "membantu; jangan memaksakan tabel kalau jawaban sederhana.\n"
     "- Paragraf pembuka 1 kalimat: risiko utama saat ini.\n"
-    "- Bagian **Kenapa ini penting**: 2-3 poin singkat.\n"
+    "- Bagian **Kenapa ini penting**: 2-3 poin singkat (bisa bullet).\n"
     "- Bagian **Tindakan yang perlu dilakukan**: 3 langkah bernomor.\n"
-    "- Markdown ringan (**bold**, bullet, numbered). Jangan tampilkan JSON mentah, snake_case field, koordinat mentah "
-    "atau backtick code, kecuali user minta detail teknis. Field teknis diubah menjadi bahasa manusia "
-    "(is_damaged -> 'truk dilaporkan rusak', off_corridor -> 'keluar dari koridor').\n"
+    "- Jangan tampilkan JSON mentah, snake_case field, koordinat mentah atau backtick code, kecuali user minta detail "
+    "teknis. Field teknis diubah menjadi bahasa manusia (is_damaged -> 'truk dilaporkan rusak', off_corridor -> 'keluar "
+    "dari koridor').\n"
+    "- Jawaban harus lengkap namun padat; target 120-220 kata, tabel maksimal 6 baris, dan tidak boleh hanya 1-2 kalimat.\n"
 )
 
 
@@ -81,6 +91,33 @@ def _parse_body(text: str) -> dict[str, Any]:
     raise ValueError("Invalid JSON stream")
 
 
+def _snapshot_digest(snapshot: dict[str, Any]) -> str:
+    """Compact command-center digest for the prompt (~600 chars).
+
+    The full snapshot JSON is megabytes of paths/predictions; tools fetch
+    details on demand. The prompt only needs the headline state so the model
+    knows what to drill into.
+    """
+    kpis = snapshot.get("kpis", {})
+    queue = snapshot.get("tpa_queue", {})
+    alerts = snapshot.get("alerts", [])[:5]
+    preds = snapshot.get("critical_predictions", [])[:3]
+    lines = [
+        f"KPI: {kpis.get('active_trucks')} truk aktif, {kpis.get('trucks_with_issues')} bermasalah, "
+        f"{kpis.get('pending_dispatches')} dispatch pending.",
+        f"TPA Bantargebang: {queue.get('trucks_waiting')} truk antre, tunggu ~{queue.get('estimated_wait_minutes')} mnt "
+        f"({queue.get('status')}).",
+        f"Lonjakan prediksi terbesar: +{kpis.get('predicted_spike_percent')}%.",
+        "Alert teratas: " + ("; ".join(
+            f"{a.get('truck_code') or a.get('plate','?')}:{a.get('severity','?')}:{str(a.get('title',''))[:60]}"
+            for a in alerts) or "tidak ada"),
+        "Prediksi kritis: " + ("; ".join(
+            f"{p.get('district','?')} +{p.get('spike_percent','?')}% ({p.get('predicted_tons','?')}t)"
+            for p in preds) or "tidak ada"),
+    ]
+    return "\n".join(lines)
+
+
 def build_executive_summary(snapshot: dict[str, Any]) -> str:
     kpis = snapshot.get("kpis", {})
     top = _top_prediction(snapshot)
@@ -95,12 +132,13 @@ def build_executive_summary(snapshot: dict[str, Any]) -> str:
     )
 
 
-def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=None) -> dict[str, Any]:
+def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=None,
+                                     images=None) -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return {"provider": "error", "error": "OPENAI_API_KEY is not configured", "answer": ""}
 
-    rag_context = format_rag_context(question, top_k=6, max_chars=6500)
+    rag_context = format_rag_context(question, top_k=5, max_chars=3000)
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
     url = f"{base_url}/chat/completions"
     model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
@@ -109,16 +147,26 @@ def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=
     user_prompt = (
         f"Question: {question}\n\n"
         f"JWIS RAG context:\n{rag_context}\n\n"
-        f"Command center snapshot JSON:\n{json.dumps(snapshot)[:12000]}"
+        f"Command center state (ringkasan; detail live tersedia via tools):\n{_snapshot_digest(snapshot)}"
     )
+
+    if images:
+        content: list[dict[str, Any]] = [{"type": "text", "text": user_prompt}]
+        for img in images[:5]:
+            content.append({"type": "image_url", "image_url": {"url": img}})
+        user_message: dict[str, Any] = {"role": "user", "content": content}
+    else:
+        user_message = {"role": "user", "content": user_prompt}
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     messages.extend(clean_history)
-    messages.append({"role": "user", "content": user_prompt})
+    messages.append(user_message)
 
     payload: dict[str, Any] = {
         "model": model,
         "messages": messages,
-        "max_tokens": 2000,
+        "max_tokens": 1500,
+        "stream": False,
     }
     if tool_ctx is not None:
         payload["tools"] = TOOL_SCHEMAS
