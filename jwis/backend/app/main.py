@@ -20,6 +20,9 @@ print("JWIS STARTUP API_KEY VALUE:", (key[:6] + "..." + key[-4:]) if key else "N
 print("JWIS STARTUP BASE_URL:", os.getenv("OPENAI_BASE_URL"))
 
 import json
+import re
+import threading
+import time
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -28,9 +31,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from app.data import build_predictions, build_alerts, command_center_snapshot, TRUCKS, ROUTE_OPTIONS, fleet_history_payload, tpa_queue_status_payload, events_permits_payload, unlicensed_collectors_payload
+from app.data import build_predictions, build_alerts, command_center_snapshot, TRUCKS, ROUTE_OPTIONS, fleet_history_payload, tpa_queue_status_payload, events_permits_payload, unlicensed_collectors_payload, _route_b_osrm
 from app.engine import (
     predict_waste_hybrid,
+    predict_waste_hybrid_series,
     list_hybrid_models,
     estimate_tpa_queue_wait,
     simulate_staggered_dispatch,
@@ -39,7 +43,8 @@ from app.engine import (
 )
 from app.astar_routing import reroute_payload
 from app.gps_feed import latest_breadcrumbs
-from app.map_truth import build_map_truth
+from app.cv_surveillance import surveillance_status
+from app.map_truth import build_map_truth, _snapped_for
 from app.queue_simulation import simulate_queue
 from app.operations_optimizer import Demand, Vehicle, build_operational_plan
 from app.forecast_metrics import suitability_labels
@@ -70,18 +75,94 @@ def _warm_route_cache() -> None:
     except Exception as e:
         print("Predictions warmup failed:", e)
 
+    # Necessary: predictions warm the /api/predictions/kecamatan default cache
+    # key (rainfall=0, no event, not weekend) so the first browser request never
+    # pays a cold 42-model load. Must run on the MAIN thread: xgboost predict
+    # spawns joblib workers, and Windows hangs when that happens from a daemon
+    # thread (observed: warm loop stuck forever, spawning zombie processes).
+    try:
+        from app.engine import predict_waste_hybrid
+        from app.real_data import load_kecamatan_map
+        for k in load_kecamatan_map():
+            predict_waste_hybrid(kelurahan=k["slug"], rainfall_mm=0.0, event_attendance=0, is_weekend=False)
+        print("Kecamatan predictions warmed.")
+    except Exception as e:
+        print("Kecamatan predictions warmup failed:", e)
+
+    try:
+        from app.rag import build_rag_index
+        build_rag_index()
+        print("RAG index warmed.")
+    except Exception as e:
+        print("RAG warmup failed:", e)
+
+    # Necessary: pre-builds the command-center snapshot (42-model predictions,
+    # weather fetch, queue sim) so the first client request hits the 8s cache
+    # instead of paying a ~10s cold build that trips the frontend's fetch cap
+    # and empties the forecast weather strip (e2e layout timeouts).
+    try:
+        command_center()
+        print("Command center cache warmed.")
+    except Exception as e:
+        print("Command center warmup failed:", e)
+
+    # Necessary: pre-fills the keyed kecamatan predictions cache (the forecast
+    # workspace's first request) and the TPA marker cache so e2e pages that
+    # mount at t=0 of the suite never wait on a cold 42-model build.
+    try:
+        predictions_kecamatan(rainfall_mm=42, event_attendance=85000, is_weekend=True)
+        print("Kecamatan endpoint cache warmed.")
+    except Exception as e:
+        print("Kecamatan endpoint warmup failed:", e)
+    try:
+        _tpa_cache["payload"] = tpa_queue_status_payload()
+        _tpa_cache["ts"] = time.time()
+        print("TPA cache warmed.")
+    except Exception as e:
+        print("TPA warmup failed:", e)
+
     import threading
     from app.astar_routing import warm_edge_cache
 
     def _warm():
         warm_edge_cache()
-        for t in TRUCKS:
-            try:
-                build_map_truth(t)
-            except Exception:
-                pass
+        try:
+            _route_b_osrm()
+            print("Route B warm cache ready.")
+        except Exception as e:
+            print("Route B warmup failed:", e)
+        from concurrent.futures import ThreadPoolExecutor
+        try:
+            with ThreadPoolExecutor(max_workers=8) as ex:
+                list(ex.map(build_map_truth, TRUCKS))
+            fleet_map_truth()  # fill the payload cache too, not just per-truck caches
+            print("Map truth warm cache ready.")
+        except Exception as e:
+            print("Map truth warmup failed:", e)
 
     threading.Thread(target=_warm, daemon=True).start()
+
+    # Necessary: keeps the 30s snap cache perpetually fresh so request threads
+    # never pay a cold OSRM snap fetch (public OSRM is slow; 6 parallel
+    # map-truth calls each took ~6s during the cold window, stalling the
+    # threadpool and tripping the frontend's 6s fetch abort). Pure I/O, so it
+    # is safe in a daemon thread (no joblib/xgboost involved).
+    def _snap_refresher():
+        import time as _time
+        from app.data import ASSIGNED_PATHS as _CURATED
+        curated_codes = list(_CURATED.keys())
+        idx = 0
+        while True:
+            _time.sleep(15)
+            try:
+                truck = next((t for t in TRUCKS if t["truck_code"] == curated_codes[idx % len(curated_codes)]), None)
+                if truck is not None:
+                    _snapped_for(truck)
+            except Exception:
+                pass
+            idx += 1
+
+    threading.Thread(target=_snap_refresher, daemon=True).start()
 
 import os
 
@@ -105,6 +186,8 @@ app.add_middleware(
 class AssistantRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     history: list[dict] = Field(default_factory=list, max_length=8)
+    file_data: str | None = Field(default=None, max_length=30_000_000)
+    file_type: str | None = Field(default=None, pattern="^(image|pdf)$")
 
 class WhatsAppAlertRequest(BaseModel):
     truck_code: str = Field(min_length=1, max_length=20)
@@ -130,6 +213,15 @@ class HybridPredictRequest(BaseModel):
     is_holiday: bool = False
     event_attendance: int = Field(default=0, ge=0, le=5_000_000)
     target_date: date | None = None
+
+class EventPermitRequest(BaseModel):
+    name: str = Field(min_length=3, max_length=120)
+    location_name: str = Field(min_length=3, max_length=160)
+    event_date: date
+    expected_attendance: int = Field(gt=0, le=2_000_000)
+    lat: float = Field(ge=-7.5, le=-5.5)
+    lng: float = Field(ge=105.5, le=108.0)
+    organizer: str | None = Field(default=None, max_length=120)
 
 # ── Existing Endpoints ───────────────────────────────────────────────
 
@@ -202,6 +294,8 @@ def data_provenance_endpoint() -> dict[str, Any]:
         "city_timbulan": load_city_timbulan(),
     }
 
+_kecamatan_cache: dict[str, Any] = {"key": None, "ts": 0.0, "payload": None}
+
 @app.get("/api/predictions/kecamatan")
 def predictions_kecamatan(
     rainfall_mm: float = Query(0.0, ge=0),
@@ -211,13 +305,24 @@ def predictions_kecamatan(
     target_date: date | None = None,
     event_lat: float | None = Query(None),
     event_lng: float | None = Query(None),
+    horizon_days: int | None = Query(None, ge=2, le=30),
 ) -> dict[str, Any]:
     """Case 2 temporal-spatial map: per-kecamatan hybrid ML prediction over the
     real 42-kecamatan SILIKA baseline, with facility-readiness recommendation.
 
     Each kecamatan gets a live Prophet+XGBoost prediction plus operational needs
-    (crews, man-hours, extra trucks) and a TPS capacity signal.
+    (crews, man-hours, extra trucks) and a TPS capacity signal. When
+    `horizon_days` is given, each kecamatan also carries a real per-day model
+    series (weekday/holiday drivers vary per day) plus horizon aggregates.
     """
+    from fastapi.params import Query as FastAPIQuery
+    if isinstance(horizon_days, FastAPIQuery):
+        horizon_days = None
+    cache_key = (rainfall_mm, event_attendance, is_weekend, is_holiday, target_date, event_lat, event_lng, horizon_days)
+    now = time.time()
+    if _kecamatan_cache["key"] == cache_key and now - _kecamatan_cache["ts"] < 60.0:
+        return _kecamatan_cache["payload"]
+
     kecs = load_kecamatan_map()
     
     target_slugs = set()
@@ -256,9 +361,26 @@ def predictions_kecamatan(
         tons = pred["predicted_tons"]
         cap = k.get("tps_capacity_ton_per_day")
         facility_alert = bool(cap is not None and tons > cap)
+        horizon_block: dict[str, Any] = {}
+        if horizon_days:
+            series = predict_waste_hybrid_series(
+                k["slug"],
+                days=horizon_days,
+                rainfall_mm=rainfall_mm,
+                event_attendance=current_attendance,
+                start_date=(target_date.isoformat() if target_date else None),
+            )
+            horizon_block = {
+                "horizon_avg_daily_tons": series["avg_daily_tons"],
+                "horizon_total_tons": series["total_tons"],
+                "horizon_peak_date": series["peak_date"],
+                "horizon_peak_tons": series["peak_tons"],
+                "daily_series": series["series"],
+            }
         features.append({
             **k,
             "predicted_tons": tons,
+            **horizon_block,
             "model_available": pred["model_available"],
             "crews_required": pred["crews_required"],
             "man_hours_required": pred["man_hours_required"],
@@ -267,6 +389,7 @@ def predictions_kecamatan(
             "facility_over_capacity": facility_alert,
             "prophet_baseline_tons": pred.get("prophet_baseline_tons"),
             "xgboost_residual": pred.get("xgboost_residual"),
+            "factor_attribution": pred.get("factor_attribution"),
             "factors": pred.get("factors"),
             "prediction_interval_p10_p90": pred.get("prediction_interval_p10_p90"),
             "co2_emissions_kg": pred.get("co2_emissions_kg"),
@@ -275,8 +398,14 @@ def predictions_kecamatan(
         })
     features.sort(key=lambda f: f["predicted_tons"], reverse=True)
     total = sum(f["predicted_tons"] for f in features)
-    return {
+    # Necessary: each uncached build runs 42 model predicts (~1-3s), and 4
+    # parallel workers can each issue one on mount; the 60s keyed cache keeps
+    # repeated identical requests (the common case) at near-zero cost.
+    _kecamatan_cache["key"] = cache_key
+    _kecamatan_cache["ts"] = time.time()
+    _kecamatan_cache["payload"] = {
         "generated_for": (target_date.isoformat() if target_date else date.today().isoformat()),
+        "horizon_days": horizon_days or 1,
         "scenario": {
             "rainfall_mm": rainfall_mm, "event_attendance": event_attendance,
             "is_weekend": is_weekend, "is_holiday": is_holiday,
@@ -288,6 +417,7 @@ def predictions_kecamatan(
         "kecamatan": features,
         "source": "SILIKA DLH 2023 baseline + Prophet/XGBoost hybrid (real 5yr pipeline)",
     }
+    return _kecamatan_cache["payload"]
 
 @app.get("/api/fleet/composition")
 def fleet_composition() -> dict[str, Any]:
@@ -299,15 +429,59 @@ def official_events() -> list[dict[str, Any]]:
     """Real, officially-scraped Jakarta events (attendance may be unknown)."""
     return load_official_events()
 
+# Necessary: the snapshot costs ~3.2s (42 models + per-truck OSRM reroutes), so
+# parallel dashboard clients (e.g. the 4 Playwright workers) would each recompute
+# it and stall. An 8s TTL shares one computation while keeping truck motion live
+# (position liveness comes from /api/map-truth and the feed, not this snapshot).
+_command_center_lock = threading.Lock()
+_command_center_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
+
 @app.get("/api/command-center")
 def command_center() -> dict:
-    dispatches = dispatch_center.audit_log()
-    return command_center_snapshot(dispatches, weather=fetch_jakarta_weather_forecast())
+    cached = _command_center_cache
+    now = time.time()
+    if cached["payload"] is None or now - cached["ts"] > 8.0:
+        with _command_center_lock:
+            now = time.time()
+            if cached["payload"] is None or now - cached["ts"] > 8.0:
+                dispatches = dispatch_center.audit_log()
+                cached["payload"] = command_center_snapshot(dispatches, weather=fetch_jakarta_weather_forecast())
+                cached["ts"] = time.time()
+    return cached["payload"]
 
 @app.get("/api/fleet")
 def fleet() -> list[dict]:
     from app.data import get_dynamic_trucks
     return get_dynamic_trucks()
+
+
+@app.get("/api/fleet/status-overview")
+def fleet_status_overview() -> dict[str, Any]:
+    """Case 1 'position AND activity' + fleet damage status: fleet-wide roll-up
+    of operational activity states and maintenance condition."""
+    from app.data import get_dynamic_trucks
+    trucks = get_dynamic_trucks()
+    by_activity: dict[str, int] = {}
+    for t in trucks:
+        state = t.get("activity", {}).get("state", "unknown")
+        by_activity[state] = by_activity.get(state, 0) + 1
+    damaged = [t for t in trucks if t.get("is_damaged")]
+    return {
+        "total_trucks": len(trucks),
+        "by_activity": by_activity,
+        "damaged_count": len(damaged),
+        "damaged_trucks": [
+            {
+                "truck_code": t["truck_code"],
+                "driver_name": t["driver_name"],
+                "vehicle_type": t.get("vehicle_type"),
+                "damage_status": t.get("damage_status"),
+            }
+            for t in damaged
+        ],
+        "activity_labels": {t["truck_code"]: t.get("activity") for t in trucks},
+        "telemetry_class": "SIMULATED fleet telemetry on real census mix; not live AVL",
+    }
 
 @app.get("/api/predictions")
 def predictions(
@@ -372,6 +546,30 @@ def kelurahan_heatmap(
             return JSONResponse(json.loads(fallback.read_text(encoding="utf-8")))
         raise HTTPException(status_code=404, detail="Kelurahan heatmap GeoJSON has not been generated.")
 
+@app.get("/api/facilities/gap-analysis")
+def facility_gap_analysis(
+    rainfall_mm: float = Query(0.0, ge=0),
+    event_attendance: int = Query(0, ge=0),
+    is_weekend: bool = False,
+) -> dict[str, Any]:
+    """Case 2 facility readiness: predicted demand vs TPS capacity proxy per
+    kecamatan, with concrete new-site counts, extra trucks, and kelurahan
+    siting candidates. Capacity is a labeled proxy, never official capacity."""
+    from app.facility_planning import build_facility_gap_analysis
+    preds = predictions_kecamatan(
+        rainfall_mm=rainfall_mm,
+        event_attendance=event_attendance,
+        is_weekend=is_weekend,
+    )
+    kec_predictions = {k["kecamatan"]: k["predicted_tons"] for k in preds["kecamatan"]}
+    result = build_facility_gap_analysis(kec_predictions)
+    result["scenario"] = {
+        "rainfall_mm": rainfall_mm,
+        "event_attendance": event_attendance,
+        "is_weekend": is_weekend,
+    }
+    return result
+
 @app.get("/api/weather")
 def weather() -> dict:
     return fetch_jakarta_weather_forecast()
@@ -387,8 +585,13 @@ async def assistant_query(payload: AssistantRequest) -> dict:
         snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=weather)
         print("SYNC STEP 3: Snapshot done")
         tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
+        images = None
+        if payload.file_data and payload.file_type:
+            from app.pdf_vision import resolve_file_to_images
+            images = resolve_file_to_images(payload.file_data, payload.file_type)
         result = answer_with_openai_if_configured(
-            payload.question, snapshot, history=payload.history, tool_ctx=tool_ctx
+            payload.question, snapshot, history=payload.history, tool_ctx=tool_ctx,
+            images=images
         )
         print("SYNC STEP 4: OpenAI done")
     except Exception as e:
@@ -425,11 +628,73 @@ def executive_summary() -> dict:
     )
     
     history_store.record_event("executive_summary", {"summary": summary})
-    return {"summary": summary_id, "summary_en": summary}
+    impact = simulate_staggered_dispatch(int(snapshot["kpis"]["active_trucks"]))
+
+    preds = predictions_kecamatan(rainfall_mm=0.0, event_attendance=0)
+    hotspots = [
+        {
+            "kecamatan": h["kecamatan"],
+            "city": h["city"],
+            "predicted_tons": h["predicted_tons"],
+            "trucks_required": h["trucks_required"],
+            "crews_required": h["crews_required"],
+            "man_hours_required": h["man_hours_required"],
+            "facility_readiness": h.get("facility_readiness"),
+        }
+        for h in preds["top_hotspots"][:5]
+    ]
+    from app.facility_planning import build_facility_gap_analysis
+    gap = build_facility_gap_analysis({k["kecamatan"]: k["predicted_tons"] for k in preds["kecamatan"]})
+    fleet_status = fleet_status_overview()
+    return {
+        "summary": summary_id,
+        "summary_en": summary,
+        "queue_impact": impact,
+        "top_hotspots": hotspots,
+        "facility_summary": gap["summary"],
+        "fleet_status": {
+            "total_trucks": fleet_status["total_trucks"],
+            "by_activity": fleet_status["by_activity"],
+            "damaged_count": fleet_status["damaged_count"],
+        },
+        "model_suitability_note": (
+            "District-daily figures are calibrated-synthetic anchored to real SILIKA 2023 "
+            "baselines; weekly/monthly and hotspot-rank resolutions are the supported "
+            "decision levels (see /api/ml/suitability)."
+        ),
+    }
 
 @app.get("/api/history")
 def history() -> list[dict]:
     return history_store.list_events()
+
+FOLLOW_UP_STATUSES = {"OPEN", "DISPATCHED", "RESOLVED"}
+
+@app.get("/api/alert/follow-ups")
+def alert_follow_ups() -> list[dict]:
+    """Audit trail of alert follow-ups (OPEN -> DISPATCHED -> RESOLVED)."""
+    return [
+        event for event in history_store.list_events(limit=200)
+        if event["event_type"] == "alert_followup"
+    ]
+
+@app.post("/api/alert/follow-up")
+def alert_follow_up(payload: dict[str, Any]) -> dict[str, Any]:
+    """Record a supervisor follow-up action (status + operator + note)."""
+    alert_id = str(payload.get("alert_id", "")).strip()
+    status = str(payload.get("status", "OPEN")).upper()
+    if status not in FOLLOW_UP_STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of {sorted(FOLLOW_UP_STATUSES)}")
+    if not alert_id:
+        raise HTTPException(status_code=400, detail="alert_id is required")
+    record = {
+        "alert_id": alert_id,
+        "status": status,
+        "operator": str(payload.get("operator", "dispatcher")).strip() or "dispatcher",
+        "note": str(payload.get("note", "")).strip(),
+    }
+    history_store.record_event("alert_followup", record)
+    return {"recorded": True, **record}
 
 CONTACTS_FILE = "driver_contacts.json"
 DEFAULT_CONTACTS = {
@@ -444,6 +709,36 @@ DEFAULT_CONTACTS = {
     "send_to_driver": True
 }
 
+def normalize_phone_number(raw: str) -> str:
+    """Normalize operator input: '08xx', '+62xx', '628xx' -> '628xx@c.us'."""
+    if not raw:
+        return ""
+    cleaned = re.sub(r"[^\d]", "", raw)
+    if not cleaned:
+        return ""
+    if cleaned.startswith("0"):
+        cleaned = "62" + cleaned[1:]
+    if "@" not in cleaned:
+        cleaned += "@c.us"
+    return cleaned
+
+
+def normalize_group_jid(raw: str) -> str:
+    """Normalize group input: phone number -> '628xx@g.us', or keep full JID."""
+    if not raw:
+        return ""
+    cleaned = raw.strip()
+    if "@" in cleaned and cleaned.endswith("@g.us"):
+        return cleaned
+    digits = re.sub(r"[^\d]", "", cleaned)
+    if not digits:
+        return cleaned
+    if digits.startswith("0"):
+        digits = "62" + digits[1:]
+    if "@" not in digits:
+        digits += "@g.us"
+    return digits
+
 def load_contacts():
     if not os.path.exists(CONTACTS_FILE):
         with open(CONTACTS_FILE, "w") as f:
@@ -451,13 +746,21 @@ def load_contacts():
         return DEFAULT_CONTACTS
     try:
         with open(CONTACTS_FILE, "r") as f:
-            return json.load(f)
-    except:
+            data = json.load(f)
+        if isinstance(data.get("drivers"), dict):
+            data["drivers"] = {name: normalize_phone_number(num) for name, num in data["drivers"].items()}
+        data["group_jid"] = normalize_group_jid(data.get("group_jid", ""))
+        return data
+    except Exception:
         return DEFAULT_CONTACTS
 
 def save_contacts(data):
+    normalized = dict(data)
+    if isinstance(normalized.get("drivers"), dict):
+        normalized["drivers"] = {name: normalize_phone_number(num) for name, num in normalized["drivers"].items()}
+    normalized["group_jid"] = normalize_group_jid(normalized.get("group_jid", ""))
     with open(CONTACTS_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+        json.dump(normalized, f, indent=4)
 
 def get_truck_info(truck_code: str) -> dict:
     from app.data import get_dynamic_trucks
@@ -491,6 +794,18 @@ def whatsapp_status() -> dict:
         "base_url": client.base_url,
         "session_id": client.session_id,
     }
+
+@app.get("/api/whatsapp/qr")
+def whatsapp_qr() -> dict:
+    return OpenWAClient.from_env().qr()
+
+@app.get("/api/whatsapp/groups")
+def whatsapp_groups() -> dict:
+    return OpenWAClient.from_env().groups()
+
+@app.post("/api/whatsapp/logout")
+def whatsapp_logout() -> dict:
+    return OpenWAClient.from_env().logout()
 
 @app.post("/api/whatsapp/alert")
 def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
@@ -759,13 +1074,94 @@ def post_stagger_simulation(active_trucks: int = 5) -> dict[str, Any]:
 
 # ── TPA Queue Status & Crowd Events (Case 1 & 2 Gaps) ────────────────
 
+# Necessary: the TPA payload is deterministic per 5s; caching it keeps the
+# map marker render (one-shot, no retry) from vanishing on a slow first fetch.
+_tpa_cache: dict[str, Any] = {}
+
 @app.get("/api/tpa/queue-status")
-def get_tpa_queue_status() -> dict[str, Any]:
-    return tpa_queue_status_payload()
+def get_tpa_queue_status(scenario: str = Query("live", pattern="^(live|peak)$")) -> dict[str, Any]:
+    cached = _tpa_cache.get(scenario)
+    now = time.time()
+    if cached is None or now - cached["ts"] > 5.0:
+        cached = {"payload": tpa_queue_status_payload(scenario=scenario), "ts": now}
+        _tpa_cache[scenario] = cached
+    return cached["payload"]
+
+_SUBMITTED_PERMITS: list[dict[str, Any]] = []
+
 
 @app.get("/api/events/permits")
 def get_events_permits() -> list[dict[str, Any]]:
-    return events_permits_payload()
+    return events_permits_payload() + list(_SUBMITTED_PERMITS)
+
+
+_EVENT_WASTE_KG_PER_PERSON = 1.2  # consistent with the labeled fixture permits (45k -> 54 t)
+
+
+@app.post("/api/events/permits", status_code=201)
+def submit_event_permit(payload: EventPermitRequest) -> dict[str, Any]:
+    """Case 2 crowd-permit intake: a permit submitted to the authority becomes a
+    live scenario — the system estimates waste generation, resource needs, and
+    the affected kecamatan, and the permit joins the map's event layer."""
+    from math import ceil as _ceil
+    from app.engine import _haversine_meters
+
+    tons = round(payload.expected_attendance * _EVENT_WASTE_KG_PER_PERSON / 1000.0, 1)
+    trucks = max(1, _ceil(tons / 18.0))
+    crews = trucks * 4
+    impact = {
+        "predicted_waste_tons": tons,
+        "backup_trucks_required": trucks,
+        "crews_required": crews,
+        "man_hours_required": crews * 8,
+        "large_bins_required": max(1, _ceil(tons / 2.5)),
+        "resource_basis": "engine constants: 18 t/truck, 4 crew/truck, 8h shift, 2.5 t/bin; 1.2 kg waste/person/event",
+    }
+
+    affected = []
+    for k in load_kecamatan_map():
+        klat, klng = k.get("lat"), k.get("lng")
+        if klat is None or klng is None:
+            continue
+        dist = _haversine_meters((payload.lat, payload.lng), (klat, klng))
+        if dist <= 3500.0:
+            affected.append({"kecamatan": k["kecamatan"], "slug": k["slug"], "distance_m": round(dist)})
+    if not affected:
+        nearest = min(
+            (k for k in load_kecamatan_map() if k.get("lat") is not None and k.get("lng") is not None),
+            key=lambda k: _haversine_meters((payload.lat, payload.lng), (k["lat"], k["lng"])),
+            default=None,
+        )
+        if nearest:
+            affected.append({
+                "kecamatan": nearest["kecamatan"], "slug": nearest["slug"],
+                "distance_m": round(_haversine_meters((payload.lat, payload.lng), (nearest["lat"], nearest["lng"]))),
+            })
+    affected.sort(key=lambda a: a["distance_m"])
+
+    permit = {
+        "id": f"EV-USER-{len(_SUBMITTED_PERMITS) + 1:03d}",
+        "name": payload.name,
+        "permit_number": f"SUBMITTED-{payload.event_date.isoformat()}",
+        "location_name": payload.location_name,
+        "lat": payload.lat,
+        "lng": payload.lng,
+        "event_date": payload.event_date.isoformat(),
+        "organizer": payload.organizer,
+        "expected_attendance": payload.expected_attendance,
+        "status": "SUBMITTED",
+        "data_class": "USER_SUBMITTED",
+        "data_note": "Scenario permit entered via dashboard; not an official DLH/police permit record.",
+        **impact,
+        "affected_kecamatan": affected,
+    }
+    _SUBMITTED_PERMITS.append(permit)
+    history_store.record_event("event_permit_submitted", {
+        "id": permit["id"], "name": permit["name"],
+        "expected_attendance": permit["expected_attendance"],
+        "affected_kecamatan": [a["slug"] for a in affected],
+    })
+    return {"permit": permit, "impact": impact, "affected_kecamatan": affected}
 
 @app.get("/api/fleet/astar-reroute")
 def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
@@ -774,9 +1170,51 @@ def get_astar_reroute(truck_code: str = "T-047") -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
     origin = None
     if truck.get("latest_position"):
-        origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
+        # Necessary: snapped (30s-cached) keeps reroute consistent with
+        # map-truth and avoids a fresh OSRM connector fetch every call.
+        origin = _snapped_for(truck)["snapped"]
     return reroute_payload(is_traffic_jam_active(), origin_position=origin)
 
+
+@app.get("/api/fleet/route-alternatives")
+def get_route_alternatives(truck_code: str = "T-047", permit_hour: int | None = Query(None, ge=0, le=23)) -> dict[str, Any]:
+    """Case 1: >=2 computed permit-compliant route alternatives with real OSRM
+    ETAs. Route 1 is optimal; route 2 is penalty-diversified (recomputed, not
+    canned). permit_hour applies the simulated truck-hour restriction windows."""
+    from app.astar_routing import find_alternative_routes, build_gps_graph, DEMO_CONGESTED_EDGES
+    truck = next((t for t in TRUCKS if t["truck_code"] == truck_code), None)
+    if truck is None:
+        raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
+    jam = is_traffic_jam_active()
+    congested = DEMO_CONGESTED_EDGES if jam else []
+    if truck.get("latest_position"):
+        origin = _snapped_for(truck)["snapped"]
+        nodes, edges = build_gps_graph(origin)
+        from app.astar_routing import find_astar_route
+        routes = []
+        first = find_astar_route(start="ORIGIN", nodes=nodes, edges=edges,
+                                 congested_edges=congested, permit_hour=permit_hour)
+        if first.get("success"):
+            first["rank"] = 1
+            first["diversified"] = False
+            routes.append(first)
+            diversified = list(congested) + list(zip(first["sequence"], first["sequence"][1:]))
+            second = find_astar_route(start="ORIGIN", nodes=nodes, edges=edges,
+                                      congested_edges=diversified, permit_hour=permit_hour)
+            if second.get("success") and tuple(second["sequence"]) != tuple(first["sequence"]):
+                second["rank"] = 2
+                second["diversified"] = True
+                routes.append(second)
+    else:
+        routes = find_alternative_routes(k=2, congested_edges=congested, permit_hour=permit_hour)
+    return {
+        "truck_code": truck_code,
+        "jam_active": jam,
+        "permit_hour": permit_hour,
+        "route_count": len(routes),
+        "routes": routes,
+        "permit_source": "SIMULATED PERMIT CONSTRAINT (not official DLH permit dataset)",
+    }
 @app.get("/api/fleet/route-decision")
 def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
     """One payload unifying every Case-1 route signal for a truck: OSRM ETA/
@@ -787,11 +1225,13 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Truck {truck_code} not found.")
     origin = None
     if truck.get("latest_position"):
-        origin = {"lat": truck["latest_position"]["lat"], "lng": truck["latest_position"]["lng"]}
+        # Necessary: snapped (30s-cached) keeps reroute consistent with
+        # map-truth and avoids a fresh OSRM connector fetch every call.
+        origin = _snapped_for(truck)["snapped"]
     jam_active = is_traffic_jam_active()
     route = reroute_payload(jam_active, origin_position=origin)
     active = route["active_route"]
-    queue = simulate_queue(32 if jam_active else 14, weighbridges=2, service_rate_per_hour=30.0, seed=42)
+    queue = simulate_queue(47 if jam_active else 14, weighbridges=2, service_rate_per_hour=4.5, seed=42)
     vehicle_status = "DAMAGED" if truck.get("is_damaged") else ("DEVIATION" if truck["deviation"]["violated"] else "OK")
     recs = []
     if truck.get("is_damaged"):
@@ -815,14 +1255,35 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
         "recommendation": recs or ["Normal operation; no intervention needed."],
     }
 
+# Necessary: each build_map_truth costs 1-4.5s (per-truck snap + T-047 reroute
+# hit OSRM). With 4 Playwright workers polling every 8s, uncached recomputes
+# overlapped and the frontend's fetch-settle checks timed out. A 4s TTL shares
+# one recompute across all clients while GPS freshness stays within 4s.
+_map_truth_lock = threading.Lock()
+_map_truth_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
+
 @app.get("/api/fleet/map-truth")
 def fleet_map_truth() -> dict[str, Any]:
     """Single geospatial-truth payload for every truck (frontend renders verbatim)."""
-    return {"trucks": [build_map_truth(t) for t in TRUCKS]}
+    cached = _map_truth_cache
+    now = time.time()
+    if cached["payload"] is None or now - cached["ts"] > 15.0:
+        with _map_truth_lock:
+            now = time.time()
+            if cached["payload"] is None or now - cached["ts"] > 15.0:
+                cached["payload"] = {"trucks": [build_map_truth(t) for t in TRUCKS]}
+                cached["ts"] = time.time()
+    return cached["payload"]
 
 @app.get("/api/fleet/unlicensed-collectors")
 def unlicensed_collectors() -> dict[str, Any]:
     return unlicensed_collectors_payload()
+
+@app.get("/api/cv/surveillance-feed")
+def cv_surveillance_feed() -> dict[str, Any]:
+    """Computer-vision gate feed (Case 1): plate reads verified against the DLH
+    whitelist. Simulated feed from a demo clip, pilot-ready ANPR contract."""
+    return surveillance_status()
 
 @app.get("/api/fleet/{truck_code}/breadcrumbs")
 def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
@@ -842,6 +1303,10 @@ def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
 @app.post("/api/fleet/astar-simulate-jam")
 def post_astar_simulate_jam(active: bool) -> dict[str, Any]:
     set_traffic_jam_active(active)
+    # Necessary: the toggled jam state feeds map-truth (jam_active, abandoned
+    # route), so any cached payload would report stale state to clients — the
+    # jam-toggle e2e reads map-truth right after POSTing the toggle.
+    _map_truth_cache["ts"] = 0.0
     return {
         "status": "success",
         "traffic_jam_active": is_traffic_jam_active(),
@@ -927,7 +1392,7 @@ def get_tps_coordinates() -> dict[str, Any]:
 
 @app.get("/api/geo/wr-coordinates")
 def get_wr_coordinates() -> dict[str, Any]:
-    """Returns all 7,884 official Wajib Retribusi locations as a GeoJSON FeatureCollection."""
+    """Returns all official Wajib Retribusi locations as a GeoJSON FeatureCollection."""
     wr_list = load_real_wr_coordinates()
     features = []
     for w in wr_list:

@@ -27,16 +27,30 @@ def set_traffic_jam_active(active: bool) -> None:
 # Simplified Jakarta -> Bantargebang road network for real-time truck logistics.
 # Each node is an actual intersection / checkpoint (lat, lng, label).
 NODES = {
-    "ORIGIN": (-6.221, 106.785, "Posisi Truk T-047 (Arteri Barat)"),
+    "ORIGIN": (-6.1649, 106.7415, "Posisi Truk T-047 (Daan Mogot, Jakarta Barat)"),
     "KEBON_JERUK": (-6.181, 106.764, "Simpang Susun Kebon Jeruk"),
     "SLIPI": (-6.198, 106.797, "Flyover Slipi"),
     "TOMANG": (-6.179, 106.788, "Gerbang Tol Tomang"),
     "SEMANGGI": (-6.219, 106.812, "Simpang Susun Semanggi"),
     "ANCOL": (-6.126, 106.843, "Tol Ancol Pelabuhan"),
-    "CAWANG": (-6.244, 106.872, "Simpang Cawang / Tol Dalam Kota"),
+    "CAWANG": (-6.2468, 106.8771, "Simpang Susun Cawang / Tol Dalam Kota"),
     "BEKASI_BARAT": (-6.241, 106.994, "Gerbang Tol Bekasi Barat"),
     "BEKASI_TIMUR": (-6.258, 107.017, "Gerbang Tol Bekasi Timur"),
     "TPA_BANTARGEBANG": (-6.331, 106.991, "Jembatan Timbang TPA Bantargebang"),
+    # JORR southern corridor (real truck bypass when the inner toll is jammed)
+    "GROGOL": (-6.1668, 106.7887, "Simpang Grogol (Jl. S. Parman)"),
+    "KEMBANGAN": (-6.1878, 106.7358, "Gerbang Tol Kembangan (JORR W2)"),
+    "JOGLO": (-6.2167, 106.7467, "Gerbang Tol Joglo (JORR W2)"),
+    "CILEDUG": (-6.2367, 106.7475, "Gerbang Tol Ciledug (JORR W2)"),
+    "PONDOK_INDAH": (-6.2653, 106.7830, "Simpang Pondok Indah (JORR W1)"),
+    "CILANDAK": (-6.2893, 106.7976, "Cilandak KKO / TB Simatupang (JORR W1)"),
+    "PASAR_MINGGU": (-6.2845, 106.8230, "Gerbang Tol Pasar Minggu (JORR W1)"),
+    "LENTENG_AGUNG": (-6.3110, 106.8380, "Gerbang Tol Lenteng Agung (JORR W1)"),
+    "KAMPUNG_RAMBUTAN": (-6.3080, 106.8840, "Simpang Kp. Rambutan (JORR x Tol Jagorawi)"),
+    "PASAR_REBO": (-6.3230, 106.8570, "Simpang Pasar Rebo (Jl. Raya Bogor)"),
+    "CIJANTUNG": (-6.3212, 106.8588, "Cijantung (koridor Jl. Raya Bogor)"),
+    "JATIWARNA": (-6.2960, 106.9630, "Gerbang Tol Jatiwarna (JORR E)"),
+    "KALIMALANG": (-6.2540, 106.9270, "Pondok Kelapa / Jl. Raya Kalimalang"),
 }
 
 # Standard connections with base distances in kilometers.
@@ -55,18 +69,52 @@ EDGES = [
     ("BEKASI_TIMUR", "TPA_BANTARGEBANG", 8.5),
     # Coastal toll bypass via Tanjung Priok (used when CAWANG is gridlocked)
     ("ANCOL", "BEKASI_BARAT", 22.0),
+    # JORR outer-ring truck corridor (the real heavy-fleet bypass)
+    ("GROGOL", "TOMANG", 2.0),
+    ("GROGOL", "KEBON_JERUK", 3.5),
+    ("KEBON_JERUK", "KEMBANGAN", 4.5),
+    ("KEMBANGAN", "JOGLO", 3.5),
+    ("JOGLO", "CILEDUG", 3.0),
+    ("CILEDUG", "PONDOK_INDAH", 5.0),
+    ("PONDOK_INDAH", "CILANDAK", 3.5),
+    ("CILANDAK", "PASAR_MINGGU", 3.0),
+    ("PASAR_MINGGU", "LENTENG_AGUNG", 3.5),
+    ("LENTENG_AGUNG", "KAMPUNG_RAMBUTAN", 5.0),
+    ("KAMPUNG_RAMBUTAN", "PASAR_REBO", 4.0),
+    ("PASAR_REBO", "CIJANTUNG", 3.0),
+    ("CIJANTUNG", "TPA_BANTARGEBANG", 9.0),
+    ("KAMPUNG_RAMBUTAN", "JATIWARNA", 8.5),
+    ("JATIWARNA", "TPA_BANTARGEBANG", 6.5),
+    # Kalimalang arterial (non-toll alternative parallel to the Cikampek toll)
+    ("CAWANG", "KALIMALANG", 8.0),
+    ("KALIMALANG", "BEKASI_BARAT", 7.5),
 ]
 
-# Per-edge metadata: permit_allowed gates truck-legal corridors; base_traffic is
-# a 1.0 baseline multiplier. A real deployment sources these from DLH permits +
-# live traffic; here they are documented demo constants.
+# Per-edge metadata: permit_allowed gates truck-legal corridors; permit_hours
+# (start, end) marks segments where heavy trucks are barred during those hours,
+# modeled on DKI truck-hour restrictions on inner-city toll segments. A real
+# deployment sources these from DLH/Dishub permit regulations; these are
+# documented demo constants and are labeled SIMULATED in every payload.
 EDGE_META: dict[tuple[str, str], dict[str, Any]] = {
     ("ANCOL", "CAWANG"): {"permit_allowed": False},  # not a truck-permitted corridor
+    ("TOMANG", "SEMANGGI"): {"permit_hours": (5, 22)},  # inner-toll truck window (simulated)
+    ("SEMANGGI", "CAWANG"): {"permit_hours": (5, 22)},  # inner-toll truck window (simulated)
 }
 
 
+def _permit_ok(meta: dict[str, Any], permit_hour: int | None) -> bool:
+    if not meta.get("permit_allowed", True):
+        return False
+    window = meta.get("permit_hours")
+    if window is None or permit_hour is None:
+        return True
+    start, end = window
+    return not (start <= permit_hour < end)
+
+
 def _edge_meta(u: str, v: str) -> dict[str, Any]:
-    return EDGE_META.get((u, v)) or EDGE_META.get((v, u)) or {"permit_allowed": True}
+    meta = EDGE_META.get((u, v)) or EDGE_META.get((v, u)) or {}
+    return {"permit_allowed": True, **meta}
 
 
 def haversine_distance(coord1, coord2):
@@ -86,7 +134,7 @@ def _osrm_edge(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> tuple:
     reuses the cache. Returns (geometry_tuple, distance_km, duration_min, is_osrm).
     Falls back to the straight-line endpoints + haversine when OSRM is down.
     """
-    route = fetch_osrm_route("edge", (a_lat, a_lng), (b_lat, b_lng), timeout_seconds=6.0)
+    route = fetch_osrm_route("edge", (a_lat, a_lng), (b_lat, b_lng), timeout_seconds=2.5)
     if route.get("source") == "osrm" and route.get("path"):
         geom = tuple((p["lat"], p["lng"]) for p in route["path"])
         return geom, float(route["distance_km"]), float(route["eta_minutes"]), True
@@ -131,11 +179,13 @@ def _heuristic_minutes(node: str, goal: str, nodes: dict) -> float:
 
 def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
                      congested_edges=None, blocked_edges=None,
-                     nodes=None, edges=None):
+                     nodes=None, edges=None, permit_hour=None):
     """A* shortest path with permit gating, traffic weighting, and OSRM geometry.
 
     - blocked_edges (permit): never traversed.
     - congested_edges: x5 traffic penalty on the optimization cost.
+    - permit_hour: when set (0-23), edges whose simulated truck-restriction
+      window covers that hour are treated as not permit-allowed.
     - nodes/edges: optional local graph (route_from_truck passes copies so the
       global graph is never mutated).
     Returns separated fields: optimization_cost (weighted search cost),
@@ -187,6 +237,7 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
                 "distance_km": osrm_km,
                 "eta_minutes": max(15, osrm_min),
                 "is_diverted": len(congested_edges) > 0,
+                "permit_hour": permit_hour,
                 "permit_source": "SIMULATED PERMIT CONSTRAINT (not official DLH permit dataset)",
             }
 
@@ -195,7 +246,7 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
         visited[u] = cost
 
         for v in adj[u]:
-            if (u, v) in blocked_set or not _edge_meta(u, v)["permit_allowed"]:
+            if (u, v) in blocked_set or not _permit_ok(_edge_meta(u, v), permit_hour):
                 continue
             multiplier = 5.0 if (u, v) in congested_set else 1.0
             cost_new = cost + edge_duration_min(u, v) * multiplier
@@ -209,6 +260,65 @@ def find_astar_route(start="ORIGIN", goal="TPA_BANTARGEBANG",
 # Default congestion scenario for the demo: the Cawang -> Bekasi Barat inner-city
 # toll segment is gridlocked, forcing a divert via the Ancol coastal toll.
 DEMO_CONGESTED_EDGES = [("CAWANG", "BEKASI_BARAT")]
+
+
+def find_alternative_routes(start="ORIGIN", goal="TPA_BANTARGEBANG", k=2,
+                            congested_edges=None, blocked_edges=None,
+                            permit_hour=None) -> list[dict[str, Any]]:
+    """Up to k genuinely different computed routes, ranked by ETA.
+
+    Route 1 is the A* optimum. Each next route is found by applying the traffic
+    multiplier to the previously returned route's edges (penalty diversification)
+    and re-running the search — so alternatives are computed paths with real OSRM
+    ETAs, never canned fixtures.
+    """
+    routes: list[dict[str, Any]] = []
+    seen_sequences: set[tuple[str, ...]] = set()
+    extra_congested: list[tuple[str, str]] = list(congested_edges or [])
+    for rank in range(k):
+        r = find_astar_route(start=start, goal=goal,
+                             congested_edges=extra_congested,
+                             blocked_edges=blocked_edges,
+                             permit_hour=permit_hour)
+        if not r.get("success"):
+            break
+        seq = tuple(r["sequence"])
+        if seq in seen_sequences:
+            break
+        seen_sequences.add(seq)
+        r["rank"] = rank + 1
+        r["diversified"] = rank > 0
+        r["is_diverted"] = bool(congested_edges)
+        routes.append(r)
+        extra_congested.extend(zip(r["sequence"], r["sequence"][1:]))
+    return routes
+
+
+def _haversine_km(a: tuple[float, float], b: tuple[float, float]) -> float:
+    import math
+    lat1, lon1, lat2, lon2 = map(math.radians, [a[0], a[1], b[0], b[1]])
+    h = math.sin((lat2 - lat1) / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin((lon2 - lon1) / 2) ** 2
+    return 2 * 6371.0 * math.asin(math.sqrt(h))
+
+
+def _demo_jam_edges_ahead(sequence: list[str]) -> list[tuple[str, str]]:
+    """Pick the corridor edge(s) 2-4 km ahead of the route start so the demo jam
+    is always in front of the truck (position-relative, deterministic)."""
+    if len(sequence) < 3:
+        return DEMO_CONGESTED_EDGES
+    picked: list[tuple[str, str]] = []
+    walked_km = 0.0
+    for i in range(len(sequence) - 1):
+        if i >= len(sequence) - 2:
+            break
+        u, v = sequence[i], sequence[i + 1]
+        seg_km = _haversine_km((NODES[u][0], NODES[u][1]), (NODES[v][0], NODES[v][1]))
+        if walked_km >= 2.0:
+            picked.append((u, v))
+            if walked_km + seg_km >= 4.0:
+                break
+        walked_km += seg_km
+    return picked or DEMO_CONGESTED_EDGES
 
 
 def nearest_node(lat: float, lng: float, exclude=("TPA_BANTARGEBANG", "ORIGIN")) -> str:
@@ -292,10 +402,17 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
     normal_edges = set(zip(normal["sequence"], normal["sequence"][1:]))
     normal_edges |= {(v, u) for (u, v) in normal_edges}
 
+    # Demo mode without explicit edges: jam the corridor 2-4 km AHEAD of the
+    # truck so "Simulate Corridor Jam" always produces a visible reroute,
+    # wherever the truck currently is on its loop.
+    if congested_edges is None and origin_position:
+        jam_edges = _demo_jam_edges_ahead(normal["sequence"])
+
     hits_route = any((u, v) in normal_edges for (u, v) in jam_edges)
     if not jam_active or not hits_route:
         return {
             "jam_active": jam_active,
+            "diversion_applied": False,
             "active_route": normal,
             "abandoned_route": None,
             "congestion_points": [],
@@ -327,6 +444,7 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
     extra_km = round(diverted["distance_km"] - normal["distance_km"], 1)
     return {
         "jam_active": True,
+        "diversion_applied": True,
         "active_route": diverted,
         "abandoned_route": normal,
         "congestion_points": jam_points,

@@ -78,6 +78,18 @@ CURATED_KNOWLEDGE = [
             "confirms delivery. Ana should avoid raw JSON, snake_case fields, and unexplained technical labels in normal answers."
         ),
     },
+    {
+        "source": "curated:gate_surveillance",
+        "title": "Gate surveillance (computer vision) capability",
+        "text": (
+            "The Gate Surveillance module (Case 1 illegal-activity requirement) is a computer-vision ANPR pipeline: YOLOv8n detects "
+            "trucks in a gate-camera feed, EasyOCR reads the license plate, and the DLH registry whitelist decides authorized vs "
+            "unlicensed. Unlicensed plates surface as critical UNLICENSED alerts. The feed is a simulated demo clip labeled "
+            "source=simulated, exactly like the simulated GPS feed; the event contract is identical to a real DLH gate camera + ANPR, "
+            "so swapping in a camera at pilot requires no downstream change. Ana must not claim live camera processing when the feed "
+            "is the simulated clip."
+        ),
+    },
 ]
 
 

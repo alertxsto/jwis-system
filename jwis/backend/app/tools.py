@@ -149,8 +149,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "get_tpa_queue",
-            "description": "Status antrean TPA Bantargebang: jumlah truk, waktu tunggu rata-rata/p95, status label, dan recommended action.",
-            "parameters": {"type": "object", "properties": {}},
+            "description": "Status antrean TPA Bantargebang: jumlah truk, waktu tunggu rata-rata/p95, status label, dan recommended action. Skenario 'live' (jam berjalan) atau 'peak' (puncak terdokumentasi DLH 47 truk/jam).",
+            "parameters": {
+                "type": "object",
+                "properties": {"scenario": {"type": "string", "enum": ["live", "peak"], "description": "Default live"}},
+            },
         },
     },
     {
@@ -206,15 +209,50 @@ def sanitize_json_payload(value: Any, max_chars: int = 8000) -> str:
 
 def _command_snapshot(ctx: ToolContext) -> dict[str, Any]:
     weather = fetch_jakarta_weather_forecast()
-    return command_center_snapshot(ctx.dispatch_center.audit_log(), weather=weather)
+    snap = command_center_snapshot(ctx.dispatch_center.audit_log(), weather=weather)
+    return {
+        "kpis": snap.get("kpis"),
+        "tpa_queue": snap.get("tpa_queue"),
+        "alerts": snap.get("alerts", [])[:8],
+        "critical_predictions": snap.get("critical_predictions", [])[:5],
+        "executive_summary": snap.get("executive_summary"),
+        "weather_today": (snap.get("weather", {}).get("forecast") or [None])[0],
+    }
+
+
+def _fleet_status_tool(args: dict) -> dict[str, Any]:
+    trucks = get_dynamic_trucks()
+    if args.get("truck_code"):
+        trucks = [t for t in trucks if t["truck_code"] == args["truck_code"]]
+    slim = []
+    for t in trucks:
+        slim.append({
+            "truck_code": t["truck_code"],
+            "driver_name": t["driver_name"],
+            "zone": t["assigned_zone"],
+            "vehicle_type": t.get("vehicle_type"),
+            "status": t["status"],
+            "activity": t.get("activity", {}).get("label"),
+            "is_damaged": t["is_damaged"],
+            "damage_note": (t.get("damage_status") or {}).get("note"),
+            "deviation_violated": t["deviation"]["violated"],
+            "deviation_meters": t["deviation"]["distance_meters"],
+            "severity": t["deviation"]["severity"],
+            "speed_kmh": t["latest_position"]["speed_kmh"],
+        })
+    problem = [t for t in slim if t["deviation_violated"] or t["is_damaged"]]
+    return {
+        "total_trucks": len(slim),
+        "problem_count": len(problem),
+        "problem_trucks": problem,
+        "note": "Kerusakan (is_damaged) dan deviasi rute (deviation_violated) adalah status TERPISAH — jangan digabung.",
+        "trucks": slim if args.get("truck_code") else f"{len(slim)} units; only problem trucks listed inline",
+    }
 
 
 _TOOLS_IMPL: dict[str, Any] = {
     "get_command_center_snapshot": lambda args, ctx: _command_snapshot(ctx),
-    "get_fleet_status": lambda args, ctx: (
-        get_dynamic_trucks() if not args.get("truck_code")
-        else [t for t in get_dynamic_trucks() if t["truck_code"] == args["truck_code"]]
-    ),
+    "get_fleet_status": lambda args, ctx: _fleet_status_tool(args),
     "get_fleet_history": lambda args, ctx: fleet_history_payload(
         truck_code=args.get("truck_code"), date=args.get("date")
     ),
@@ -228,7 +266,7 @@ _TOOLS_IMPL: dict[str, Any] = {
         ],
     },
     "get_route_options": lambda args, ctx: fetch_osrm_route(
-        "Route B - Daan Mogot Recovery", origin=(-6.221, 106.785), destination=(-6.195, 106.802)
+        "Route B - Daan Mogot Recovery", origin=(-6.1649, 106.7415), destination=(-6.1753, 106.7988)
     ),
     "simulate_astar_reroute": lambda args, ctx: _simulate_reroute(args),
     "get_predictions": lambda args, ctx: _predictions_payload(args),
@@ -237,8 +275,8 @@ _TOOLS_IMPL: dict[str, Any] = {
         "suitability": suitability_labels(),
         "note": "Daily per-district resolution is calibrated-synthetic and must not be presented as observed accuracy.",
     },
-    "get_tpa_queue": lambda args, ctx: tpa_queue_status_payload(),
-    "simulate_staggered_dispatch": lambda args, ctx: simulate_staggered_dispatch(int(args.get("active_trucks", 5))),
+    "get_tpa_queue": lambda args, ctx: tpa_queue_status_payload(scenario=args.get("scenario", "live")),
+    "simulate_staggered_dispatch": lambda args, ctx: simulate_staggered_dispatch(int(args.get("active_trucks", 47))),
     "get_weather": lambda args, ctx: fetch_jakarta_weather_forecast(),
     "get_events": lambda args, ctx: [
         *[{"id": e.get("id"), "name": e.get("title") or e.get("name"), **e} for e in load_official_events()],
@@ -276,11 +314,34 @@ def _simulate_reroute(args: dict) -> dict[str, Any]:
 
 def _predictions_payload(args: dict) -> dict[str, Any]:
     from app.data import build_predictions
+    from app.real_data import load_kecamatan_map
 
     preds = build_predictions()
     if args.get("date"):
         preds = [p for p in preds if p["date"] == args["date"]]
-    out = {"predictions": preds[:30]}
+    out: dict[str, Any] = {"predictions_daily_city": preds[:14]}
+
+    hotspots = []
+    for k in load_kecamatan_map():
+        pred = predict_waste_hybrid(
+            kelurahan=k["slug"],
+            rainfall_mm=float(args.get("rainfall_mm", 0)),
+            is_weekend=bool(args.get("is_weekend", False)),
+            is_holiday=bool(args.get("is_holiday", False)),
+            event_attendance=int(args.get("event_attendance", 0)),
+        )
+        hotspots.append({
+            "kecamatan": k["kecamatan"], "city": k["city"],
+            "predicted_tons": pred["predicted_tons"],
+            "trucks_required": max(1, round(pred["predicted_tons"] / 18)),
+            "crews_required": pred["crews_required"],
+            "man_hours_required": pred["man_hours_required"],
+        })
+    hotspots.sort(key=lambda h: -h["predicted_tons"])
+    out["kecamatan_hotspots_top5"] = hotspots[:5]
+    out["kecamatan_count"] = len(hotspots)
+    out["note"] = "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan; pakai angka ini apa adanya."
+
     if args.get("kelurahan"):
         out["detail"] = predict_waste_hybrid(
             kelurahan=args["kelurahan"],

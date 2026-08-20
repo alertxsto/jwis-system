@@ -65,7 +65,7 @@ def fallback_route(name: str, origin: tuple[float, float], destination: tuple[fl
     }
 
 
-def snap_to_road(lat: float, lng: float, timeout_seconds: float = 6.0) -> dict[str, Any]:
+def snap_to_road(lat: float, lng: float, timeout_seconds: float = 2.5) -> dict[str, Any]:
     """Snap a raw GPS point to the nearest road via OSRM /nearest.
 
     Cached by coordinate. Returns raw + snapped coordinates and provenance;
@@ -90,7 +90,7 @@ def _snap_cached(lat: float, lng: float, timeout_seconds: float) -> dict[str, An
     return {"raw": raw, "snapped": raw, "source": "RAW_GPS_UNSNAPPED"}
 
 
-def road_route(coords: list[tuple[float, float]], timeout_seconds: float = 8.0) -> dict[str, Any]:
+def road_route(coords: list[tuple[float, float]], timeout_seconds: float = 2.5) -> dict[str, Any]:
     """Road-following geometry through ordered (lat,lng) waypoints via OSRM /route.
 
     Cached by coordinate tuple so repeat/warm calls are instant. Returns geometry

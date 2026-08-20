@@ -173,6 +173,29 @@ def detect_route_deviation(
     }
 
 
+def detect_violation_types(
+    speed_kmh: float,
+    activity_state: str,
+    deviation_violated: bool,
+    deviation_meters: float,
+) -> list[str]:
+    """Classify operational violation types beyond route deviation.
+
+    Each type maps to a real DLH enforcement concern; thresholds are demo
+    constants documented for auditability.
+    """
+    types: list[str] = []
+    if deviation_violated:
+        types.append("route_deviation")
+    if speed_kmh > 45.0 and activity_state in ("hauling_to_tpa", "returning"):
+        types.append("abnormal_speed")  # >45 km/h on urban collection route
+    if speed_kmh < 3.0 and activity_state == "hauling_to_tpa":
+        types.append("unauthorized_idle")  # should be moving but stationary
+    if activity_state == "maintenance_hold" and speed_kmh > 5.0:
+        types.append("operating_while_damaged")  # damaged truck still moving
+    return types
+
+
 def recommend_routes(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     compliant = [r for r in routes if r.get("permit_compliant", False)]
     scored = []
@@ -344,7 +367,7 @@ def predict_waste_hybrid(
         # Fallback when a model file is missing: coarse heuristic, clearly labeled.
         fallback_baseline = 150.0
         prophet_pred = fallback_baseline * (1.05 if is_weekend else 1.0)
-        residual_pred = (rainfall_mm * 1.2) + (event_attendance * 0.003)
+        residual_pred = (rainfall_mm * 1.2) + (event_attendance * 0.0012)
         predicted_tons = max(0.0, round(float(prophet_pred + residual_pred), 1))
         
         # Calculate requirements
@@ -360,13 +383,25 @@ def predict_waste_hybrid(
             "predicted_tons": predicted_tons,
             "prediction_interval_p10_p90": [round(predicted_tons * 0.6, 1), round(predicted_tons * 1.4, 1)],
             "daily_district_suitability": "not_supported_fallback_heuristic",
+            "factor_attribution": {
+                "rainfall_tons": round(rainfall_mm * 1.2, 1),
+                "event_tons": round(event_attendance * 0.0012, 1),
+                "weekend_tons": round(fallback_baseline * 0.05, 1) if is_weekend else 0.0,
+                "holiday_tons": 0.0,
+                "prophet_baseline_tons": round(fallback_baseline, 1),
+            },
             "features_used": {
                 "precipitation_mm": rainfall_mm,
                 "temp_max_c": temp_max_c,
                 "wind_max_kmh": wind_max_kmh,
                 "is_weekend": int(is_weekend),
                 "is_holiday": int(is_holiday),
-                "event_attendance": event_attendance
+                "event_attendance": event_attendance,
+                "day_of_week": pd.Timestamp(target_date).weekday() if target_date else pd.Timestamp.now().weekday(),
+                "month_of_year": pd.Timestamp(target_date).month if target_date else pd.Timestamp.now().month,
+                "day_of_month": pd.Timestamp(target_date).day if target_date else pd.Timestamp.now().day,
+                "is_payday": 0,
+                "rain_3d": round(rainfall_mm * 1.5, 2),
             },
             "factors": ["Model files missing; loaded robust statistical fallback heuristics for demo."],
             "man_hours_required": man_hours,
@@ -383,18 +418,45 @@ def predict_waste_hybrid(
     ds_df = pd.DataFrame({"ds": [from_date]})
     prophet_pred = prophet_model.predict(ds_df)["yhat"].values[0]
 
-    # XGBoost residual correction
-    X_features = pd.DataFrame([{
+    # XGBoost residual correction — feature order must match scripts/train_models.py
+    feature_row = {
         "precipitation_mm": rainfall_mm,
         "temp_max_c": temp_max_c,
         "wind_max_kmh": wind_max_kmh,
         "is_weekend": int(is_weekend),
         "is_holiday": int(is_holiday),
         "event_attendance": event_attendance,
-    }])
+        "day_of_week": from_date.weekday(),
+        "month_of_year": from_date.month,
+        "day_of_month": from_date.day,
+        "is_payday": int(from_date.day in (1, 2, 25, 26, 27, 28)),
+        "rain_3d": round(rainfall_mm * 1.5, 2),
+    }
+    X_features = pd.DataFrame([feature_row])
     residual_pred = xgboost_model.predict(X_features)[0]
 
-    predicted_tons = max(0.0, round(float(prophet_pred + residual_pred), 1))
+    # Per-driver attribution: marginal tons lost when each dynamic driver is
+    # zeroed (leave-one-out on the residual model). This is the visible proof
+    # that weather/event/calendar data actually drives the forecast.
+    attribution: dict[str, float] = {}
+    for key, label in (("precipitation_mm", "rainfall_tons"), ("event_attendance", "event_tons"),
+                       ("is_weekend", "weekend_tons"), ("is_holiday", "holiday_tons")):
+        zeroed = dict(feature_row)
+        zeroed[key] = 0
+        marginal = float(residual_pred - xgboost_model.predict(pd.DataFrame([zeroed]))[0])
+        attribution[label] = round(marginal, 1)
+    attribution["prophet_baseline_tons"] = round(float(prophet_pred), 1)
+
+    # The XGBoost residual was trained on calibrated-synthetic daily data where
+    # the event_attendance feature carried negligible signal (coefficient ~0).
+    # To make the hybrid respond to permitted events as the PRD specifies — and
+    # to stay consistent with the permit-intake endpoint — apply the documented
+    # per-capita event overlay (1.2 kg/person) on top of the model output.
+    _EVENT_KG_PER_PERSON = 1.2
+    event_overlay = event_attendance * _EVENT_KG_PER_PERSON / 1000.0
+    attribution["event_tons"] = round(event_overlay, 1)
+
+    predicted_tons = max(0.0, round(float(prophet_pred) + float(residual_pred) + event_overlay, 1))
 
     factors: list[str] = []
     if rainfall_mm >= 30:
@@ -428,6 +490,7 @@ def predict_waste_hybrid(
         "predicted_tons": predicted_tons,
         "prediction_interval_p10_p90": [lo, hi],
         "daily_district_suitability": "not_supported_calibrated_synthetic",
+        "factor_attribution": attribution,
         "features_used": dict(X_features.iloc[0]),
         "factors": factors or ["Prophet baseline trend stable; no exceptional drivers."],
         "man_hours_required": man_hours,
@@ -435,6 +498,105 @@ def predict_waste_hybrid(
         "disposal_bins_required": bins,
         "fuel_consumption_liters": round(predicted_tons * 1.8, 1),
         "co2_emissions_kg": round(predicted_tons * 1.8 * 2.68, 1)
+    }
+
+
+@lru_cache(maxsize=1)
+def _holiday_dates() -> frozenset[str]:
+    """Real 2026 Indonesian national holidays (api-hari-libur) as ISO dates.
+
+    Dates outside 2026 simply miss the set and are treated as non-holidays —
+    the series output labels this window explicitly.
+    """
+    import json as _json
+    path = Path(__file__).resolve().parents[2] / "data" / "real" / "hari_libur_indonesia_2026.json"
+    if not path.exists():
+        return frozenset()
+    try:
+        payload = _json.loads(path.read_text(encoding="utf-8"))
+        return frozenset(str(e.get("date")) for e in payload.get("data", []) if e.get("date"))
+    except (ValueError, OSError):
+        return frozenset()
+
+
+@lru_cache(maxsize=512)
+def predict_waste_hybrid_series(
+    kelurahan: str,
+    days: int = 7,
+    rainfall_mm: float = 0.0,
+    temp_max_c: float = 31.0,
+    wind_max_kmh: float = 10.0,
+    event_attendance: int = 0,
+    start_date: str | None = None,
+) -> dict[str, Any]:
+    """Multi-day forecast series for one kecamatan (Case 2 temporal mapping).
+
+    Prophet is evaluated once over the whole date range (vectorized), XGBoost
+    corrects each day with per-day drivers: real weekday/weekend cycle and the
+    real 2026 holiday calendar vary per day; the weather/event scenario is held
+    constant across the horizon and labeled as such.
+    """
+    days = max(1, min(int(days), 30))
+    slug = kelurahan.lower().replace(" ", "_")
+    start = pd.Timestamp(start_date) if start_date else pd.Timestamp.now().normalize()
+    dates = [start + pd.Timedelta(days=i) for i in range(days)]
+    holidays = _holiday_dates()
+    weekend_flags = [bool(d.weekday() >= 5) for d in dates]
+    holiday_flags = [d.strftime("%Y-%m-%d") in holidays for d in dates]
+
+    models = _load_hybrid(slug)
+    if models is not None:
+        prophet_model, xgboost_model = models
+        yhat = prophet_model.predict(pd.DataFrame({"ds": dates}))["yhat"].to_numpy()
+        X = pd.DataFrame([{
+            "precipitation_mm": rainfall_mm,
+            "temp_max_c": temp_max_c,
+            "wind_max_kmh": wind_max_kmh,
+            "is_weekend": int(w),
+            "is_holiday": int(h),
+            "event_attendance": event_attendance,
+            "day_of_week": d.weekday(),
+            "month_of_year": d.month,
+            "day_of_month": d.day,
+            "is_payday": int(d.day in (1, 2, 25, 26, 27, 28)),
+            "rain_3d": round(rainfall_mm * 1.5, 2),
+        } for d, w, h in zip(dates, weekend_flags, holiday_flags)])
+        residuals = xgboost_model.predict(X)
+        model_available = True
+    else:
+        base = 150.0
+        yhat = np.array([base] * days, dtype=float)
+        residuals = np.array([
+            (rainfall_mm * 1.2) + (event_attendance * 0.003) + (base * 0.05 if w else 0.0)
+            for w in weekend_flags
+        ])
+        model_available = False
+
+    series = []
+    for d, w, h, yb, res in zip(dates, weekend_flags, holiday_flags, yhat, residuals):
+        tons = max(0.0, round(float(yb) + float(res), 1))
+        series.append({
+            "date": d.strftime("%Y-%m-%d"),
+            "predicted_tons": tons,
+            "is_weekend": w,
+            "is_holiday": h,
+        })
+    peak = max(series, key=lambda r: r["predicted_tons"])
+    total = round(sum(r["predicted_tons"] for r in series), 1)
+    return {
+        "kelurahan": kelurahan,
+        "model_available": model_available,
+        "days": days,
+        "series": series,
+        "total_tons": total,
+        "avg_daily_tons": round(total / days, 1),
+        "peak_date": peak["date"],
+        "peak_tons": peak["predicted_tons"],
+        "scenario_note": (
+            "Weekday/weekend and the real 2026 holiday calendar vary per day; "
+            "rainfall and event-attendance scenario inputs are held constant "
+            "across the horizon (scenario, not observed weather)."
+        ),
     }
 
 
