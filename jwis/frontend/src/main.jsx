@@ -1427,40 +1427,50 @@ function FleetTable({ trucks, onOpenTripHistory }) {
           <p>{trucks.length} units tracked · {damagedCount} with open damage status. Each row is directly actionable and audit-ready.</p>
         </div>
       </div>
-      <div className="table-wrap">
-        <table>
+      <div className="table-wrap fleet-table-wrap">
+        <table className="fleet-state-table" aria-label="Fleet operational status">
           <thead>
             <tr>
-              <th>Truck</th>
-              <th>Driver</th>
-              <th>Zone</th>
-              <th>Status</th>
-              <th>Activity</th>
-              <th>Speed</th>
-              <th>Deviation</th>
-              <th>History</th>
+              <th scope="col" style={{ width: "16%" }}>Truck &amp; Plate</th>
+              <th scope="col" style={{ width: "16%" }}>Driver</th>
+              <th scope="col" style={{ width: "14%" }}>Assigned Zone</th>
+              <th scope="col" style={{ width: "14%" }}>Compliance</th>
+              <th scope="col" style={{ width: "18%" }}>Activity State</th>
+              <th scope="col" style={{ width: "10%" }}>Speed</th>
+              <th scope="col" style={{ width: "12%" }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {shown.map((truck) => (
               <tr key={truck.truck_code}>
-                <td><b>{truck.truck_code}</b><span>{truck.plate_number}</span></td>
-                <td>{truck.driver_name}</td>
-                <td>{truck.assigned_zone}</td>
+                <td>
+                  <div className="truck-cell">
+                    <strong className="truck-code-badge">{truck.truck_code}</strong>
+                    <span className="truck-plate-sub">{truck.plate_number}</span>
+                  </div>
+                </td>
+                <td className="driver-name-cell">{truck.driver_name}</td>
+                <td><span className="zone-tag">{truck.assigned_zone}</span></td>
                 <td>
                   {truck.deviation?.violated ? (
-                    <StatusPill tone="danger">Route violation</StatusPill>
+                    <StatusPill tone="danger">Violation ({Math.round(truck.deviation.distance_meters)}m)</StatusPill>
                   ) : truck.is_damaged ? (
                     <StatusPill tone="warning">{truck.damage_status?.state === "breakdown" ? "Breakdown" : "Maintenance"}</StatusPill>
                   ) : (
                     <StatusPill tone="success">Normal</StatusPill>
                   )}
                 </td>
-                <td>{truck.activity?.label || "—"}</td>
-                <td>{truck.latest_position?.speed_kmh} km/h</td>
-                <td>{Math.round(truck.deviation?.distance_meters || 0)} m</td>
                 <td>
-                  <button className="ghost-button" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)}>
+                  <div className="activity-cell">
+                    <span className={`activity-dot ${truck.deviation?.violated ? "danger" : truck.is_damaged ? "warning" : "active"}`} />
+                    <span>{truck.activity?.label || "Idle"}</span>
+                  </div>
+                </td>
+                <td className="speed-cell">
+                  <code>{truck.latest_position?.speed_kmh || 0} km/h</code>
+                </td>
+                <td>
+                  <button className="ghost-button compact-history-btn" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)}>
                     Trip history
                   </button>
                 </td>
@@ -2425,33 +2435,36 @@ function UnlicensedCollectorAlerts() {
         </div>
         <AlertTriangle size={20} />
       </div>
-      <div className="table-wrap">
-        <table className="audit-table" role="grid" aria-label="Unlicensed collector detection">
+      <div className="table-wrap unlicensed-table-wrap">
+        <table className="unlicensed-collector-table" role="grid" aria-label="Unlicensed collector detection">
           <thead>
             <tr>
-              <th scope="col">Plate number</th>
-              <th scope="col">Coordinate location</th>
-              <th scope="col">Status</th>
-              <th scope="col">Enforcement action</th>
+              <th scope="col" style={{ width: "45%" }}>Vehicle &amp; Location</th>
+              <th scope="col" style={{ width: "27%" }}>Status</th>
+              <th scope="col" style={{ width: "28%" }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {alerts.alerts.map((a, i) => (
               <tr key={i}>
-                <td><strong>{a.plate || "Unknown"}</strong></td>
-                <td><code>{a.lat.toFixed(4)}, {a.lng.toFixed(4)}</code></td>
                 <td>
-                  <span className={`status-pill ${enforced[a.plate] ? "success" : "warning"}`}>
-                    {enforced[a.plate] ? "PATROL DISPATCHED" : "UNAUTHORIZED"}
+                  <div className="unlicensed-plate-cell">
+                    <strong className="unlicensed-plate-badge">{a.plate || "Unknown"}</strong>
+                    <span className="unlicensed-coord-tag">📍 {a.lat.toFixed(4)}, {a.lng.toFixed(4)}</span>
+                  </div>
+                </td>
+                <td>
+                  <span className={`pill ${enforced[a.plate] ? "success" : "danger"}`}>
+                    {enforced[a.plate] ? "Dispatched" : "Unauthorized"}
                   </span>
                 </td>
                 <td>
                   <button 
-                    className="primary-button compact" 
+                    className={`primary-button compact-enforce-btn ${enforced[a.plate] ? "enforced" : ""}`} 
                     onClick={() => handleEnforce(a.plate)}
                     disabled={enforced[a.plate]}
                   >
-                    {enforced[a.plate] ? "Patrol dispatched" : "Dispatch patrol"}
+                    {enforced[a.plate] ? "Patrol Sent" : "Dispatch"}
                   </button>
                 </td>
               </tr>

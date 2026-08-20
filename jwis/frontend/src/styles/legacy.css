@@ -174,50 +174,56 @@
 
 .alert-item {
   min-width: 0;
-  height: 228px;
-  overflow: hidden;
-  border: 1px solid #d7e0e8;
+  height: auto;
+  min-height: auto;
+  overflow: visible;
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
-  background: #fbfcfd;
-  padding: var(--space-4);
-  display: grid;
-  grid-template-rows: minmax(58px, auto) 74px 44px;
-  gap: 10px;
+  background: var(--ui-surface);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.alert-item:hover {
+  border-color: var(--ui-border-strong);
+  box-shadow: var(--ui-shadow-sm);
 }
 
 .alert-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .alert-head svg {
   flex: 0 0 auto;
-  color: #b42318;
+  color: var(--ui-danger, #b42318);
   margin-top: 2px;
 }
 
-.alert-head > div,
-.route-rec > div {
+.alert-head > div {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
 .alert-head strong {
   display: block;
-  line-height: 1.3;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--ui-ink);
   overflow-wrap: anywhere;
 }
 
 .alert-head p {
-  margin: 3px 0 0;
-  color: #526170;
+  margin: 4px 0 0;
+  color: var(--ui-muted);
   line-height: 1.45;
-  font-size: 14px;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  font-size: 13px;
 }
 
 .route-rec {
@@ -225,8 +231,7 @@
   align-items: center;
   min-width: 0;
   gap: var(--space-3);
-  min-height: 74px;
-  padding: 10px 12px;
+  padding: 10px 14px;
   border-radius: 8px;
   border: 1px solid var(--ui-border);
   background: var(--ui-surface-muted);
@@ -235,19 +240,21 @@
 
 .route-rec strong {
   display: block;
+  font-size: 13px;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .route-rec span {
   display: block;
   margin-top: 2px;
-  color: #55538a;
-  font-size: 13px;
+  color: var(--ui-muted);
+  font-size: 12px;
 }
 
 .route-rec-empty {
   color: var(--ui-muted);
-  background: var(--ui-surface);
+  background: var(--ui-surface-muted);
   border-style: dashed;
 }
 
@@ -257,20 +264,34 @@
 }
 
 .alert-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.78fr);
-  justify-content: stretch;
-  align-items: stretch;
-  gap: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   min-width: 0;
-  min-height: 44px;
+  margin-top: 2px;
 }
 
-.alert-actions .primary-button,
+.alert-actions .primary-button {
+  flex: 1 1 auto;
+  min-width: 140px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
 .alert-actions .ghost-button {
-  width: 100%;
-  min-width: 0;
-  padding-inline: 10px;
+  flex: 0 0 auto;
+  height: 38px;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: 6px;
   white-space: nowrap;
 }
 
@@ -1220,39 +1241,53 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .traffic-status-badge.clear { background: var(--green-light); color: var(--green-dark); }
 .traffic-status-badge.congested { background: var(--red-light); color: var(--red); }
 .astar-info-card {
-  background: var(--ui-surface);
+  background: var(--ui-surface-muted);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
-  padding: var(--space-4);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 .astar-msg {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 0 12px;
+  font-size: 12.5px;
+  color: var(--ui-ink);
+  margin: 0;
   line-height: 1.5;
+  background: var(--ui-surface);
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--ui-border);
 }
 .astar-stats {
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 .astar-stat-col {
-  flex: 1;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  padding: 10px 8px;
   text-align: center;
 }
 .astar-stat-col span {
   display: block;
   font-size: 11px;
-  color: var(--text-muted);
+  font-weight: 500;
+  color: var(--ui-muted);
   margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .astar-stat-col strong {
-  font-size: 16px;
-  color: var(--text);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ui-ink);
 }
-.text-diverted { color: var(--red) !important; }
-.text-normal { color: var(--green-dark) !important; }
-.marker.diverted span { background: var(--red) !important; }
+.text-diverted { color: #dc2626 !important; }
+.text-normal { color: #16a34a !important; }
+.marker.diverted span { background: #dc2626 !important; }
 
 /* TPA Queue Panel */
 .tpa-status-grid {

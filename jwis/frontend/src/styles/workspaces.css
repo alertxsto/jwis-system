@@ -95,20 +95,144 @@
 
 .fleet-detail-surface {
   margin-top: 0;
-  height: 420px;
-  min-height: 0;
+  min-height: 480px;
+  height: auto;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .fleet-detail-surface .panel {
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  box-shadow: none;
+  height: auto;
+  min-height: 480px;
+  overflow: visible;
+  box-shadow: var(--ui-shadow-sm);
   border-radius: var(--ui-radius-card);
   border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  padding: 24px;
+}
+
+.fleet-table-wrap {
+  margin-top: var(--space-4);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  overflow-x: auto;
+  background: var(--ui-surface);
+}
+
+.fleet-state-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.fleet-state-table thead th {
+  padding: 14px 18px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--ui-border-strong);
+  white-space: nowrap;
+}
+
+.fleet-state-table tbody td {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--ui-border);
+  vertical-align: middle;
+  font-size: 13.5px;
+  color: var(--ui-ink);
+}
+
+.fleet-state-table tbody tr:hover td {
+  background: var(--ui-canvas);
+}
+
+.fleet-state-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.truck-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.truck-code-badge {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ui-ink);
+  letter-spacing: -0.01em;
+}
+
+.truck-plate-sub {
+  font-size: 11.5px;
+  color: var(--ui-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.driver-name-cell {
+  font-weight: 500;
+  color: var(--ui-ink);
+}
+
+.zone-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink-soft);
+  border: 1px solid var(--ui-border);
+}
+
+.activity-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ui-ink);
+}
+
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.activity-dot.active {
+  background: #16a34a;
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+.activity-dot.warning {
+  background: #ea580c;
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.2);
+}
+
+.activity-dot.danger {
+  background: #dc2626;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+.speed-cell code {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  color: var(--ui-muted);
+  background: var(--ui-surface-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.compact-history-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
 }
 
 .forecast-workspace {
@@ -989,10 +1113,9 @@
   }
 }
 
-/* Map footer inspector row styles (desktop 3-column grid, mobile stacked) */
 .map-footer-inspector-row {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(360px, 1.15fr) minmax(380px, 1.2fr) minmax(320px, 0.95fr);
   align-items: stretch;
   gap: var(--space-5);
   margin-top: var(--space-5);
@@ -1006,12 +1129,121 @@
 
 .inspector-col > .panel {
   width: 100%;
-  min-height: 560px;
+  min-height: 520px;
   max-height: 640px;
-  padding-bottom: var(--space-3);
+  padding: 22px 24px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.inspector-col > .panel .panel-title {
+  margin-bottom: 16px;
+}
+
+.inspector-col > .panel .panel-title h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ui-ink);
+  letter-spacing: -0.01em;
+}
+
+.inspector-col > .panel .panel-title p {
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ui-muted);
+  margin-top: 2px;
+}
+
+.unlicensed-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
+  background: var(--ui-surface);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.unlicensed-collector-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.unlicensed-collector-table thead th {
+  padding: 10px 14px;
+  background: var(--ui-surface-muted);
+  color: var(--ui-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--ui-border-strong);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.unlicensed-collector-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ui-border);
+  vertical-align: middle;
+  font-size: 13px;
+}
+
+.unlicensed-collector-table tbody tr:hover td {
+  background: var(--ui-canvas);
+}
+
+.unlicensed-collector-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.unlicensed-plate-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.unlicensed-plate-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-ink);
+}
+
+.unlicensed-coord-tag {
+  font-size: 11px;
+  color: var(--ui-muted);
+  font-family: var(--font-mono, monospace);
+}
+
+.compact-enforce-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  white-space: nowrap;
+  min-height: 32px;
+}
+
+.compact-enforce-btn.enforced {
+  background: var(--ui-surface-muted);
+  color: var(--ui-muted);
+  border: 1px solid var(--ui-border);
+  cursor: default;
+}
+
+.stagger-schedule-note {
+  margin-top: 12px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ui-muted);
 }
 
 .inspector-col > .panel .table-wrap {
@@ -1023,10 +1255,12 @@
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
-  overflow-y: scroll;
+  overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 8px;
-  scrollbar-gutter: stable;
+  padding-right: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .inspector-col .empty-state.compact {
@@ -1041,7 +1275,16 @@
   text-align: center;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1280px) {
+  .map-footer-inspector-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .inspector-col:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
   .map-footer-inspector-row {
     grid-template-columns: minmax(0, 1fr);
   }
