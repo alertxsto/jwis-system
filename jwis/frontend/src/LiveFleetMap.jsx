@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Compass } from "lucide-react";
+import { useLanguage } from "./i18n.jsx";
+import { createCruiseEngine } from "./cruiseEngine.js";
 
 const JAKARTA_CENTER = [106.8456, -6.2088];
 // Necessary: inline local styles — no tile CDN. Remote tile styles made the
@@ -62,17 +65,26 @@ function metersBetween(a, b) {
   return Math.sqrt(x * x + y * y);
 }
 
-function renderTruckPopup(truckData, truthData, followingCode) {
+function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
   const isAnom = truckData?.deviation?.violated;
-  const statusTxt = isAnom ? "Route violation" : truckData?.is_damaged ? "Fleet damage" : "Normal corridor";
+  const statusTxt = isAnom 
+    ? (lang === "id" ? "Pelanggaran Koridor" : "Route violation") 
+    : truckData?.is_damaged 
+      ? (lang === "id" ? "Kerusakan Armada" : "Fleet damage") 
+      : (lang === "id" ? "Sesuai Koridor Normal" : "Normal corridor");
   const rawStr = truthData?.raw_gps ? `${truthData.raw_gps.lat.toFixed(5)}, ${truthData.raw_gps.lng.toFixed(5)}` : "n/a";
   const snapStr = truthData?.snapped_gps ? `${truthData.snapped_gps.lat.toFixed(5)}, ${truthData.snapped_gps.lng.toFixed(5)}` : "n/a";
   const snapSrc = truthData?.provenance?.snapped_gps || "RAW_GPS_UNSNAPPED";
   const devM = Math.round(truthData?.deviation_m ?? truckData?.deviation?.distance_meters ?? 0);
   const speed = truckData?.latest_position?.speed_kmh ?? "?";
   const updated = truckData?.latest_position?.updated_seconds_ago ?? "?";
-  const activityTxt = truckData?.activity?.label ? `Activity: ${truckData.activity.label}` : "";
-  const damageTxt = truckData?.is_damaged && truckData?.damage_status?.note ? `Damage: ${truckData.damage_status.note}` : "";
+  const activityTxt = truckData?.activity?.label ? `${lang === "id" ? "Aktivitas" : "Activity"}: ${truckData.activity.label}` : "";
+  const damageTxt = truckData?.is_damaged && truckData?.damage_status?.note ? `${lang === "id" ? "Kerusakan" : "Damage"}: ${truckData.damage_status.note}` : "";
+  const distLabel = lang === "id" ? `${devM} m dari koridor resmi - ${speed} km/jam` : `${devM} m from assigned road - ${speed} km/h`;
+  const trackBtn = followingCode === truckData.truck_code ? (lang === "id" ? "Berhenti Lacak" : "Stop tracking") : (lang === "id" ? "Lacak Truk" : "Track");
+  const dispatchBtn = lang === "id" ? `Kirim Instruksi ${truckData.truck_code}` : `Dispatch ${truckData.truck_code}`;
+  const fitBtn = lang === "id" ? "Paskan Rute" : "Fit route";
+
   return `
       <div class="map-popup">
         <strong>${truckData.truck_code}</strong>
@@ -80,14 +92,14 @@ function renderTruckPopup(truckData, truthData, followingCode) {
         <p>${statusTxt}</p>
         ${activityTxt ? `<small>${activityTxt}</small>` : ""}
         ${damageTxt ? `<small>${damageTxt}</small>` : ""}
-        <small>${devM} m from assigned road - ${speed} km/h</small>
+        <small>${distLabel}</small>
         <small>Raw GPS: ${rawStr}</small>
         <small>Snapped: ${snapStr} (${snapSrc})</small>
-<small>Updated ${updated}s ago</small>
+        <small>${lang === "id" ? "Diperbarui" : "Updated"} ${updated}s ${lang === "id" ? "lalu" : "ago"}</small>
         <p class="popup-src">SIMULATION · not live GPS</p>
-        <button class="popup-track" data-track="${truckData.truck_code}">${followingCode === truckData.truck_code ? "Stop tracking" : "Track"}</button>
-        <button class="popup-dispatch" data-truck="${truckData.truck_code}">Dispatch ${truckData.truck_code}</button>
-        <button class="popup-fit" data-fit="${truckData.truck_code}">Fit route</button>
+        <button class="popup-track" data-track="${truckData.truck_code}">${trackBtn}</button>
+        <button class="popup-dispatch" data-truck="${truckData.truck_code}">${dispatchBtn}</button>
+        <button class="popup-fit" data-fit="${truckData.truck_code}">${fitBtn}</button>
       </div>
     `;
 }
@@ -208,6 +220,7 @@ export function LiveFleetMap({
   onBreadcrumbsLoaded,
   jamActive = false,
 }) {
+  const { lang, t } = useLanguage();
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const [mapInstance, setMapInstance] = useState(null);
@@ -246,6 +259,18 @@ export function LiveFleetMap({
   trucksRef.current = trucks;
   const followTruckRef = useRef(followTruck);
   followTruckRef.current = followTruck;
+  const playbackTruckRef = useRef(playbackTruck);
+  playbackTruckRef.current = playbackTruck;
+  // Cruise engine: continuous smooth movement for trucks with route geometry.
+  // Degrades gracefully — null engine means per-poll glide behavior only.
+  const cruiseRef = useRef(null);
+  if (!cruiseRef.current) {
+    try {
+      cruiseRef.current = createCruiseEngine();
+    } catch {
+      cruiseRef.current = null;
+    }
+  }
 
 
   useEffect(() => {
@@ -665,7 +690,7 @@ export function LiveFleetMap({
 popup.on("open", () => {
               const t0 = trucksRef.current.find((x) => x.truck_code === truck.truck_code) || truck;
               const tr0 = mapTruthRef.current[truck.truck_code];
-              popup.setHTML(renderTruckPopup(t0, tr0, followTruckRef.current));
+              popup.setHTML(renderTruckPopup(t0, tr0, followTruckRef.current, lang));
               const btn = document.querySelector(`.popup-dispatch[data-truck="${truck.truck_code}"]`);
               if (btn && typeof onSelectTruck === "function") {
                 btn.addEventListener("click", () => onSelectTruck(truck.truck_code, true));
@@ -695,41 +720,61 @@ popup.on("open", () => {
             );
 
             nextMarkers[key] = { marker, element, popup, coords: targetCoords, headingEl, statusClass };
+            {
+              const engine = cruiseRef.current;
+              if (engine) {
+                const geom =
+                  truth047?.assigned_route?.geometry?.length >= 2
+                    ? truth047.assigned_route.geometry
+                    : truck.assigned_path?.length >= 2
+                      ? truck.assigned_path
+                      : null;
+                if (geom) engine.registerTruck(truck.truck_code, geom);
+              }
+            }
 } else {
             if (existing.statusClass !== statusClass) {
               existing.element.className = `truck-marker ${statusClass}`;
               existing.statusClass = statusClass;
             }
 
-            const from = [existing.marker.getLngLat().lng, existing.marker.getLngLat().lat];
-            const deltaM = metersBetween(from, targetCoords);
-            if (existing.animId) {
-              cancelAnimationFrame(existing.animId);
-              existing.animId = null;
-            }
-            if (deltaM < 1.0) {
-              existing.marker.setLngLat(targetCoords);
+            const cruise = cruiseRef.current;
+            if (cruise && cruise.has(truck.truck_code)) {
+              // Cruise engine owns this marker's position; softly reconcile
+              // the apparent position toward the latest real GPS fix.
+              cruise.softCorrect(truck.truck_code, targetCoords, 0.2);
               existing.coords = targetCoords;
-              setHeading(existing.headingEl, from, targetCoords);
             } else {
-              const duration = Math.max(500, Math.min(2600, deltaM * 40));
-              const startTime = performance.now();
-              const step = (now) => {
-                const t = Math.min((now - startTime) / duration, 1);
-                const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-                existing.marker.setLngLat([
-                  from[0] + (targetCoords[0] - from[0]) * ease,
-                  from[1] + (targetCoords[1] - from[1]) * ease,
-                ]);
-                if (t < 1) {
-                  existing.animId = requestAnimationFrame(step);
-                } else {
-                  existing.animId = null;
-                  existing.coords = targetCoords;
-                  setHeading(existing.headingEl, from, targetCoords);
-                }
-              };
-              existing.animId = requestAnimationFrame(step);
+              const from = [existing.marker.getLngLat().lng, existing.marker.getLngLat().lat];
+              const deltaM = metersBetween(from, targetCoords);
+              if (existing.animId) {
+                cancelAnimationFrame(existing.animId);
+                existing.animId = null;
+              }
+              if (deltaM < 1.0) {
+                existing.marker.setLngLat(targetCoords);
+                existing.coords = targetCoords;
+                setHeading(existing.headingEl, from, targetCoords);
+              } else {
+                const duration = Math.max(500, Math.min(2600, deltaM * 40));
+                const startTime = performance.now();
+                const step = (now) => {
+                  const t = Math.min((now - startTime) / duration, 1);
+                  const ease = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                  existing.marker.setLngLat([
+                    from[0] + (targetCoords[0] - from[0]) * ease,
+                    from[1] + (targetCoords[1] - from[1]) * ease,
+                  ]);
+                  if (t < 1) {
+                    existing.animId = requestAnimationFrame(step);
+                  } else {
+                    existing.animId = null;
+                    existing.coords = targetCoords;
+                    setHeading(existing.headingEl, from, targetCoords);
+                  }
+                };
+                existing.animId = requestAnimationFrame(step);
+              }
             }
             nextMarkers[key] = existing;
             delete activeMarkersRef.current[key];
@@ -741,6 +786,14 @@ popup.on("open", () => {
         m.popup?.remove();
         m.marker.remove();
       });
+      {
+        const engine = cruiseRef.current;
+        if (engine) {
+          Object.keys(activeMarkersRef.current).forEach((code) => {
+            engine.removeTruck(code);
+          });
+        }
+      }
       activeMarkersRef.current = nextMarkers;
 
       const jamData = featureCollection(jamFeatures);
@@ -1466,6 +1519,7 @@ popup.on("open", () => {
     if (!map || !playbackTruck) return;
     const trail = breadcrumbs[playbackTruck];
     if (!trail || trail.length < 2) return;
+    cruiseRef.current?.pauseTruck(playbackTruck);
     if (playbackMarkerRef.current) playbackMarkerRef.current.remove();
     const el = document.createElement("div");
     el.className = "playback-marker";
@@ -1488,8 +1542,49 @@ popup.on("open", () => {
       popup.remove();
       marker.remove();
       playbackMarkerRef.current = null;
+      cruiseRef.current?.resumeTruck(playbackTruck);
     };
   }, [playbackTruck, breadcrumbs, mapInstance]);
+
+  // Continuous cruise: one global rAF loop moves all engine-registered trucks.
+  // rAF auto-pauses on hidden tabs; dt clamp in the engine prevents jumps.
+  useEffect(() => {
+    const engine = cruiseRef.current;
+    const map = mapInstance;
+    if (!engine || !map) return undefined;
+    let rafId = null;
+    const frameTimes = [];
+    let slowMode = false;
+    let lastFrame = 0;
+    const loop = (now) => {
+      rafId = requestAnimationFrame(loop);
+      // perf guard: drop to ~30fps if frames consistently exceed 33ms
+      if (lastFrame) {
+        frameTimes.push(now - lastFrame);
+        if (frameTimes.length > 120) frameTimes.shift();
+        if (frameTimes.length === 120) {
+          const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+          slowMode = avg > 33;
+        }
+      }
+      lastFrame = now;
+      if (slowMode && now - loop.lastSkip < 33) return;
+      loop.lastSkip = now;
+      const positions = engine.tick(now);
+      const markers = activeMarkersRef.current;
+      for (const [code, lngLat] of positions) {
+        const entry = markers[code];
+        if (!entry) continue;
+        if (playbackTruckRef.current === code) continue; // playback owns it
+        entry.marker.setLngLat(lngLat);
+      }
+    };
+    loop.lastSkip = 0;
+    rafId = requestAnimationFrame(loop);
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [mapInstance]);
 
   const playbackOptions = Object.keys(breadcrumbs);
 
@@ -1588,7 +1683,7 @@ popup.on("open", () => {
           onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
           onFocus={() => setSearchOpen(true)}
           onBlur={() => window.setTimeout(() => setSearchOpen(false), 200)}
-          placeholder="Search trucks, TPS, districts..."
+          placeholder={lang === "id" ? "Cari nomor truk, TPS, kecamatan..." : "Search trucks, TPS, districts..."}
           aria-label="Search map"
         />
         {searchOpen && searchResults.length > 0 && (
@@ -1607,14 +1702,14 @@ popup.on("open", () => {
       </div>
 
       <div className="map-basemap" role="group" aria-label="Basemap style">
-        {streetsOffline && <span className="basemap-offline-note" title="Remote street tiles unreachable">offline map</span>}
+        {streetsOffline && <span className="basemap-offline-note" title="Remote street tiles unreachable">{lang === "id" ? "peta offline" : "offline map"}</span>}
         <button
           className={showAllFleet ? "active" : ""}
           onClick={() => setShowAllFleet((v) => !v)}
-          title={showAllFleet ? "Show fewer trucks" : "Show all 59 trucks"}
+          title={showAllFleet ? (lang === "id" ? "Tampilkan lebih sedikit" : "Show fewer trucks") : (lang === "id" ? "Tampilkan semua 59 truk" : "Show all 59 trucks")}
           style={{ marginLeft: 8 }}
         >
-          {showAllFleet ? `Fleet: ${trucks.length}` : "Fleet: 19"}
+          {showAllFleet ? `${lang === "id" ? "Armada" : "Fleet"}: ${trucks.length}` : `${lang === "id" ? "Armada" : "Fleet"}: 19`}
         </button>
       </div>
 
@@ -1624,17 +1719,19 @@ popup.on("open", () => {
             <strong>{routeInfo.name}</strong>
             <small>{routeInfo.distance_km} km · ~{routeInfo.eta_minutes} min · {routeInfo.source}</small>
           </span>
-          <button onClick={fitRoute}>Fit</button>
+          <button onClick={fitRoute}>{lang === "id" ? "Paskan Rute" : "Fit"}</button>
         </div>
       )}
 
       {followTruck && (
         <button className="map-follow-chip" onClick={() => setFollowTruck(null)}>
-          Following {followTruck} — tap to stop
+          {lang === "id" ? `Mengikuti ${followTruck} — ketuk untuk berhenti` : `Following ${followTruck} — tap to stop`}
         </button>
       )}
 
-      <button className="map-reset-btn" onClick={resetView} aria-label="Reset view" title="Reset view">⌂</button>
+      <button className="map-reset-btn" onClick={resetView} aria-label={lang === "id" ? "Reset tampilan" : "Reset view"} title={lang === "id" ? "Reset tampilan" : "Reset view"}>
+        <Compass size={15} />
+      </button>
     </div>
   );
 }
