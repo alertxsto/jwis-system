@@ -141,9 +141,9 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
   const before = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
   expect(before).toContain("actual-violation");
 
-  await page.locator(".astar-panel .primary-button", { hasText: "Simulate Corridor Jam" }).click();
-  await expect(page.locator(".traffic-status-badge")).toContainText("Jam Active");
-  await expect(page.locator(".astar-stat-col strong", { hasText: "Diverted (A*)" })).toBeVisible();
+  await page.locator(".astar-panel .astar-toggle-btn").click();
+  await expect(page.locator(".traffic-status-badge")).toContainText(/Jam Active|Macet Aktif/);
+  await expect(page.locator(".astar-stat-col strong").filter({ hasText: /Diverted \(A\*\)|Dialihkan \(A\*\)/ })).toBeVisible({ timeout: 20000 });
 
   const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
   expect(reroute.diversion_applied).toBe(true);
@@ -171,8 +171,8 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
     { timeout: 15000 }
   );
 
-  await page.locator(".astar-panel .primary-button", { hasText: "Restore Traffic" }).click();
-  await expect(page.locator(".traffic-status-badge")).toContainText("Clear");
+  await page.locator(".astar-panel .astar-toggle-btn").click();
+  await expect(page.locator(".traffic-status-badge")).toContainText(/Corridor Clear|Koridor Lancar/);
 
   const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
   expect(reroute.diversion_applied).toBe(false);
@@ -225,4 +225,17 @@ test("TPS and WR layers survive basemap switch", async ({ page }) => {
     expect(layerCheck.wr).toBe(true);
     expect(layerCheck.wrCluster).toBe(true);
   }
+});
+
+test("truck markers cruise smoothly on the live map", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const marker = page.locator(".truck-marker").first();
+  await marker.waitFor({ state: "visible", timeout: 30000 });
+  const box1 = await marker.boundingBox();
+  await page.waitForTimeout(2500);
+  const box2 = await marker.boundingBox();
+  expect(box1).toBeTruthy();
+  expect(box2).toBeTruthy();
+  const moved = Math.hypot(box2.x - box1.x, box2.y - box1.y);
+  expect(moved).toBeGreaterThan(0.5); // continuous cruise, not static
 });
