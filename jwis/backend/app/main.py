@@ -1452,13 +1452,12 @@ def _start_ai_engine() -> None:
     engine.register("carbon", _ai_carbon.update)
 
     def _forecast_loop() -> None:
-        _ai_forecast.refresh()  # immediate first refresh at startup
         while True:
-            threading.Event().wait(3600)
             try:
                 _ai_forecast.refresh()
             except Exception:  # noqa: BLE001
                 logging.getLogger(__name__).exception("event forecast refresh failed")
+            threading.Event().wait(3600)
 
     threading.Thread(target=_forecast_loop, daemon=True,
                      name="jwis-ai-forecast").start()
