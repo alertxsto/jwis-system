@@ -20,6 +20,7 @@ print("JWIS STARTUP API_KEY VALUE:", (key[:6] + "..." + key[-4:]) if key else "N
 print("JWIS STARTUP BASE_URL:", os.getenv("OPENAI_BASE_URL"))
 
 import json
+import logging
 import re
 import threading
 import time
@@ -57,6 +58,15 @@ from app.storage import HistoryStore
 from app.whatsapp import OpenWAClient, build_alert_message
 from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap, load_real_tps_coordinates, load_real_wr_coordinates
 from app.astar_routing import is_traffic_jam_active, set_traffic_jam_active
+from app.ai.actions.auto_reroute import AutoRerouter
+from app.ai.actions.auto_state import EVENT_FEED
+from app.ai.detectors.deviation_trigger import DeviationTrigger
+from app.ai.detectors.speed_anomaly import SpeedAnomalyDetector
+from app.ai.detectors.stop_pattern import StopPatternDetector
+from app.ai.engine_loop import maybe_start_engine
+from app.ai.forecasters.event_impact import EventImpactForecaster
+from app.ai.forecasters.fuel_model import CarbonCalculator
+from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
 history_store = HistoryStore()
@@ -1416,3 +1426,71 @@ def get_wr_coordinates() -> dict[str, Any]:
         "source": "Official SILIKA Wajib Retribusi 2023 coordinates",
         "total": len(features)
     }
+
+
+# ── AI ENGINE (production AI-first) ──────────────────────────────────────────
+
+_ai_detector = SpeedAnomalyDetector()
+_ai_rerouter = AutoRerouter(detector=_ai_detector, feed=EVENT_FEED)
+_ai_queue = TpaQueuePredictor()
+_ai_deviation = DeviationTrigger(feed=EVENT_FEED)
+_ai_stop = StopPatternDetector()
+_ai_carbon = CarbonCalculator()
+_ai_forecast = EventImpactForecaster(feed=EVENT_FEED)
+
+
+@app.on_event("startup")
+def _start_ai_engine() -> None:
+    engine = maybe_start_engine()
+    if engine is None:
+        return
+    engine.register("auto_reroute", _ai_rerouter.run)
+    engine.register("tpa_queue", _ai_queue.update)
+    engine.register("deviation_replay", _ai_deviation.check)
+    engine.register("stop_pattern", lambda source: _ai_stop.scan())
+    engine.register("carbon", _ai_carbon.update)
+
+    def _forecast_loop() -> None:
+        _ai_forecast.refresh()  # immediate first refresh at startup
+        while True:
+            threading.Event().wait(3600)
+            try:
+                _ai_forecast.refresh()
+            except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception("event forecast refresh failed")
+
+    threading.Thread(target=_forecast_loop, daemon=True,
+                     name="jwis-ai-forecast").start()
+
+
+@app.get("/api/ai/events")
+def ai_events() -> dict[str, Any]:
+    events = EVENT_FEED.snapshot()
+    return {"events": events, "count": len(events)}
+
+
+@app.post("/api/ai/events/{index}/ack")
+def ai_event_ack(index: int) -> dict[str, Any]:
+    return {"ok": EVENT_FEED.acknowledge(index)}
+
+
+@app.get("/api/ai/tpa-queue-live")
+def ai_tpa_queue_live() -> dict[str, Any]:
+    return _ai_queue.latest()
+
+
+@app.get("/api/ai/unlicensed-flags")
+def ai_unlicensed_flags() -> dict[str, Any]:
+    flags = _ai_stop.flags()
+    return {"flags": flags, "count": len(flags)}
+
+
+@app.get("/api/ai/carbon-live")
+def ai_carbon_live() -> dict[str, Any]:
+    return _ai_carbon.latest()
+
+
+@app.get("/api/ai/event-forecast")
+def ai_event_forecast() -> dict[str, Any]:
+    outlook = _ai_forecast.latest()
+    return {"outlook": outlook, "count": len(outlook)}
