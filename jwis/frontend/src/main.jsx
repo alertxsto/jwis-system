@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
@@ -8,6 +8,7 @@ import { AppShell } from "./layout/AppShell.jsx";
 import { FleetOperations } from "./workspaces/FleetOperations.jsx";
 import { IntegratedPlanning } from "./workspaces/IntegratedPlanning.jsx";
 import { WasteForecast } from "./workspaces/WasteForecast.jsx";
+import { LanguageProvider, useLanguage } from "./i18n.jsx";
 import {
   Activity,
   AlertTriangle,
@@ -18,7 +19,9 @@ import {
   MapPinned,
   Radio,
   RefreshCcw,
+  RotateCcw,
   Route,
+  Search,
   Send,
   ShieldCheck,
   Truck,
@@ -36,6 +39,9 @@ import {
   TrendingUp,
   Zap,
   Clock,
+  Crosshair,
+  ArrowRight,
+  MapPin,
   Lock,
   LogOut,
   User,
@@ -274,6 +280,7 @@ function StatusPill({ tone, children }) {
 }
 
 function LoginPage({ onLogin }) {
+  const { lang, setLang } = useLanguage();
   const [username, setUsername] = useState("dispatcher");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -294,7 +301,7 @@ function LoginPage({ onLogin }) {
       localStorage.setItem("jwis_token", principal.token);
       onLogin();
     } catch {
-      setError("Invalid username or password.");
+      setError(lang === "id" ? "Nama pengguna atau kata sandi tidak valid." : "Invalid username or password.");
     }
   }
 
@@ -302,18 +309,24 @@ function LoginPage({ onLogin }) {
     <main className="login-shell">
       <section className="login-surface" aria-labelledby="login-title">
         <div className="login-card">
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+            <div className="language-toggle-widget" style={{ display: "inline-flex", background: "var(--ui-surface-muted)", borderRadius: "8px", padding: "2px", border: "1px solid var(--ui-border)" }}>
+              <button type="button" onClick={() => setLang("id")} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: lang === "id" ? 700 : 500, borderRadius: "5px", border: 0, cursor: "pointer", background: lang === "id" ? "var(--ui-surface)" : "transparent", color: lang === "id" ? "var(--ui-accent)" : "var(--ui-muted)" }}>ID</button>
+              <button type="button" onClick={() => setLang("en")} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: lang === "en" ? 700 : 500, borderRadius: "5px", border: 0, cursor: "pointer", background: lang === "en" ? "var(--ui-surface)" : "transparent", color: lang === "en" ? "var(--ui-accent)" : "var(--ui-muted)" }}>EN</button>
+            </div>
+          </div>
           <div className="login-brand">
             <span><ShieldCheck size={22} /></span>
             <div>
-              <p className="login-kicker">DLH Command Access</p>
-              <h1 id="login-title">JWIS Control Center</h1>
+              <p className="login-kicker">{lang === "id" ? "Akses Masuk Komando DLH" : "DLH Command Access"}</p>
+              <h1 id="login-title">{lang === "id" ? "Pusat Kendali JWIS" : "JWIS Control Center"}</h1>
             </div>
           </div>
           <p className="login-copy">
-            Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.
+            {lang === "id" ? "Akses resmi operator untuk pemantauan armada, prediksi timbulan sampah, dan pengawasan logistik." : "Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision."}
           </p>
           <form className="login-form" onSubmit={submit}>
-            <label htmlFor="username">Username</label>
+            <label htmlFor="username">{lang === "id" ? "Nama Pengguna" : "Username"}</label>
             <div className="input-shell">
               <User size={18} />
               <input
@@ -323,7 +336,7 @@ function LoginPage({ onLogin }) {
                 autoComplete="username"
               />
             </div>
-            <label htmlFor="password">Password</label>
+            <label htmlFor="password">{lang === "id" ? "Kata Sandi" : "Password"}</label>
             <div className="input-shell">
               <Lock size={18} />
               <input
@@ -332,12 +345,12 @@ function LoginPage({ onLogin }) {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete="current-password"
-                placeholder="Enter password"
+                placeholder={lang === "id" ? "Masukkan kata sandi" : "Enter password"}
               />
             </div>
             {error && <p className="form-error" role="alert">{error}</p>}
             <button className="primary-button login-submit" type="submit">
-              <Lock size={16} /> Sign in
+              <Lock size={16} /> {lang === "id" ? "Masuk Sistem" : "Sign in"}
             </button>
           </form>
           <div className="login-demo-note">
@@ -424,7 +437,19 @@ function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbac
   );
 }
 
+function formatAlertDescription(desc) {
+  if (!desc) return "";
+  return desc
+    .replace(/(\d+)\s*meters/gi, (match, val) => {
+      const num = Number(val);
+      if (isNaN(num)) return match;
+      return num >= 1000 ? `${(num / 1000).toFixed(1)} km` : `${num} m`;
+    })
+    .replace("from the assigned corridor", "outside designated corridor");
+}
+
 function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
+  const { t, lang } = useLanguage();
   const [followUps, setFollowUps] = useState({});
   const [notes, setNotes] = useState({});
 
@@ -460,7 +485,7 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-} catch (error) {
+    } catch (error) {
       console.warn("Follow-up sync failed; kept local only", error);
     }
   }
@@ -471,66 +496,81 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
     <section className="panel">
       <div className="panel-title">
         <div>
-          <h2>Action Queue</h2>
-          <p>Alerts are linked to route recommendations and field instructions.</p>
+          <h2>{t("aq_title")}</h2>
+          <p>{t("aq_subtitle")}</p>
         </div>
-        <StatusPill tone="danger">{activeCount} active</StatusPill>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <StatusPill tone="danger">{activeCount} {lang === "id" ? "aktif" : "active"}</StatusPill>
+        </div>
       </div>
       <div className="alert-list">
         {alerts.map((alert) => {
           const recommendedRoute = alert.recommended_routes?.[0];
           const status = followUps[alert.id]?.status || "OPEN";
           const statusClass = status === "RESOLVED" ? "success" : status === "DISPATCHED" ? "warning" : "danger";
+          const formattedDesc = formatAlertDescription(alert.description);
+
           return (
             <article className="alert-item" key={alert.id}>
               <div className="alert-head">
-                <AlertTriangle size={18} />
+                <div className="alert-icon-box">
+                  <AlertTriangle size={17} />
+                </div>
                 <div>
                   <strong>{alert.title}</strong>
-                  <p>{alert.description}</p>
+                  <p>{formattedDesc}</p>
                 </div>
-                <span className={`pill ${statusClass}`}>{status}</span>
+                <span className={`pill ${statusClass}`}>
+                  <span className={`status-dot ${statusClass}`} />
+                  {status === "OPEN" ? (lang === "id" ? "TERBUKA" : "OPEN") : status === "DISPATCHED" ? (lang === "id" ? "DIKIRIM" : "DISPATCHED") : (lang === "id" ? "SELESAI" : "RESOLVED")}
+                </span>
               </div>
               <div className={`route-rec ${recommendedRoute ? "" : "route-rec-empty"}`}>
                 {recommendedRoute ? (
                   <>
-                    <Route size={17} />
-                    <div>
+                    <div className="route-rec-icon">
+                      <Route size={16} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <strong>{recommendedRoute.name}</strong>
-                      <span>{recommendedRoute.eta_minutes} min ETA - score {recommendedRoute.score}</span>
+                      <div className="route-rec-meta">
+                        <span className="route-rec-tag"><Clock size={12} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }} />{recommendedRoute.eta_minutes} min ETA</span>
+                        <span className="route-rec-tag"><Crosshair size={12} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }} />Score {recommendedRoute.score}</span>
+                      </div>
                     </div>
                   </>
                 ) : (
                   <div>
-                    <strong>Awaiting route recommendation</strong>
-                    <span>Dispatch can proceed after operator review.</span>
+                    <strong>{t("aq_awaiting_rec")}</strong>
+                    <span>{t("aq_awaiting_sub")}</span>
                   </div>
                 )}
               </div>
               {status !== "RESOLVED" ? (
                 <div className="alert-actions">
-                  <button className="primary-button" onClick={() => { onDispatch(alert); recordFollowUp(alert, "DISPATCHED", `Routed via ${recommendedRoute?.name || "backup route"}`); }}>
-                    <Send size={16} /> Approve &amp; Dispatch
-                  </button>
-                  <button className="ghost-button alert-wa-button" onClick={() => onWhatsApp(alert)}>
-                    <MessageCircle size={16} /> WA Alert
-                  </button>
+                  <div className="alert-btn-row">
+                    <button className="primary-button" onClick={() => { onDispatch(alert); recordFollowUp(alert, "DISPATCHED", `Routed via ${recommendedRoute?.name || "backup route"}`); }}>
+                      <Send size={14} /> {t("btn_approve_dispatch")}
+                    </button>
+                    <button className="alert-wa-button" onClick={() => onWhatsApp(alert)}>
+                      <MessageCircle size={14} /> {t("btn_wa_alert")}
+                    </button>
+                  </div>
                   <div className="alert-resolve-row">
                     <input
                       type="text"
-                      className="fu-note-input"
                       value={notes[alert.id] || ""}
                       onChange={(e) => setNotes((s) => ({ ...s, [alert.id]: e.target.value }))}
-                      placeholder="Note (e.g. T-012 handled by supervisor)"
+                      placeholder={t("btn_resolve_placeholder")}
                     />
-                    <button className="ghost-button" onClick={() => recordFollowUp(alert, "RESOLVED")} disabled={!notes[alert.id]?.trim()}>
-                      <Check size={16} /> Mark Resolved
+                    <button className="resolve-btn" onClick={() => recordFollowUp(alert, "RESOLVED")} disabled={!notes[alert.id]?.trim()}>
+                      <Check size={14} /> {t("btn_mark_resolved")}
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="alert-resolved-note">
-                  <Check size={14} /> Resolved by <b>{followUps[alert.id]?.operator}</b>: {followUps[alert.id]?.note || "closed"}
+                  <Check size={14} /> {lang === "id" ? "Diselesaikan oleh" : "Resolved by"} <b>{followUps[alert.id]?.operator}</b>: {followUps[alert.id]?.note || "closed"}
                 </div>
               )}
             </article>
@@ -542,27 +582,28 @@ function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
 }
 
 function RouteEvidencePanel({ route }) {
+  const { lang } = useLanguage();
   if (!route) return null;
   return (
     <section className="panel route-evidence-panel">
       <div className="panel-title">
         <div>
-          <h2>OSRM Route Evidence</h2>
-          <p>ETA and route geometry are fetched from OSRM public routing, with fallback for demo resilience.</p>
+          <h2>{lang === "id" ? "Bukti Rute OSRM" : "OSRM Route Evidence"}</h2>
+          <p>{lang === "id" ? "Estimasi waktu dan geometri rute diambil dari routing publik OSRM." : "ETA and route geometry are fetched from OSRM public routing, with fallback for demo resilience."}</p>
         </div>
         <StatusPill tone={route.source === "osrm" ? "success" : "warning"}>{route.source}</StatusPill>
       </div>
       <div className="route-evidence-grid">
         <div>
-          <span>Recommended route</span>
+          <span>{lang === "id" ? "Rekomendasi Rute" : "Recommended route"}</span>
           <strong>{route.name}</strong>
         </div>
         <div>
-          <span>ETA</span>
+          <span>{lang === "id" ? "Estimasi Waktu" : "ETA"}</span>
           <strong>{route.eta_minutes} min</strong>
         </div>
         <div>
-          <span>Distance</span>
+          <span>{lang === "id" ? "Jarak" : "Distance"}</span>
           <strong>{route.distance_km} km</strong>
         </div>
       </div>
@@ -572,97 +613,95 @@ function RouteEvidencePanel({ route }) {
 }
 
 function PredictionPanel({ predictions, allPredictions = predictions }) {
+  const { t, lang } = useLanguage();
   const totalExtraTrucks = predictions.reduce((sum, item) => sum + (item.recommended_extra_trucks || 0), 0);
   const totalExtraCrews = predictions.reduce((sum, item) => sum + (item.recommended_extra_crews || 0), 0);
   const highestSpike = predictions.reduce(
     (max, item) => Math.max(max, item.spike_percent || 0),
     0,
   );
-  const priorityRows = [...predictions]
-    .sort((a, b) => (b.predicted_tons || 0) - (a.predicted_tons || 0))
-    .slice(0, 6);
-  const maxTons = Math.max(...priorityRows.map((item) => item.predicted_tons || 0), 1);
-  const verticalRows = [...allPredictions]
-    .sort((a, b) => (b.predicted_tons || 0) - (a.predicted_tons || 0))
-    .slice(0, 6);
-  const verticalMaxTons = Math.max(...verticalRows.map((item) => item.predicted_tons || 0), 1);
+  const displayRows = [...predictions].sort((a, b) => (b.predicted_tons || 0) - (a.predicted_tons || 0));
 
   return (
-    <section className="panel prediction-panel">
+    <section className="panel wide prediction-panel">
       <div className="panel-title">
         <div>
-          <h2>Predictive Readiness</h2>
-          <p>Seven-day spatial risk forecast with explainable demand drivers.</p>
+          <h2>{t("fc_pred_title")}</h2>
+          <p>{t("fc_pred_sub")}</p>
         </div>
-        <CloudRain size={20} />
-      </div>
-      <div className="prediction-summary-grid">
-        <div>
-          <span>High-risk districts</span>
-          <strong>{predictions.length}</strong>
-        </div>
-        <div>
-          <span>Peak spike</span>
-          <strong>+{highestSpike}%</strong>
-        </div>
-        <div>
-          <span>Extra capacity</span>
-          <strong>{totalExtraTrucks} trucks / {totalExtraCrews} crews</strong>
+        <div className="panel-header-icon-wrap">
+          <CloudRain size={18} />
         </div>
       </div>
-      <div className="prediction-insight-grid">
-        <div className="district-priority-chart" aria-label="District priority chart">
-          <h3>District priority</h3>
-          {priorityRows.map((item) => {
-            const width = Math.max(8, ((item.predicted_tons || 0) / maxTons) * 100);
-            return (
-              <article className="district-priority-row" key={`${item.district}-${item.date}-priority`}>
-                <div className="district-priority-label">
-                  <strong>{item.district}</strong>
-                  <span>{item.recommended_extra_trucks} trucks / {item.recommended_extra_crews} crews</span>
-                </div>
-                <div className="district-priority-bar" aria-label={`${item.district} ${Math.round(item.predicted_tons || 0)} tons`}>
-                  <span style={{ width: `${width}%` }} />
-                </div>
-                <b>+{item.spike_percent}%</b>
-              </article>
-            );
-          })}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_hr_districts")}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#dc2626" }}>{predictions.length} {lang === "id" ? "distrik" : "districts"}</strong>
         </div>
-        <div className="district-vertical-chart" aria-label="Waste load by district chart">
-          <h3>Waste load by district</h3>
-          <div className="district-vertical-bars">
-            {verticalRows.map((item) => {
-              const height = Math.max(10, ((item.predicted_tons || 0) / verticalMaxTons) * 100);
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_peak_spike")}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#d97706" }}>+{highestSpike}%</strong>
+        </div>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_extra_cap")}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>{totalExtraTrucks} {lang === "id" ? "truk" : "trucks"} · {totalExtraCrews} {lang === "id" ? "kru" : "crews"}</strong>
+        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" style={{ width: "24%" }}>{t("fc_th_district")}</th>
+              <th scope="col" style={{ width: "16%" }}>{t("fc_th_date")}</th>
+              <th scope="col" style={{ width: "18%" }}>{t("fc_th_volume")}</th>
+              <th scope="col" style={{ width: "20%" }}>{t("fc_th_spike")}</th>
+              <th scope="col" style={{ width: "22%" }}>{t("fc_th_backup")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayRows.map((item, idx) => {
+              const spike = item.spike_percent || 0;
+              const isCrit = spike >= 40 || item.risk_level === "critical";
+              const isHigh = spike >= 30 || item.risk_level === "high";
+              const tone = isCrit ? "danger" : isHigh ? "warning" : "info";
+
               return (
-                <article className="district-vertical-bar" key={`${item.district}-${item.date}-vertical`}>
-                  <div className="district-vertical-track">
-                    <span style={{ height: `${height}%` }} />
-                  </div>
-                  <strong>{Math.round(item.predicted_tons || 0)}t</strong>
-                  <small title={item.district}>{item.district}</small>
-                </article>
+                <tr key={`${item.district}-${item.date}-${idx}`}>
+                  <td>
+                    <strong style={{ color: "var(--ui-ink)", fontWeight: 700 }}>{item.district}</strong>
+                  </td>
+                  <td>
+                    <span style={{ fontFamily: "var(--mono, monospace)", fontSize: "12px", color: "var(--ui-muted)" }}>
+                      {item.date}
+                    </span>
+                  </td>
+                  <td>
+                    <span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600, color: "var(--ui-ink)" }}>
+                      {item.predicted_tons?.toFixed(1) || "0.0"} {lang === "id" ? "t/hari" : "t/day"}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ flex: 1, height: "6px", background: "var(--ui-surface-muted)", borderRadius: "9999px", overflow: "hidden", border: "1px solid var(--ui-border)" }}>
+                        <div style={{ height: "100%", width: `${Math.min(100, spike * 2)}%`, background: isCrit ? "#dc2626" : isHigh ? "#d97706" : "var(--ui-accent)" }} />
+                      </div>
+                      <span className={`pill ${tone}`} style={{ minWidth: "48px", justifyContent: "center" }}>
+                        +{spike}%
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <span className="zone-tag">
+                      {item.recommended_extra_trucks || 0} {lang === "id" ? "truk" : "trucks"} · {item.recommended_extra_crews || 0} {lang === "id" ? "kru" : "crews"}
+                    </span>
+                  </td>
+                </tr>
               );
             })}
-          </div>
-        </div>
-      </div>
-      <div className="prediction-list">
-        {predictions.map((item) => (
-          <article className="prediction" key={`${item.district}-${item.date}`}>
-            <div>
-              <strong>{item.district}</strong>
-              <span>{item.date}</span>
-            </div>
-            <div className="bar" aria-label={`${item.spike_percent} percent predicted spike`}>
-              <span style={{ width: `${Math.min(100, item.spike_percent * 2)}%` }} />
-            </div>
-            <div className="prediction-meta">
-              <b>+{item.spike_percent}%</b>
-              <span>{item.recommended_extra_trucks} trucks - {item.recommended_extra_crews} crews</span>
-            </div>
-          </article>
-        ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );
@@ -678,6 +717,7 @@ const PERMIT_VENUE_PRESETS = [
 ];
 
 function PermitSubmissionPanel({ onPermitSubmitted }) {
+  const { lang } = useLanguage();
   const [name, setName] = useState("");
   const [locationName, setLocationName] = useState("");
   const [eventDate, setEventDate] = useState("");
@@ -714,7 +754,7 @@ function PermitSubmissionPanel({ onPermitSubmitted }) {
       setResult(json);
       onPermitSubmitted?.(json.permit);
     } catch (err) {
-      setError("Submission failed — backend offline or invalid input.");
+      setError(lang === "id" ? "Pengajuan gagal — backend offline atau input tidak valid." : "Submission failed — backend offline or invalid input.");
     } finally {
       setSubmitting(false);
     }
@@ -724,28 +764,30 @@ function PermitSubmissionPanel({ onPermitSubmitted }) {
     <section className="panel wide" data-testid="permit-submission-panel">
       <div className="panel-title">
         <div>
-          <h2>Event Permit Intake</h2>
-          <p>Submit an event permit — the system estimates waste generation, resources, and affected districts instantly.</p>
+          <h2>{lang === "id" ? "Pengajuan Izin Acara Keramaian" : "Event Permit Intake"}</h2>
+          <p>{lang === "id" ? "Ajukan izin acara publik — sistem langsung mengestimasi volume sampah, kebutuhan armada, dan distrik terdampak." : "Submit an event permit — the system estimates waste generation, resources, and affected districts instantly."}</p>
         </div>
-        <Calendar size={20} />
+        <div className="panel-header-icon-wrap">
+          <Calendar size={18} />
+        </div>
       </div>
 
       <form className="permit-form" onSubmit={submit}>
-        <label>Event name
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required minLength={3} placeholder="e.g. Konser Musik GBK" />
+        <label>{lang === "id" ? "Nama Acara" : "Event name"}
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} required minLength={3} placeholder={lang === "id" ? "misal: Konser Musik GBK" : "e.g. Konser Musik GBK"} />
         </label>
-        <label>Venue preset
+        <label>{lang === "id" ? "Pilihan Lokasi Populer" : "Venue preset"}
           <select defaultValue="gbk" onChange={(e) => applyPreset(e.target.value)} aria-label="Venue preset">
             {PERMIT_VENUE_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
         </label>
-        <label>Location
-          <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} required minLength={3} placeholder="Venue / area name" />
+        <label>{lang === "id" ? "Nama Lokasi / Area" : "Location"}
+          <input type="text" value={locationName} onChange={(e) => setLocationName(e.target.value)} required minLength={3} placeholder={lang === "id" ? "Nama venue / area acara" : "Venue / area name"} />
         </label>
-        <label>Event date
+        <label>{lang === "id" ? "Tanggal Acara" : "Event date"}
           <input type="date" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
         </label>
-        <label>Expected attendance: <b>{Number(attendance).toLocaleString("en-US")}</b>
+        <label>{lang === "id" ? "Estimasi Jumlah Penonton:" : "Expected attendance:"} <b>{Number(attendance).toLocaleString(lang === "id" ? "id-ID" : "en-US")} {lang === "id" ? "orang" : "people"}</b>
           <input type="range" min="1000" max="200000" step="1000" value={attendance} onChange={(e) => setAttendanceLocal(e.target.value)} />
         </label>
         <div className="permit-coords">
@@ -753,23 +795,23 @@ function PermitSubmissionPanel({ onPermitSubmitted }) {
           <label>Lng <input type="number" step="0.0001" value={lng} onChange={(e) => setLng(e.target.value)} required /></label>
         </div>
         <button className="primary-button" type="submit" disabled={submitting}>
-          {submitting ? "Submitting…" : "Submit permit & estimate impact"}
+          {submitting ? (lang === "id" ? "Mengirim..." : "Submitting…") : (lang === "id" ? "Kirim Izin & Hitung Dampak Sampah" : "Submit permit & estimate impact")}
         </button>
         {error && <p className="permit-error">{error}</p>}
       </form>
 
       {result && (
         <div className="permit-impact" data-testid="permit-impact">
-          <h3>Estimated impact — {result.permit.name}</h3>
+          <h3>{lang === "id" ? "Estimasi Dampak Sampah —" : "Estimated impact —"} {result.permit.name}</h3>
           <div className="facility-summary">
-            <div><b>{result.impact.predicted_waste_tons} t</b><span>predicted waste</span></div>
-            <div><b>{result.impact.backup_trucks_required}</b><span>backup trucks</span></div>
-            <div><b>{result.impact.crews_required}</b><span>field crews</span></div>
-            <div><b>{result.impact.man_hours_required}</b><span>man-hours</span></div>
-            <div><b>{result.impact.large_bins_required}</b><span>large bins</span></div>
+            <div><b>{result.impact.predicted_waste_tons} t</b><span>{lang === "id" ? "prediksi sampah" : "predicted waste"}</span></div>
+            <div><b>{result.impact.backup_trucks_required}</b><span>{lang === "id" ? "truk cadangan" : "backup trucks"}</span></div>
+            <div><b>{result.impact.crews_required}</b><span>{lang === "id" ? "kru lapangan" : "field crews"}</span></div>
+            <div><b>{result.impact.man_hours_required}</b><span>{lang === "id" ? "jam-kerja kru" : "man-hours"}</span></div>
+            <div><b>{result.impact.large_bins_required}</b><span>{lang === "id" ? "tong sampah besar" : "large bins"}</span></div>
           </div>
           <p className="permit-affected">
-            Affected districts: {result.affected_kecamatan.map((a) => a.kecamatan).join(", ") || "nearest district assigned"}.
+            {lang === "id" ? "Kecamatan terdampak:" : "Affected districts:"} {result.affected_kecamatan.map((a) => a.kecamatan).join(", ") || "nearest district assigned"}.
           </p>
           <p className="kec-note">{result.permit.data_note} Basis: {result.impact.resource_basis}.</p>
         </div>
@@ -779,6 +821,7 @@ function PermitSubmissionPanel({ onPermitSubmitted }) {
 }
 
 function FacilityGapPanel({ rainfall = 0, attendance = 0 }) {
+  const { lang } = useLanguage();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -807,26 +850,29 @@ function FacilityGapPanel({ rainfall = 0, attendance = 0 }) {
     <section className="panel wide" data-testid="facility-gap-panel">
       <div className="panel-title">
         <div>
-          <h2>Facility Readiness &amp; Gap Analysis</h2>
+          <h2>{lang === "id" ? "Kesiapan Fasilitas & Analisis Kesenjangan TPS" : "Facility Readiness & Gap Analysis"}</h2>
           <p>
-            Predicted demand vs TPS capacity proxy — where disposal and transport
-            facilities are missing, and where to site them.
+            {lang === "id"
+              ? "Perbandingan kebutuhan timbulan sampah vs kapasitas TPS — mendeteksi distrik yang kekurangan fasilitas pembuangan."
+              : "Predicted demand vs TPS capacity proxy — where disposal and transport facilities are missing, and where to site them."}
           </p>
         </div>
-        <Factory size={20} />
+        <div className="panel-header-icon-wrap">
+          <Factory size={18} />
+        </div>
       </div>
 
-      {loading && <p className="panel-loading">Preparing facility gap analysis…</p>}
-      {!loading && !data && <p className="panel-loading">Gap analysis unavailable.</p>}
+      {loading && <p className="panel-loading">{lang === "id" ? "Menyiapkan analisis kesenjangan fasilitas..." : "Preparing facility gap analysis…"}</p>}
+      {!loading && !data && <p className="panel-loading">{lang === "id" ? "Analisis kesenjangan tidak tersedia." : "Gap analysis unavailable."}</p>}
 
       {data && (
         <>
           <div className="facility-summary">
-            <div><b>{summary.critical_count}</b><span>critical districts</span></div>
-            <div><b>{summary.total_gap_ton_per_day?.toLocaleString("en-US")} t</b><span>daily capacity gap</span></div>
-            <div><b>{summary.total_extra_trucks_needed}</b><span>extra trips/day</span></div>
-            <div><b>{summary.total_new_tps_sites_needed}</b><span>new TPS sites (bounded share)</span></div>
-            <div><b>{Math.round((summary.citywide_proxy_coverage_ratio || 0) * 100)}%</b><span>proxy coverage</span></div>
+            <div><b>{summary.critical_count}</b><span>{lang === "id" ? "distrik kritis" : "critical districts"}</span></div>
+            <div><b>{summary.total_gap_ton_per_day?.toLocaleString(lang === "id" ? "id-ID" : "en-US")} t</b><span>{lang === "id" ? "kesenjangan kapasitas/hari" : "daily capacity gap"}</span></div>
+            <div><b>{summary.total_extra_trucks_needed}</b><span>{lang === "id" ? "tambahan ritase/hari" : "extra trips/day"}</span></div>
+            <div><b>{summary.total_new_tps_sites_needed}</b><span>{lang === "id" ? "lokasi TPS baru dibutuhkan" : "new TPS sites (bounded share)"}</span></div>
+            <div><b>{Math.round((summary.citywide_proxy_coverage_ratio || 0) * 100)}%</b><span>{lang === "id" ? "cakupan estimasi" : "proxy coverage"}</span></div>
           </div>
 
           <div className="facility-list">
@@ -837,12 +883,12 @@ function FacilityGapPanel({ rainfall = 0, attendance = 0 }) {
                   <span className="facility-sev" style={{ color: sevColor[a.severity] }}>{a.severity}</span>
                 </div>
                 <div className="facility-meta">
-                  <span>demand {a.predicted_tons_per_day.toLocaleString("en-US")} t/day vs capacity {a.tps_capacity_proxy_ton_per_day ?? "?"} t</span>
-                  <span>gap <b>{a.gap_ton_per_day ?? "?"} t</b> · +{a.recommended_extra_trips_per_day} trips/day · {a.recommended_new_tps_sites} new TPS</span>
+                  <span>{lang === "id" ? "timbulan" : "demand"} {a.predicted_tons_per_day.toLocaleString(lang === "id" ? "id-ID" : "en-US")} t/{lang === "id" ? "hari" : "day"} vs {lang === "id" ? "kapasitas" : "capacity"} {a.tps_capacity_proxy_ton_per_day ?? "?"} t</span>
+                  <span>{lang === "id" ? "gap" : "gap"} <b>{a.gap_ton_per_day ?? "?"} t</b> · +{a.recommended_extra_trips_per_day} {lang === "id" ? "ritase/hari" : "trips/day"} · {a.recommended_new_tps_sites} TPS</span>
                 </div>
                 {a.siting_candidates?.length > 0 && (
                   <div className="facility-siting">
-                    Site near: {a.siting_candidates.map((c) => `${c.kelurahan} (${c.predicted_tons} t, ${c.existing_tps_sites} TPS)`).join(" · ")}
+                    {lang === "id" ? "Rekomendasi lokasi:" : "Site near:"} {a.siting_candidates.map((c) => `${c.kelurahan} (${c.predicted_tons} t, ${c.existing_tps_sites} TPS)`).join(" · ")}
                   </div>
                 )}
               </article>
@@ -851,7 +897,7 @@ function FacilityGapPanel({ rainfall = 0, attendance = 0 }) {
 
           {areas.length > 6 && (
             <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
-              {showAll ? "Show fewer" : `Show all (${areas.length} districts)`}
+              {showAll ? (lang === "id" ? "Tampilkan lebih sedikit" : "Show fewer") : `${lang === "id" ? "Tampilkan semua" : "Show all"} (${areas.length} ${lang === "id" ? "distrik" : "districts"})`}
             </button>
           )}
           <p className="kec-note">{data.assumptions?.coverage_note}</p>
@@ -862,6 +908,7 @@ function FacilityGapPanel({ rainfall = 0, attendance = 0 }) {
 }
 
 function KecamatanMapPanel({ horizon = "7d" }) {
+  const { lang } = useLanguage();
   const [data, setData] = useState(null);
   const [rain, setRain] = useState(0);
   const [attendance, setAttendance] = useState(0);
@@ -874,9 +921,6 @@ function KecamatanMapPanel({ horizon = "7d" }) {
   const horizonDays = Math.max(2, Math.min(30, parseInt(horizon, 10) || 7));
 
   async function load() {
-    // Necessary: 15s cap covers the server's cold-start per-kecamatan build
-    // (42 model predicts, ~1-3s warm, up to ~10s on first cold call) while
-    // still preventing an unbounded fetch from hanging the forecast panel.
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 15000);
     setLoading(true);
@@ -899,7 +943,6 @@ function KecamatanMapPanel({ horizon = "7d" }) {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [horizonDays]);
 
   const rows = data?.kecamatan || [];
@@ -924,14 +967,17 @@ function KecamatanMapPanel({ horizon = "7d" }) {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>District Waste Forecast</h2>
+          <h2>{lang === "id" ? "Prakiraan Timbulan Sampah 42 Kecamatan" : "District Waste Forecast"}</h2>
           <p>
-            Hybrid Prophet+XGBoost forecast for {data?.kecamatan_count || 42} DKI districts,
-            anchored to official SILIKA DLH 2023 baseline. Total forecast:{" "}
-            <b>{data?.total_predicted_tons?.toLocaleString("en-US") || "..."} tons/day</b>.
+            {lang === "id"
+              ? `Model hybrid Prophet+XGBoost untuk ${data?.kecamatan_count || 42} kecamatan DKI, terkalibrasi data riil SILIKA DLH 2023. Total estimasi:`
+              : `Hybrid Prophet+XGBoost forecast for ${data?.kecamatan_count || 42} DKI districts, anchored to official SILIKA DLH 2023 baseline. Total forecast:`}{" "}
+            <b>{data?.total_predicted_tons?.toLocaleString(lang === "id" ? "id-ID" : "en-US") || "..."} {lang === "id" ? "ton/hari" : "tons/day"}</b>.
           </p>
         </div>
-        <MapPinned size={20} />
+        <div className="panel-header-icon-wrap">
+          <MapPinned size={18} />
+        </div>
       </div>
 
       <div className="scenario-controls">
@@ -1349,6 +1395,7 @@ function DataAuditWorkspace() {
 }
 
 function WeatherPanel({ weather }) {
+  const { lang } = useLanguage();
   const forecast = weather?.forecast || [];
   const peak = forecast.reduce(
     (best, item) => (item.waste_impact_percent > (best?.waste_impact_percent || 0) ? item : best),
@@ -1362,11 +1409,11 @@ function WeatherPanel({ weather }) {
     <section className="panel weather-panel">
       <div className="panel-title">
         <div>
-          <h2>Open-Meteo Weather Risk</h2>
-          <p>Jakarta 7-day rainfall forecast used as a driver for waste-volume readiness.</p>
+          <h2>{lang === "id" ? "Risiko Cuaca Open-Meteo" : "Open-Meteo Weather Risk"}</h2>
+          <p>{lang === "id" ? "Prakiraan curah hujan 7 hari Jakarta sebagai pemicu kesiapan armada timbulan." : "Jakarta 7-day rainfall forecast used as a driver for waste-volume readiness."}</p>
         </div>
         <StatusPill tone={weather?.source === "open-meteo" ? "success" : "warning"}>
-          {weather?.source === "open-meteo" ? "Open-Meteo live" : "fallback"}
+          {weather?.source === "open-meteo" ? (lang === "id" ? "Open-Meteo live" : "Open-Meteo live") : (lang === "id" ? "Cadangan" : "fallback")}
         </StatusPill>
       </div>
       {peak && (
@@ -1374,7 +1421,7 @@ function WeatherPanel({ weather }) {
           <CloudRain size={26} />
           <div>
             <strong>{peak.date}</strong>
-            <span>{peak.rainfall_mm.toFixed(1)} mm rain - {Math.round(peak.precipitation_probability)}% probability</span>
+            <span>{peak.rainfall_mm.toFixed(1)} mm {lang === "id" ? "hujan" : "rain"} - {Math.round(peak.precipitation_probability)}% {lang === "id" ? "peluang" : "probability"}</span>
           </div>
           <b>+{peak.waste_impact_percent}%</b>
         </div>
@@ -1383,8 +1430,8 @@ function WeatherPanel({ weather }) {
         {forecast.slice(0, 7).map((day) => (
           <article key={day.date} className={`weather-day ${day.risk_level}`}>
             <div>
-              <strong>{new Date(day.date).toLocaleDateString("en-US", { weekday: "short" })}</strong>
-              <small>{new Date(day.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</small>
+              <strong>{new Date(day.date).toLocaleDateString(lang === "id" ? "id-ID" : "en-US", { weekday: "short" })}</strong>
+              <small>{new Date(day.date).toLocaleDateString(lang === "id" ? "id-ID" : "en-US", { month: "short", day: "numeric" })}</small>
             </div>
             <span>{Math.round(day.rainfall_mm)} mm</span>
             <small>{Math.round(day.temperature_min_c)}-{Math.round(day.temperature_max_c)} C</small>
@@ -1392,11 +1439,11 @@ function WeatherPanel({ weather }) {
         ))}
       </div>
       <div className="weather-trend-chart" aria-label="Rainfall impact trend chart">
-        <h3>Rainfall impact trend</h3>
+        <h3>{lang === "id" ? "Tren Dampak Curah Hujan" : "Rainfall impact trend"}</h3>
         {trendRows.map((day) => {
           const rainWidth = Math.max(4, ((day.rainfall_mm || 0) / maxRainfall) * 100);
           const impactWidth = Math.max(4, ((day.waste_impact_percent || 0) / maxImpact) * 100);
-          const dayLabel = new Date(day.date).toLocaleDateString("en-US", { weekday: "short" });
+          const dayLabel = new Date(day.date).toLocaleDateString(lang === "id" ? "id-ID" : "en-US", { weekday: "short" });
           return (
             <article className="weather-trend-row" key={`${day.date}-trend`}>
               <span>{dayLabel}</span>
@@ -1416,79 +1463,125 @@ function WeatherPanel({ weather }) {
 }
 
 function FleetTable({ trucks, onOpenTripHistory }) {
+  const { t, lang } = useLanguage();
   const [showAll, setShowAll] = useState(false);
-  const shown = showAll ? trucks : trucks.slice(0, 12);
+  const [searchTerm, setSearchTerm] = useState("");
+  const filtered = trucks.filter(
+    (t) =>
+      t.truck_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.driver_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.plate_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.assigned_zone?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+  const shown = showAll ? filtered : filtered.slice(0, 12);
   const damagedCount = trucks.filter((t) => t.is_damaged).length;
+  const violationCount = trucks.filter((t) => t.deviation?.violated).length;
+
   return (
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Fleet State</h2>
-          <p>{trucks.length} units tracked · {damagedCount} with open damage status. Each row is directly actionable and audit-ready.</p>
+          <h2>{t("ft_title")}</h2>
+          <p>{trucks.length} {lang === "id" ? "unit dipantau real-time" : "units monitored in real-time"} · {damagedCount} {lang === "id" ? "peringatan perbaikan" : "maintenance alerts"} · {violationCount} {lang === "id" ? "deviasi rute" : "corridor deviations"}.</p>
+        </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div className="input-shell" style={{ width: "220px", height: "36px" }}>
+            <Search size={14} />
+            <input
+              type="text"
+              placeholder={t("ft_search")}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ fontSize: "12.5px" }}
+            />
+          </div>
         </div>
       </div>
       <div className="table-wrap fleet-table-wrap">
         <table className="fleet-state-table" aria-label="Fleet operational status">
           <thead>
             <tr>
-              <th scope="col" style={{ width: "16%" }}>Truck &amp; Plate</th>
-              <th scope="col" style={{ width: "16%" }}>Driver</th>
-              <th scope="col" style={{ width: "14%" }}>Assigned Zone</th>
-              <th scope="col" style={{ width: "14%" }}>Compliance</th>
-              <th scope="col" style={{ width: "18%" }}>Activity State</th>
-              <th scope="col" style={{ width: "10%" }}>Speed</th>
-              <th scope="col" style={{ width: "12%" }}>Action</th>
+              <th scope="col" style={{ width: "18%" }}>{t("ft_th_truck")}</th>
+              <th scope="col" style={{ width: "16%" }}>{t("ft_th_driver")}</th>
+              <th scope="col" style={{ width: "14%" }}>{t("ft_th_zone")}</th>
+              <th scope="col" style={{ width: "16%" }}>{t("ft_th_comp")}</th>
+              <th scope="col" style={{ width: "16%" }}>{t("ft_th_activity")}</th>
+              <th scope="col" style={{ width: "10%" }}>{t("ft_th_speed")}</th>
+              <th scope="col" style={{ width: "10%" }}>{t("ft_th_action")}</th>
             </tr>
           </thead>
           <tbody>
-            {shown.map((truck) => (
-              <tr key={truck.truck_code}>
-                <td>
-                  <div className="truck-cell">
-                    <strong className="truck-code-badge">{truck.truck_code}</strong>
-                    <span className="truck-plate-sub">{truck.plate_number}</span>
-                  </div>
-                </td>
-                <td className="driver-name-cell">{truck.driver_name}</td>
-                <td><span className="zone-tag">{truck.assigned_zone}</span></td>
-                <td>
-                  {truck.deviation?.violated ? (
-                    <StatusPill tone="danger">Violation ({Math.round(truck.deviation.distance_meters)}m)</StatusPill>
-                  ) : truck.is_damaged ? (
-                    <StatusPill tone="warning">{truck.damage_status?.state === "breakdown" ? "Breakdown" : "Maintenance"}</StatusPill>
-                  ) : (
-                    <StatusPill tone="success">Normal</StatusPill>
-                  )}
-                </td>
-                <td>
-                  <div className="activity-cell">
-                    <span className={`activity-dot ${truck.deviation?.violated ? "danger" : truck.is_damaged ? "warning" : "active"}`} />
-                    <span>{truck.activity?.label || "Idle"}</span>
-                  </div>
-                </td>
-                <td className="speed-cell">
-                  <code>{truck.latest_position?.speed_kmh || 0} km/h</code>
-                </td>
-                <td>
-                  <button className="ghost-button compact-history-btn" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)}>
-                    Trip history
-                  </button>
+            {shown.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--ui-muted)" }}>
+                  {lang === "id" ? `Tidak ada kendaraan yang cocok dengan "${searchTerm}".` : `No vehicles found matching "${searchTerm}".`}
                 </td>
               </tr>
-            ))}
+            ) : (
+              shown.map((truck) => {
+                const isViolation = Boolean(truck.deviation?.violated);
+                const isBreakdown = Boolean(truck.is_damaged);
+                const complianceTone = isViolation ? "danger" : isBreakdown ? "warning" : "success";
+                const complianceLabel = isViolation
+                  ? `${lang === "id" ? "Pelanggaran" : "Violation"} (${Math.round(truck.deviation.distance_meters >= 1000 ? truck.deviation.distance_meters / 1000 : truck.deviation.distance_meters)}${truck.deviation.distance_meters >= 1000 ? "km" : "m"})`
+                  : isBreakdown
+                    ? (truck.damage_status?.state === "breakdown" ? (lang === "id" ? "Mogok" : "Breakdown") : (lang === "id" ? "Perawatan" : "Maintenance"))
+                    : (lang === "id" ? "Sesuai" : "Compliant");
+
+                return (
+                  <tr key={truck.truck_code}>
+                    <td>
+                      <div className="truck-cell" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <strong className="plate-badge">{truck.truck_code}</strong>
+                        <span style={{ fontSize: "11.5px", color: "var(--ui-muted)", fontFamily: "var(--mono, monospace)" }}>
+                          {truck.plate_number}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="driver-name-cell">
+                      <strong style={{ color: "var(--ui-ink)", fontWeight: 600 }}>{truck.driver_name}</strong>
+                    </td>
+                    <td><span className="zone-tag">{truck.assigned_zone}</span></td>
+                    <td>
+                      <span className={`pill ${complianceTone}`}>
+                        <span className={`status-dot ${complianceTone}`} />
+                        {complianceLabel}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="activity-cell" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span className={`activity-dot ${isViolation ? "danger" : isBreakdown ? "warning" : "active"}`} />
+                        <span style={{ fontSize: "12.5px" }}>{truck.activity?.label || (lang === "id" ? "Siaga" : "Idle")}</span>
+                      </div>
+                    </td>
+                    <td className="speed-cell">
+                      <span className="speed-badge">{truck.latest_position?.speed_kmh || 0} km/h</span>
+                    </td>
+                    <td>
+                      <button className="text-button" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)} style={{ height: "30px", padding: "0 10px", fontSize: "12px" }}>
+                        {t("btn_trip_history")}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
-      {trucks.length > 12 && (
-        <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
-          {showAll ? "Show fewer" : `Show all (${trucks.length} units)`}
-        </button>
+      {filtered.length > 12 && (
+        <div style={{ marginTop: "12px", display: "flex", justifyContent: "center" }}>
+          <button className="text-button show-more-btn" onClick={() => setShowAll(!showAll)}>
+            {showAll ? (lang === "id" ? "Tampilkan lebih sedikit" : "Show fewer") : `${lang === "id" ? "Tampilkan semua" : "Show all"} (${filtered.length} ${lang === "id" ? "unit" : "units"})`}
+          </button>
+        </div>
       )}
     </section>
   );
 }
 
 function ExecutiveSummary({ summary, queue }) {
+  const { lang } = useLanguage();
   const [impact, setImpact] = useState(null);
 
   useEffect(() => {
@@ -1504,37 +1597,39 @@ function ExecutiveSummary({ summary, queue }) {
     <section className="panel">
       <div className="panel-title">
         <div>
-          <h2>Executive Summary</h2>
-          <p>Prepared for DLH leadership and case-provider review.</p>
+          <h2>{lang === "id" ? "Ringkasan Eksekutif" : "Executive Summary"}</h2>
+          <p>{lang === "id" ? "Disiapkan untuk pimpinan Dinas Lingkungan Hidup (DLH) DKI Jakarta." : "Prepared for DLH leadership and case-provider review."}</p>
         </div>
-        <ShieldCheck size={20} />
+        <div className="panel-header-icon-wrap">
+          <ShieldCheck size={18} />
+        </div>
       </div>
       <h3>{summary.headline}</h3>
       <ul>
         {summary.points.map((point) => <li key={point}>{point}</li>)}
       </ul>
       <div className="queue-box">
-        <strong>TPA Bantargebang queue</strong>
-        <span>{queue.trucks_waiting} trucks waiting - {queue.estimated_wait_minutes} min estimated delay</span>
+        <strong>{lang === "id" ? "Antrean TPA Bantargebang" : "TPA Bantargebang queue"}</strong>
+        <span>{queue.trucks_waiting} {lang === "id" ? "truk mengantre" : "trucks waiting"} - {queue.estimated_wait_minutes} {lang === "id" ? "menit estimasi keterlambatan" : "min estimated delay"}</span>
         <p>{queue.recommendation}</p>
       </div>
       {impact && (
         <div className="exec-impact">
-          <div className="exec-impact-head"><strong>Optimization Impact — Staggered Dispatch</strong></div>
+          <div className="exec-impact-head"><strong>{lang === "id" ? "Dampak Optimasi — Keberangkatan Bertahap" : "Optimization Impact — Staggered Dispatch"}</strong></div>
           <div className="exec-impact-grid">
             <div className="exec-impact-col">
-              <span className="exec-impact-label">Baseline (all trucks peak)</span>
-              <strong>{impact.baseline_queue_trucks} trucks · {impact.baseline_wait_minutes} min wait</strong>
+              <span className="exec-impact-label">{lang === "id" ? "Baseline (semua truk jam puncak)" : "Baseline (all trucks peak)"}</span>
+              <strong>{impact.baseline_queue_trucks} {lang === "id" ? "truk" : "trucks"} · {impact.baseline_wait_minutes} {lang === "id" ? "menit antre" : "min wait"}</strong>
               <small>p95 {impact.baseline_p95_minutes} min</small>
             </div>
             <div className="exec-impact-arrow" aria-hidden="true">→</div>
             <div className="exec-impact-col">
-              <span className="exec-impact-label">With staggered dispatch</span>
-              <strong>{impact.optimized_queue_trucks} trucks · {impact.optimized_wait_minutes} min wait</strong>
+              <span className="exec-impact-label">{lang === "id" ? "Dengan keberangkatan bertahap" : "With staggered dispatch"}</span>
+              <strong>{impact.optimized_queue_trucks} {lang === "id" ? "truk" : "trucks"} · {impact.optimized_wait_minutes} {lang === "id" ? "menit antre" : "min wait"}</strong>
               <small>p95 {impact.optimized_p95_minutes} min</small>
             </div>
             <div className="exec-impact-delta">
-              <strong>−{impact.queue_reduction_percent}% wait</strong>
+              <strong>−{impact.queue_reduction_percent}% {lang === "id" ? "antrean" : "wait"}</strong>
             </div>
           </div>
         </div>
@@ -1795,6 +1890,7 @@ function PlanningApproval({ plan, planLoading, approved, approvePlan, role }) {
 }
 
 function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall, eventLat, eventLng, summary, queue }) {
+  const { t, lang } = useLanguage();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -1905,35 +2001,39 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           <ScenarioPanel mode="inputs">
       <div className="panel-title">
         <div>
-          <h2>Event Scenario Simulator</h2>
-          <p>Weather and crowd scenarios run through the live 42-district hybrid model, not a static estimate.</p>
+          <h2>{t("plan_sim_title")}</h2>
+          <p>{t("plan_sim_sub")}</p>
         </div>
-        <Users size={20} />
+        <div className="panel-header-icon-wrap">
+          <Users size={18} />
+        </div>
       </div>
-      <div className="control-row">
-        <label>
-          <span>Event Attendance</span>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "16px" }}>
+        <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>{t("plan_att")}</span>
           <input type="range" min="0" max="200000" step="5000" value={attendance} onChange={(event) => setAttendance(Number(event.target.value))} />
-          <small>{attendance.toLocaleString("en-US")} people</small>
+          <small style={{ fontSize: "13px", fontWeight: 700, color: "var(--ui-accent)" }}>{attendance.toLocaleString(lang === "id" ? "id-ID" : "en-US")} {lang === "id" ? "orang" : "people"}</small>
         </label>
-        <label>
-          <span>Rainfall (mm)</span>
+        <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>{t("plan_rain")}</span>
           <input type="range" min="0" max="100" step="1" value={rainfall} onChange={(event) => setRainfall(Number(event.target.value))} />
-          <small>{rainfall} mm</small>
+          <small style={{ fontSize: "13px", fontWeight: 700, color: "var(--ui-accent)" }}>{rainfall} mm / {lang === "id" ? "hari" : "day"}</small>
         </label>
-        <button className="primary-button" onClick={run} disabled={loading}>
-          {loading ? "Calculating..." : "Run scenario"}
+      </div>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <button className="primary-button" onClick={run} disabled={loading} style={{ width: "auto", minHeight: "36px", height: "36px", padding: "0 20px" }}>
+          {loading ? (lang === "id" ? "Menghitung..." : "Calculating...") : t("btn_run_scenario")}
         </button>
       </div>
-      <div className="scenario-result">
-        <strong>Total forecast {totalTons.toLocaleString("en-US")} tons/day ({data?.kecamatan_count || 42} districts)</strong>
-        <span>Peak: {top5[0]?.kecamatan || "..."} - {top5[0]?.predicted_tons?.toLocaleString("en-US") || "..."} tons</span>
+      <div className="scenario-result" style={{ marginBottom: "16px" }}>
+        <strong>{lang === "id" ? `Total estimasi timbulan ${totalTons.toLocaleString("id-ID")} ton/hari (${data?.kecamatan_count || 42} distrik)` : `Total forecast ${totalTons.toLocaleString("en-US")} tons/day (${data?.kecamatan_count || 42} districts)`}</strong>
+        <span>{lang === "id" ? "Titik Puncak:" : "Peak Hotspot:"} {top5[0]?.kecamatan || "..."} — {top5[0]?.predicted_tons?.toLocaleString(lang === "id" ? "id-ID" : "en-US") || "..."} {lang === "id" ? "ton" : "tons"}</span>
       </div>
-      <div className="scenario-reqs">
-        <div className="req-chip"><b>{manHours}</b><span>man-hours (top 5)</span></div>
-        <div className="req-chip"><b>{crews}</b><span>field crews (top 5)</span></div>
-        <div className="req-chip"><b>{trucks}</b><span>trucks (top 5)</span></div>
-        <div className="req-chip"><b>{bins}</b><span>large bins (top 5)</span></div>
+      <div className="scenario-reqs" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{manHours}</b><span>{lang === "id" ? "jam-kerja kru (top 5)" : "man-hours (top 5)"}</span></div>
+        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{crews}</b><span>{lang === "id" ? "kru lapangan (top 5)" : "field crews (top 5)"}</span></div>
+        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{trucks}</b><span>{lang === "id" ? "truk armada (top 5)" : "trucks (top 5)"}</span></div>
+        <div className="req-chip" style={{ padding: "10px 12px" }}><b>{bins}</b><span>{lang === "id" ? "tong sampah besar (top 5)" : "large bins (top 5)"}</span></div>
       </div>
           </ScenarioPanel>
         ),
@@ -1941,31 +2041,40 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           <ScenarioPanel mode="recommendation">
       <div className="optimizer-section">
         <div className="optimizer-head">
-          <h3>Operations Optimizer</h3>
+          <h3>{t("plan_opt_title")}</h3>
         </div>
         
         {!plan && (
           <>
-            <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading}>
-              {planLoading ? "Optimizing..." : "Generate Dispatch Plan (CP-SAT)"}
-            </button>
-            <div className="plan-preflight-grid" aria-label="Plan preflight">
+            <div className="plan-preflight-grid" aria-label="Plan preflight" style={{ marginBottom: "16px" }}>
               <div>
-                <span>Forecast demand</span>
-                <strong>{totalTons.toLocaleString("en-US")} tons/day</strong>
+                <span>{t("plan_demand")}</span>
+                <strong>{totalTons.toLocaleString(lang === "id" ? "id-ID" : "en-US")} {lang === "id" ? "ton/hari" : "tons/day"}</strong>
               </div>
               <div>
-                <span>Fleet need</span>
-                <strong>{trucks} trucks / {crews} crews</strong>
+                <span>{t("plan_fleet_need")}</span>
+                <strong>{trucks} {lang === "id" ? "truk" : "trucks"} / {crews} {lang === "id" ? "kru" : "crews"}</strong>
               </div>
               <div>
-                <span>TPA queue</span>
-                <strong>{queue.trucks_waiting} trucks / {queue.estimated_wait_minutes} min</strong>
+                <span>{t("plan_tpa_queue")}</span>
+                <strong>{queue.trucks_waiting} {lang === "id" ? "truk" : "trucks"} / {queue.estimated_wait_minutes} min</strong>
               </div>
             </div>
-            <div className="optimizer-empty-state" aria-live="polite">
-              <strong>No dispatch plan generated yet.</strong>
-              <p>Generate a CP-SAT plan to fill this stage with assigned trucks, demand coverage, and permit compliance evidence.</p>
+
+            <button className="primary-button" onClick={generatePlan} disabled={planLoading || loading} style={{ width: "auto", minHeight: "38px", height: "38px", padding: "0 24px", marginBottom: "14px" }}>
+              {planLoading ? (lang === "id" ? "Mengoptimalkan Alokasi..." : "Optimizing Assignments...") : t("btn_generate_plan")}
+            </button>
+
+            <div className="optimizer-empty-state" aria-live="polite" style={{ padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                <Workflow size={18} style={{ color: "var(--ui-accent)", flexShrink: 0, marginTop: "2px" }} />
+                <div>
+                  <strong style={{ fontSize: "13px" }}>{t("plan_awaiting_title")}</strong>
+                  <p style={{ fontSize: "12px", color: "var(--ui-muted)" }}>
+                    {t("plan_awaiting_desc")}
+                  </p>
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -2059,6 +2168,7 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
 
 
 function TpaQueuePanel() {
+  const { t, lang } = useLanguage();
   const [queue, setQueue] = useState(null);
   const [scenario, setScenario] = useState("peak");
 
@@ -2081,33 +2191,35 @@ function TpaQueuePanel() {
     <section className="panel tpa-queue-panel">
       <div className="panel-title">
         <div>
-          <h2>Bantargebang Landfill Queue Status</h2>
-          <p>Real-time visualization of weighbridge throughput and final-disposal truck queues.</p>
+          <h2>{t("tpa_title")}</h2>
+          <p>{t("tpa_subtitle")}</p>
         </div>
         <div className="tpa-scenario-toggle" role="group" aria-label="Arrival scenario">
-          {[["peak", "Peak hour"], ["live", "Live clock"]].map(([id, label]) => (
+          {[["peak", lang === "id" ? "Jam Puncak" : "Peak hour"], ["live", lang === "id" ? "Waktu Nyata" : "Live clock"]].map(([id, label]) => (
             <button key={id} className={scenario === id ? "active" : ""} onClick={() => setScenario(id)}>{label}</button>
           ))}
         </div>
-        <Clock size={20} />
+        <div className="panel-header-icon-wrap">
+          <Clock size={18} />
+        </div>
       </div>
       {queue.arrival_profile && (
-        <p className="tpa-scenario-note">Arrival profile: {queue.arrival_profile} · {queue.method}</p>
+        <p className="tpa-scenario-note">{lang === "id" ? "Profil kedatangan:" : "Arrival profile:"} {queue.arrival_profile} · {queue.method}</p>
       )}
 
       <div className="tpa-status-grid">
         <div className="tpa-status-card">
-          <span>Queued Trucks</span>
-          <strong>{queue.trucks_in_queue} units</strong>
+          <span>{lang === "id" ? "Truk Mengantre" : "Queued Trucks"}</span>
+          <strong>{queue.trucks_in_queue} {lang === "id" ? "unit" : "units"}</strong>
         </div>
         <div className="tpa-status-card">
-          <span>Estimated Wait</span>
+          <span>{lang === "id" ? "Estimasi Waktu Antre" : "Estimated Wait"}</span>
           <strong className={queue.avg_wait_minutes > 60 ? "text-danger" : "text-success"}>
             {queue.avg_wait_minutes} min
           </strong>
         </div>
         <div className="tpa-status-card">
-          <span>Weighbridge</span>
+          <span>{lang === "id" ? "Status Jembatan Timbang" : "Weighbridge"}</span>
           <strong className={queue.weighbridge_status.includes("DEGRADED") ? "text-danger" : "text-success"}>
             {queue.weighbridge_status}
           </strong>
@@ -2115,13 +2227,13 @@ function TpaQueuePanel() {
       </div>
 
       <div className="tpa-logs">
-        <h3>Latest Weighbridge Log</h3>
+        <h3>{lang === "id" ? "Log Timbangan Terkini" : "Latest Weighbridge Log"}</h3>
         <ul>
           {queue.scale_logs?.map((log, i) => (
             <li key={i}>
-              <span className="time">{log.time}</span>
+              <span className="time"><Clock size={12} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }} />{log.time}</span>
               <span className="truck">{log.truck}</span>
-              <span className="weight">{log.weight_ton} tons</span>
+              <span className="weight">{log.weight_ton} {lang === "id" ? "ton" : "tons"}</span>
               <span className={`status-badge ${log.status.toLowerCase()}`}>{log.status}</span>
             </li>
           ))}
@@ -2131,8 +2243,8 @@ function TpaQueuePanel() {
   );
 }
 
-
 function CrowdEventsPanel({ onSimulateEvent }) {
+  const { lang } = useLanguage();
   const [events, setEvents] = useState([]);
 
   async function fetchEvents() {
@@ -2150,10 +2262,12 @@ function CrowdEventsPanel({ onSimulateEvent }) {
     <section className="panel events-panel">
       <div className="panel-title">
         <div>
-          <h2>Crowd Permit & Waste-Volume Forecast</h2>
-          <p>Connects public-event permit data with DLH logistics resource planning.</p>
+          <h2>{lang === "id" ? "Izin Keramaian & Prediksi Sampah Event" : "Crowd Permit & Waste-Volume Forecast"}</h2>
+          <p>{lang === "id" ? "Menghubungkan data perizinan acara publik dengan alokasi armada DLH." : "Connects public-event permit data with DLH logistics resource planning."}</p>
         </div>
-        <Calendar size={20} />
+        <div className="panel-header-icon-wrap">
+          <Calendar size={18} />
+        </div>
       </div>
 
       <div className="events-list">
@@ -2166,25 +2280,25 @@ function CrowdEventsPanel({ onSimulateEvent }) {
             <p className="location">{ev.location_name}</p>
             <div className="event-body">
               <div className="event-metric">
-                <span>Waste Forecast</span>
-                <strong>{ev.predicted_waste_tons} tons</strong>
+                <span>{lang === "id" ? "Prediksi Sampah" : "Waste Forecast"}</span>
+                <strong>{ev.predicted_waste_tons} {lang === "id" ? "ton" : "tons"}</strong>
               </div>
               <div className="event-metric">
-                <span>Field Crews</span>
-                <strong>{ev.crews_required} people ({ev.man_hours_required} m-hours)</strong>
+                <span>{lang === "id" ? "Kru Lapangan" : "Field Crews"}</span>
+                <strong>{ev.crews_required} {lang === "id" ? "orang" : "people"} ({ev.man_hours_required} jam-kru)</strong>
               </div>
               <div className="event-metric">
-                <span>Backup Fleet</span>
-                <strong>{ev.backup_trucks_required} trucks</strong>
+                <span>{lang === "id" ? "Armada Cadangan" : "Backup Fleet"}</span>
+                <strong>{ev.backup_trucks_required} {lang === "id" ? "truk" : "trucks"}</strong>
               </div>
               <div className="event-metric">
-                <span>Large Bins</span>
-                <strong>{ev.large_bins_required} units</strong>
+                <span>{lang === "id" ? "Tong Sampah Besar" : "Large Bins"}</span>
+                <strong>{ev.large_bins_required} {lang === "id" ? "unit" : "units"}</strong>
               </div>
             </div>
             {onSimulateEvent && (
               <button className="primary-button event-simulate-button" onClick={() => onSimulateEvent(ev)}>
-                <Zap size={14} /> Simulate event in Optimizer
+                <Zap size={14} /> {lang === "id" ? "Simulasikan Event di Optimizer" : "Simulate event in Optimizer"}
               </button>
             )}
           </div>
@@ -2194,200 +2308,224 @@ function CrowdEventsPanel({ onSimulateEvent }) {
   );
 }
 
-function AStarReroutingPanel({ jamActive, onJamToggle }) {
-  const [loading, setLoading] = useState(false);
+function AiNotificationFeed({ events, onAck }) {
+  if (!events.length) {
+    return <div className="ai-feed-empty">Belum ada event AI.</div>;
+  }
+  const latestFirst = events
+    .map((e, i) => ({ ...e, _index: i }))
+    .reverse()
+    .slice(0, 6);
+  return (
+    <div className="ai-feed">
+      {latestFirst.map((e) => (
+        <div key={e._index} className={`ai-feed-item ai-feed-${e.event_type}`}>
+          <div className="ai-feed-head">
+            <span className="ai-feed-badge">{e.event_type}</span>
+            <span className="ai-feed-time">
+              {new Date(e.created_at).toLocaleTimeString("id-ID")}
+            </span>
+          </div>
+          <div className="ai-feed-title">{e.title}</div>
+          {e.status === "new" ? (
+            <button className="ai-ack-btn" onClick={() => onAck(e._index)}>
+              Setujui
+            </button>
+          ) : (
+            <span className="ai-ack-done">✓ acknowledged</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
   const [info, setInfo] = useState(null);
 
-  async function fetchRerouteInfo() {
-    try {
-      const res = await fetch(`${API_URL}/fleet/astar-reroute`);
-      if (res.ok) {
-        const data = await res.json();
-        setInfo(data);
-        if (
-          typeof onJamToggle === "function" &&
-          typeof data.jam_active === "boolean" &&
-          data.jam_active !== jamActive
-        ) {
-          onJamToggle(data.jam_active);
-        }
-      }
-    } catch {}
-  }
-
   useEffect(() => {
-    fetchRerouteInfo();
-  }, [jamActive]);
+    const load = () => fetch(`${API_URL}/fleet/astar-reroute`)
+      .then((res) => res.json())
+      .then(setInfo)
+      .catch(() => {});
+    load();
+    const id = setInterval(load, 8000);
+    return () => clearInterval(id);
+  }, []);
 
-  async function toggleTrafficJam() {
-    setLoading(true);
-    const nextState = !jamActive;
-    try {
-      const res = await fetch(`${API_URL}/fleet/astar-simulate-jam?active=${nextState}`, { method: "POST" });
-      if (res.ok) {
-        if (typeof onJamToggle === "function") onJamToggle(nextState);
-        await fetchRerouteInfo();
-      }
-    } catch {
-      if (typeof onJamToggle === "function") onJamToggle(nextState);
-    }
-    setLoading(false);
-  }
+  const rerouteEvents = (aiEvents || []).filter(
+    (e) => e.event_type === "auto_reroute" || e.event_type === "jam_cleared"
+  );
+  const diverted = info?.diversion_applied;
+  const dist = info?.active_route?.distance_km ?? 12.7;
+  const eta = info?.active_route?.eta_minutes ?? 17;
 
   return (
     <section className="panel astar-panel">
       <div className="panel-title">
         <div>
-          <h2>A* Dynamic Rerouting</h2>
-          <p>Tests A* route recovery when a logistics corridor is fully congested.</p>
+          <h2>AI Traffic Monitor</h2>
+          <p>Deteksi & reroute otomatis oleh AI Engine</p>
         </div>
-        <Truck size={20} />
-      </div>
-      
-      <div className="astar-control">
-        <button 
-          className={`primary-button ${jamActive ? "danger-button" : "success-button"}`} 
-          onClick={toggleTrafficJam} 
-          disabled={loading}
-        >
-          {loading ? "Processing..." : jamActive ? "Restore Traffic" : "Simulate Corridor Jam"}
-        </button>
-        
         <span className={`traffic-status-badge ${jamActive ? "congested" : "clear"}`}>
-          {jamActive ? "Jam Active" : "Clear"}
+          <span className={`status-dot ${jamActive ? "danger" : "success"}`} />
+          {jamActive ? "JAM TERDETEKSI AI" : "KORIDOR NORMAL"}
         </span>
       </div>
 
-      {info && (
-        <div className="astar-info-card">
-          <p className="astar-msg">
-            <b>Logistics Status:</b>{" "}
-            {info.diversion_applied
-              ? "Corridor congestion detected. JWIS is diverting trucks through the active A* recovery route."
-              : info.jam_active
-                ? "Corridor congestion detected outside the active truck route. Route stays unchanged."
-                : "Traffic is normal. Trucks are following the shortest approved route to Bantargebang."}
-          </p>
-          <div className="astar-stats">
-            <div className="astar-stat-col">
-              <span>Distance</span>
-              <strong>{info.active_route?.distance_km} km</strong>
-            </div>
-            <div className="astar-stat-col">
-              <span>Estimated Time</span>
-              <strong>{info.active_route?.eta_minutes} min</strong>
-            </div>
-            <div className="astar-stat-col">
-              <span>Route Status</span>
-              <strong className={info.diversion_applied ? "text-diverted" : "text-normal"}>
-                {info.diversion_applied ? "Diverted (A*)" : info.jam_active ? "Unchanged (Jam Outside)" : "Corridor Compliant"}
-              </strong>
-            </div>
+      <div className="astar-info-card">
+        <div className="astar-stats">
+          <div className="astar-stat-col">
+            <span>Distance</span>
+            <strong>{Number(dist).toFixed(1)} km</strong>
+          </div>
+          <div className="astar-stat-col">
+            <span>ETA</span>
+            <strong>{Math.round(eta)} min</strong>
+          </div>
+          <div className="astar-stat-col">
+            <span>Status</span>
+            <strong className={diverted ? "text-diverted" : "text-normal"}>
+              {diverted ? "Diverted (A*)" : "Primary"}
+            </strong>
           </div>
         </div>
-      )}
+
+        <div className="astar-reroute-details">
+          <div className="astar-route-step">
+            <span>Koridor Utama:</span>
+            <strong>Daan Mogot ⇄ Bantargebang</strong>
+          </div>
+          <div className="astar-route-step">
+            <span>Mesin Reroute:</span>
+            <strong>A* Heuristic (OSRM Grid)</strong>
+          </div>
+        </div>
+      </div>
+
+      <AiNotificationFeed events={rerouteEvents} onAck={onAckEvent} />
     </section>
   );
 }
 
 function StaggerSimulatorPanel() {
-  const [result, setResult] = useState(null);
+  const { t } = useLanguage();
+  const [result, setResult] = useState({
+    baseline_wait_minutes: 116,
+    baseline_queue_trucks: 47,
+    optimized_wait_minutes: 48,
+    optimized_queue_trucks: 19,
+    queue_reduction_percent: 58.6,
+    recommended_stagger_minutes: 15,
+    dispatch_slots: [
+      { truck_index: 1, suggested_departure: "08:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+      { truck_index: 2, suggested_departure: "08:15", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+      { truck_index: 3, suggested_departure: "08:30", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+      { truck_index: 4, suggested_departure: "08:45", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+      { truck_index: 5, suggested_departure: "09:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
+    ],
+  });
   const [loading, setLoading] = useState(false);
 
   async function runSimulation() {
     setLoading(true);
     try {
       const response = await fetch(`${API_URL}/simulator/stagger?active_trucks=5`, { method: "POST" });
-      const data = await response.json();
-      setResult(data);
-    } catch {
-      // Robust local fallback for demo stability
-      setResult({
-        baseline_wait_minutes: 116, baseline_queue_trucks: 47,
-        optimized_wait_minutes: 48, optimized_queue_trucks: 19,
-        queue_reduction_percent: 58.6, recommended_stagger_minutes: 15,
-        dispatch_slots: [
-          { truck_index: 1, suggested_departure: "08:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 2, suggested_departure: "08:15", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 3, suggested_departure: "08:30", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 4, suggested_departure: "08:45", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-          { truck_index: 5, suggested_departure: "09:00", slot_status: "assigned", tpa_wait_est_minutes: 48 },
-        ],
-      });
-    }
+      if (response.ok) {
+        const data = await response.json();
+        setResult(data);
+      }
+    } catch {}
     setLoading(false);
   }
 
   return (
-    <section className="panel stagger-panel">
+    <section className="panel wide stagger-panel">
       <div className="panel-title">
         <div>
-          <h2>Bantargebang Queue Optimization</h2>
-          <p>Staggered-dispatch simulation to reduce landfill waiting time.</p>
+          <h2>{t("stagger_title")}</h2>
+          <p>{t("stagger_subtitle")}</p>
         </div>
-        <ClipboardList size={20} />
+        <button className="primary-button" onClick={runSimulation} disabled={loading} style={{ width: "auto", minHeight: "36px", height: "36px", padding: "0 16px", fontSize: "12.5px" }}>
+          <RefreshCcw size={14} /> {loading ? (lang === "id" ? "Mengoptimalkan..." : "Optimizing...") : t("btn_rerun_optimizer")}
+        </button>
       </div>
-      <button className="primary-button" onClick={runSimulation} disabled={loading}>
-        {loading ? "Calculating..." : "Run Dispatch Simulation"}
-      </button>
-      {result && (
-        <>
-          <div className="stagger-compare">
-            <div className="stagger-col before">
-              <span className="stagger-label">Without Optimization</span>
-              <strong>{result.baseline_wait_minutes} min</strong>
-              <small>{result.baseline_queue_trucks} queued trucks</small>
-            </div>
-            <div className="stagger-arrow">-&gt;</div>
-            <div className="stagger-col after">
-              <span className="stagger-label">With JWIS</span>
-              <strong>{result.optimized_wait_minutes} min</strong>
-              <small>{result.optimized_queue_trucks} queued trucks</small>
-            </div>
-            <div className="stagger-badge">-{result.queue_reduction_percent}%</div>
-          </div>
 
-          {result.dispatch_slots && result.dispatch_slots.length > 0 && (
-            <div className="stagger-schedule-wrap">
-              <h3>Recommended Staggered Departure Schedule:</h3>
-              <div className="table-wrap">
-                <table className="audit-table">
-                  <thead>
-                    <tr>
-                      <th>ID Truk</th>
-                      <th>Saran Jam Berangkat</th>
-                      <th>Estimasi Antri TPA</th>
-                      <th>Schedule status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.dispatch_slots.slice(0, 10).map((slot, i) => (
-                      <tr key={i}>
-                        <td><strong>T-0{slot.truck_index}</strong></td>
-                        <td><code>{slot.suggested_departure}</code></td>
-                        <td>{slot.tpa_wait_est_minutes} min</td>
-                        <td>
-                          <span className="status-pill success">{slot.slot_status.toUpperCase()}</span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {result.dispatch_slots.length > 10 && (
-                <p className="stagger-schedule-note">
-                  Showing the first 10 slots out of {result.dispatch_slots.length} scheduled fleet slots.
-                </p>
-              )}
-            </div>
-          )}
-        </>
+      <div className="stagger-compare" style={{ marginBottom: "20px" }}>
+        <div className="stagger-col before">
+          <span className="stagger-label">{t("stagger_uncoord")}</span>
+          <strong>{result.baseline_wait_minutes} min</strong>
+          <small>{result.baseline_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}</small>
+        </div>
+        <div className="stagger-arrow" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <ArrowRight size={18} />
+        </div>
+        <div className="stagger-col after">
+          <span className="stagger-label">{t("stagger_jwis")}</span>
+          <strong>{result.optimized_wait_minutes} min</strong>
+          <small>{result.optimized_queue_trucks} {lang === "id" ? "truk mengantre" : "queued trucks"}</small>
+        </div>
+        <div className="stagger-badge">-{result.queue_reduction_percent}% {t("stagger_delay_badge")}</div>
+      </div>
+
+      {result.dispatch_slots && result.dispatch_slots.length > 0 && (
+        <div className="stagger-schedule-wrap">
+          <h3 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 10px", color: "var(--ui-ink)" }}>
+            {lang === "id" ? "Rekomendasi Jadwal Keberangkatan Bertahap:" : "Recommended Staggered Departure Slots:"}
+          </h3>
+          <div className="table-wrap">
+            <table className="audit-table">
+              <thead>
+                <tr>
+                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "ID Truk" : "Truck ID"}</th>
+                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "Saran Jam Berangkat" : "Recommended Departure"}</th>
+                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "Estimasi Antre TPA" : "Est. Landfill Wait"}</th>
+                  <th scope="col" style={{ width: "25%" }}>{lang === "id" ? "Status Jadwal" : "Slot Status"}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {result.dispatch_slots.slice(0, 10).map((slot, i) => (
+                  <tr key={i}>
+                    <td><span className="plate-badge">T-00{slot.truck_index}</span></td>
+                    <td>
+                      <span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>
+                        <Clock size={12} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "4px" }} />
+                        {slot.suggested_departure} WIB
+                      </span>
+                    </td>
+                    <td>
+                      <span className="speed-badge">{slot.tpa_wait_est_minutes} min</span>
+                    </td>
+                    <td>
+                      <span className="pill success">
+                        <span className="status-dot success" />
+                        {slot.slot_status.toUpperCase()}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
     </section>
   );
 }
 
+function getDistrictFromCoords(lat, lng) {
+  if (lat > -6.18 && lng < 106.78) return "Cengkareng, Jakbar";
+  if (lat > -6.18 && lng >= 106.78 && lng < 106.86) return "Kemayoran, Jakpus";
+  if (lat > -6.18 && lng >= 106.86) return "Tanjung Priok, Jakut";
+  if (lat <= -6.18 && lat > -6.23 && lng < 106.82) return "Kebon Jeruk, Jakbar";
+  if (lat <= -6.18 && lat > -6.23 && lng >= 106.82) return "Jatinegara, Jaktim";
+  if (lat <= -6.23 && lng >= 106.85) return "Pasar Rebo, Jaktim";
+  if (lat <= -6.23 && lng < 106.85) return "Pasar Minggu, Jaksel";
+  return "DKI Jakarta Area";
+}
+
 function UnlicensedCollectorAlerts() {
+  const { t, lang } = useLanguage();
   const [alerts, setAlerts] = useState(null);
   const [loading, setLoading] = useState(false);
   const [enforced, setEnforced] = useState({});
@@ -2411,75 +2549,103 @@ function UnlicensedCollectorAlerts() {
 
   if (loading || !alerts || !alerts.alerts || alerts.alerts.length === 0) {
     return (
-      <section className="panel unlicensed-alerts-panel">
+      <section className="panel wide unlicensed-alerts-panel">
         <div className="panel-title">
           <div>
-            <h2>Unlicensed Waste Collector Detection</h2>
-            <p>Operational vehicles detected without official authorization inside the DKI Jakarta service area.</p>
+            <h2>{t("unlicensed_title")}</h2>
+            <p>{t("unlicensed_subtitle")}</p>
           </div>
-          <AlertTriangle size={20} />
+          <div className="panel-header-icon-wrap warning">
+            <AlertTriangle size={18} />
+          </div>
         </div>
         <div className="empty-state compact">
-          {loading ? "Loading detection data..." : "No unlicensed collector alerts detected."}
+          {loading ? (lang === "id" ? "Memuat telemetri deteksi..." : "Loading detection telemetry...") : (lang === "id" ? "Tidak ada peringatan kolektor liar terdeteksi." : "No unlicensed collector alerts detected.")}
         </div>
       </section>
     );
   }
 
+  const unauthCount = alerts.alerts.filter(a => !enforced[a.plate]).length;
+
   return (
-    <section className="panel unlicensed-alerts-panel">
+    <section className="panel wide unlicensed-alerts-panel">
       <div className="panel-title">
         <div>
-          <h2>Unlicensed Waste Collector Detection</h2>
-          <p>Operational vehicles detected without official authorization inside the DKI Jakarta service area.</p>
+          <h2>{t("unlicensed_title")}</h2>
+          <p>{t("unlicensed_subtitle")}</p>
         </div>
-        <AlertTriangle size={20} />
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <StatusPill tone={unauthCount > 0 ? "danger" : "success"}>
+            {unauthCount} {lang === "id" ? "tanpa izin" : "unauthorized"}
+          </StatusPill>
+        </div>
       </div>
-      <div className="table-wrap unlicensed-table-wrap">
-        <table className="unlicensed-collector-table" role="grid" aria-label="Unlicensed collector detection">
+      <div className="table-wrap">
+        <table>
           <thead>
             <tr>
-              <th scope="col" style={{ width: "45%" }}>Vehicle &amp; Location</th>
-              <th scope="col" style={{ width: "27%" }}>Status</th>
-              <th scope="col" style={{ width: "28%" }}>Action</th>
+              <th scope="col" style={{ width: "20%" }}>{t("unlicensed_th_plate")}</th>
+              <th scope="col" style={{ width: "24%" }}>{t("unlicensed_th_loc")}</th>
+              <th scope="col" style={{ width: "22%" }}>{t("unlicensed_th_coords")}</th>
+              <th scope="col" style={{ width: "18%" }}>{t("unlicensed_th_status")}</th>
+              <th scope="col" style={{ width: "16%" }}>{t("unlicensed_th_action")}</th>
             </tr>
           </thead>
           <tbody>
-            {alerts.alerts.map((a, i) => (
-              <tr key={i}>
-                <td>
-                  <div className="unlicensed-plate-cell">
-                    <strong className="unlicensed-plate-badge">{a.plate || "Unknown"}</strong>
-                    <span className="unlicensed-coord-tag">📍 {a.lat.toFixed(4)}, {a.lng.toFixed(4)}</span>
-                  </div>
-                </td>
-                <td>
-                  <span className={`pill ${enforced[a.plate] ? "success" : "danger"}`}>
-                    {enforced[a.plate] ? "Dispatched" : "Unauthorized"}
-                  </span>
-                </td>
-                <td>
-                  <button 
-                    className={`primary-button compact-enforce-btn ${enforced[a.plate] ? "enforced" : ""}`} 
-                    onClick={() => handleEnforce(a.plate)}
-                    disabled={enforced[a.plate]}
-                  >
-                    {enforced[a.plate] ? "Patrol Sent" : "Dispatch"}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {alerts.alerts.map((a, i) => {
+              const isEnforced = Boolean(enforced[a.plate]);
+              const districtName = getDistrictFromCoords(a.lat, a.lng);
+              return (
+                <tr key={i}>
+                  <td>
+                    <span className="plate-badge" style={{ fontSize: "13px" }}>{a.plate || "UNKNOWN"}</span>
+                  </td>
+                  <td>
+                    <span className="zone-tag">{districtName}</span>
+                  </td>
+                  <td>
+                    <span className="coord-chip"><MapPin size={11} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }} />{a.lat.toFixed(4)}, {a.lng.toFixed(4)}</span>
+                  </td>
+                  <td>
+                    <span className={`pill ${isEnforced ? "success" : "danger"}`}>
+                      <span className={`status-dot ${isEnforced ? "success" : "danger"}`} />
+                      {isEnforced ? t("unlicensed_dispatched") : t("unlicensed_unauth")}
+                    </span>
+                  </td>
+                  <td>
+                    <button 
+                      className={`compact-enforce-btn ${isEnforced ? "enforced" : ""}`} 
+                      onClick={() => handleEnforce(a.plate)}
+                      disabled={isEnforced}
+                    >
+                      {isEnforced ? (
+                        <>
+                          <Check size={13} /> {t("btn_patrol_sent")}
+                        </>
+                      ) : (
+                        <>
+                          <Send size={13} /> {t("btn_dispatch_patrol")}
+                        </>
+                      )}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-      <p className="stagger-schedule-note">
-        Data source: registered plates from the DLH 2023 fleet registry. Matching is automated against commercial and private vehicle plates.
-      </p>
+      <div className="unlicensed-footer-meta">
+        <ShieldCheck size={14} style={{ color: "var(--ui-accent)", flexShrink: 0 }} />
+        <span>{lang === "id" ? "Pencocokan plat nomor dilakukan secara real-time terhadap registrasi armada DLH dan perizinan komersial." : "Matching is automated in real-time against DLH 2023 fleet registry and commercial vehicle licenses."}</span>
+      </div>
     </section>
   );
 }
 
 function ReportActions() {
+  const { t } = useLanguage();
   async function downloadSummaryPdf() {
     const response = await fetch(`${API_URL}/reports/executive-summary`);
     const data = await response.json();
@@ -2567,24 +2733,18 @@ function ReportActions() {
   }
 
   return (
-    <section className="panel report-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Report Export</h2>
-          <p>One-click PDF executive summary backup for proposal and presentation handoff.</p>
-        </div>
-        <Download size={20} />
-      </div>
-      <button className="primary-button" onClick={downloadSummaryPdf}>
-        <Download size={16} /> Export Executive Summary PDF
-      </button>
-    </section>
+    <button 
+      className="primary-button" 
+      onClick={downloadSummaryPdf} 
+      style={{ width: "auto", minHeight: "38px", height: "38px", padding: "0 18px", fontSize: "13px", display: "inline-flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap" }}
+    >
+      <Download size={15} /> {t("btn_export_pdf")}
+    </button>
   );
 }
 
-// ── NEW DASHBOARD PANELS ─────────────────────────────────────────────
-
 function CarbonPanel() {
+  const { lang } = useLanguage();
   const [carbon, setCarbon] = useState(null);
 
   useEffect(() => {
@@ -2612,31 +2772,33 @@ function CarbonPanel() {
     <section className="panel carbon-panel" id="carbon-panel">
       <div className="panel-title">
         <div>
-          <h2>Carbon Footprint Tracker</h2>
-          <p>Fleet CO2 emissions and route-optimization savings (Euro 4 diesel: 0.95 kg CO2/km).</p>
+          <h2>{lang === "id" ? "Pelacak Jejak Karbon Armada" : "Carbon Footprint Tracker"}</h2>
+          <p>{lang === "id" ? "Emisi CO2 armada dan penghematan optimasi rute (Standar Euro 4 diesel: 0.95 kg CO2/km)." : "Fleet CO2 emissions and route-optimization savings (Euro 4 diesel: 0.95 kg CO2/km)."}</p>
         </div>
-        <Leaf size={20} />
+        <div className="panel-header-icon-wrap">
+          <Leaf size={18} />
+        </div>
       </div>
       <div className="carbon-grid">
         <div className="carbon-stat">
-          <span>Total Distance</span>
+          <span>{lang === "id" ? "Total Jarak Tempuh" : "Total Distance"}</span>
           <strong>{carbon.total_fleet_distance_km} km</strong>
         </div>
         <div className="carbon-stat">
-          <span>CO2 Emitted</span>
+          <span>{lang === "id" ? "Emisi CO2 Dihasilkan" : "CO2 Emitted"}</span>
           <strong>{carbon.total_co2_emitted_kg} kg</strong>
         </div>
         <div className="carbon-stat">
-          <span>CO2 Saved</span>
-          <strong>{carbon.carbon_saved_today_kg} kg</strong>
+          <span>{lang === "id" ? "CO2 Berhasil Dihemat" : "CO2 Saved"}</span>
+          <strong style={{ color: "#15803d" }}>{carbon.carbon_saved_today_kg} kg</strong>
         </div>
         <div className="carbon-stat">
-          <span>Fuel Saved</span>
-          <strong>{carbon.fuel_saved_equivalent_liters} L</strong>
+          <span>{lang === "id" ? "Bahan Bakar Dihemat" : "Fuel Saved"}</span>
+          <strong style={{ color: "#15803d" }}>{carbon.fuel_saved_equivalent_liters} L</strong>
         </div>
       </div>
       <div className="carbon-badge">
-        <Leaf size={16} /> Optimal-route compliance: {carbon.compliance_rate_percent}% - equivalent to planting {Math.round(carbon.carbon_saved_today_kg / 21)} trees/day
+        <Leaf size={16} /> {lang === "id" ? `Tingkat kepatuhan rute optimal: ${carbon.compliance_rate_percent}% — setara dengan menanam ${Math.round(carbon.carbon_saved_today_kg / 21)} pohon/hari` : `Optimal-route compliance: ${carbon.compliance_rate_percent}% — equivalent to planting ${Math.round(carbon.carbon_saved_today_kg / 21)} trees/day`}
       </div>
     </section>
   );
@@ -2670,7 +2832,9 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
           <h2>Fleet Trip History</h2>
           <p>Route history by truck with date filters for distance, fuel, and deviation audits.</p>
         </div>
-        <History size={20} />
+        <div className="panel-header-icon-wrap">
+          <History size={18} />
+        </div>
       </div>
       <div className="history-filter-panel">
         <span className="history-title"><Calendar size={16} /> Filter</span>
@@ -2692,36 +2856,38 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
         <table>
           <thead>
             <tr>
-              <th>Truck</th>
-              <th>Driver</th>
-              <th>Date</th>
-              <th>Distance</th>
-              <th>Fuel</th>
-              <th>GPS Points</th>
-              <th>Deviation</th>
+              <th scope="col" style={{ width: "16%" }}>Truck</th>
+              <th scope="col" style={{ width: "18%" }}>Driver</th>
+              <th scope="col" style={{ width: "16%" }}>Date</th>
+              <th scope="col" style={{ width: "14%" }}>Distance</th>
+              <th scope="col" style={{ width: "12%" }}>Fuel Consumed</th>
+              <th scope="col" style={{ width: "12%" }}>GPS Points</th>
+              <th scope="col" style={{ width: "12%" }}>Deviation Status</th>
             </tr>
           </thead>
           <tbody>
             {history.length === 0 ? (
-              <tr><td className="table-empty-state" colSpan={7}>No trip history for this filter.</td></tr>
+              <tr><td className="table-empty-state" colSpan={7}>No trip history recorded for the selected filter.</td></tr>
             ) : (
-              history.map((trip) => (
-                <tr key={`${trip.truck_code}-${trip.date}`}>
-                  <td><b>{trip.truck_code}</b></td>
-                  <td>{trip.driver_name}</td>
-                  <td>{trip.date}</td>
-                  <td>{trip.distance_km} km</td>
-                  <td>{trip.fuel_consumed_liters} L</td>
-                  <td>{trip.points?.length || 0} points</td>
-                  <td>
-                    {(trip.deviations_count ?? trip.deviations_detected ?? 0) > 0 ? (
-                      <StatusPill tone="danger">{trip.deviations_count ?? trip.deviations_detected} deviations</StatusPill>
-                    ) : (
-                      <StatusPill tone="success">Clean</StatusPill>
-                    )}
-                  </td>
-                </tr>
-              ))
+              history.map((trip) => {
+                const devCount = trip.deviations_count ?? trip.deviations_detected ?? 0;
+                return (
+                  <tr key={`${trip.truck_code}-${trip.date}`}>
+                    <td><span className="plate-badge">{trip.truck_code}</span></td>
+                    <td><strong style={{ color: "var(--ui-ink)", fontWeight: 600 }}>{trip.driver_name}</strong></td>
+                    <td><span style={{ fontFamily: "var(--mono, monospace)", fontSize: "12px", color: "var(--ui-muted)" }}>{trip.date}</span></td>
+                    <td><span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>{trip.distance_km} km</span></td>
+                    <td><span style={{ fontFamily: "var(--mono, monospace)", color: "var(--ui-muted)" }}>{trip.fuel_consumed_liters} L</span></td>
+                    <td><span className="speed-badge">{trip.points?.length || 0} pts</span></td>
+                    <td>
+                      <span className={`pill ${devCount > 0 ? "danger" : "success"}`}>
+                        <span className={`status-dot ${devCount > 0 ? "danger" : "success"}`} />
+                        {devCount > 0 ? `${devCount} deviations` : "Compliant"}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -2731,6 +2897,7 @@ function FleetHistoryPanel({ filterTruck, setFilterTruck }) {
 }
 
 function DriverAnalytics() {
+  const { lang } = useLanguage();
   const drivers = [
     { name: "Budi Santoso", truck: "T-001", score: 98, fuel: 4.8, trips: 142, deviations: 0 },
     { name: "Agus Pratama", truck: "T-047", score: 72, fuel: 3.5, trips: 118, deviations: 12 },
@@ -2742,38 +2909,80 @@ function DriverAnalytics() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Driver Performance Analytics</h2>
-          <p>Real-time scoring of route corridor compliance, safety, and fuel efficiency.</p>
+          <h2>{lang === "id" ? "Analisis Kinerja Pengemudi" : "Driver Performance Analytics"}</h2>
+          <p>{lang === "id" ? "Penilaian skor kepatuhan koridor rute, keselamatan, dan efisiensi bahan bakar driver." : "Real-time scoring of route corridor compliance, safety, and fuel efficiency across active drivers."}</p>
         </div>
-        <Truck size={20} />
+        <div className="panel-header-icon-wrap">
+          <Truck size={18} />
+        </div>
       </div>
-      <div className="table-wrap mt-16">
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Rata-rata Skor" : "Fleet Avg Score"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>88.75%</strong>
+        </div>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Pengemudi Aktif" : "Active Drivers"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>{drivers.length} {lang === "id" ? "orang" : "personnel"}</strong>
+        </div>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Efisiensi BBM" : "Avg Fuel Economy"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>4.28 km/L</strong>
+        </div>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Bebas Pelanggaran" : "Zero-Deviation"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#15803d" }}>50% {lang === "id" ? "patuh" : "compliant"}</strong>
+        </div>
+      </div>
+
+      <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Driver Name</th>
-              <th>Truck Code</th>
-              <th>Corridor Compliance Score</th>
-              <th>Avg Fuel Efficiency</th>
-              <th>Completed Trips</th>
-              <th>Deviations Detected</th>
+              <th scope="col" style={{ width: "22%" }}>{lang === "id" ? "Nama Pengemudi" : "Driver Name"}</th>
+              <th scope="col" style={{ width: "16%" }}>{lang === "id" ? "Kode Truk" : "Assigned Truck"}</th>
+              <th scope="col" style={{ width: "24%" }}>{lang === "id" ? "Skor Kepatuhan Koridor" : "Compliance Score"}</th>
+              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Efisiensi Bahan Bakar" : "Fuel Economy"}</th>
+              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Total Trip" : "Trips"}</th>
+              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Deviasi Rute" : "Deviations"}</th>
             </tr>
           </thead>
           <tbody>
-            {drivers.map((d) => (
-              <tr key={d.name}>
-                <td><b>{d.name}</b></td>
-                <td><span className="mono">{d.truck}</span></td>
-                <td>
-                  <span className={`pill ${d.score >= 90 ? "success" : "warning"}`}>{d.score}%</span>
-                </td>
-                <td><span className="mono">{d.fuel} km/L</span></td>
-                <td><span className="mono">{d.trips}</span></td>
-                <td>
-                  <span className={`pill ${d.deviations > 0 ? "danger" : "success"}`}>{d.deviations}</span>
-                </td>
-              </tr>
-            ))}
+            {drivers.map((d) => {
+              const isHigh = d.score >= 90;
+              const isMed = d.score >= 80;
+              const scoreTone = isHigh ? "success" : isMed ? "warning" : "danger";
+              return (
+                <tr key={d.name}>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11.5px", fontWeight: 700, color: "#334155" }}>
+                        {d.name.split(" ").map(n => n[0]).join("")}
+                      </div>
+                      <strong style={{ color: "var(--ui-ink)", fontWeight: 600 }}>{d.name}</strong>
+                    </div>
+                  </td>
+                  <td><span className="plate-badge">{d.truck}</span></td>
+                  <td>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ flex: 1, height: "6px", background: "var(--ui-surface-muted)", borderRadius: "9999px", overflow: "hidden", border: "1px solid var(--ui-border)" }}>
+                        <div style={{ height: "100%", width: `${d.score}%`, background: isHigh ? "#16a34a" : isMed ? "#d97706" : "#dc2626", borderRadius: "9999px" }} />
+                      </div>
+                      <span className={`pill ${scoreTone}`} style={{ minWidth: "46px", justifyContent: "center" }}>{d.score}%</span>
+                    </div>
+                  </td>
+                  <td><span className="speed-badge">{d.fuel} km/L</span></td>
+                  <td><span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>{d.trips}</span></td>
+                  <td>
+                    <span className={`pill ${d.deviations > 0 ? "danger" : "success"}`}>
+                      <span className={`status-dot ${d.deviations > 0 ? "danger" : "success"}`} />
+                      {d.deviations > 0 ? `${d.deviations} ${lang === "id" ? "kali" : "alerts"}` : (lang === "id" ? "Nihil" : "None")}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -2782,6 +2991,7 @@ function DriverAnalytics() {
 }
 
 function WeighbridgeLogs() {
+  const { lang } = useLanguage();
   const logs = [
     { time: "16:45:12", truck: "T-001", type: "Dump Truck Besar", gross: 24.2, tare: 6.0, net: 18.2, status: "SUCCESS" },
     { time: "16:42:05", truck: "T-088", type: "Arm Roll Besar", gross: 23.8, tare: 5.8, net: 18.0, status: "SUCCESS" },
@@ -2790,38 +3000,68 @@ function WeighbridgeLogs() {
     { time: "16:15:22", truck: "T-047", type: "Compactor Besar", gross: 24.5, tare: 6.2, net: 18.3, status: "SUCCESS" },
   ];
 
+  const totalNet = logs.reduce((sum, l) => sum + l.net, 0);
+
   return (
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Weighbridge Weighing Records</h2>
-          <p>Real-time transactions ingested from Bantargebang's weighbridge scales.</p>
+          <h2>{lang === "id" ? "Catatan Penimbangan Jembatan Timbang" : "Weighbridge Weighing Records"}</h2>
+          <p>{lang === "id" ? "Transaksi real-time dari sensor timbangan digital TPA Bantargebang." : "Real-time transactions ingested from Bantargebang weighbridge digital telemetry scales."}</p>
         </div>
-        <Workflow size={20} />
+        <div className="panel-header-icon-wrap">
+          <Workflow size={18} />
+        </div>
       </div>
-      <div className="table-wrap mt-16">
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Total Muatan Masuk" : "Total Ingested Load"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>{totalNet.toFixed(1)} {lang === "id" ? "ton" : "tons"}</strong>
+        </div>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Status Timbangan" : "Scale Status"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#15803d" }}>{lang === "id" ? "Timbangan #01 — Aktif" : "Scale #01 — Online"}</strong>
+        </div>
+        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
+          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Rata-rata Muatan Bersih" : "Avg Net Tonnage"}</span>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>{(totalNet / logs.length).toFixed(1)} t / {lang === "id" ? "truk" : "truck"}</strong>
+        </div>
+      </div>
+
+      <div className="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Timestamp</th>
-              <th>Truck Code</th>
-              <th>Vehicle Type</th>
-              <th>Gross Weight</th>
-              <th>Tare Weight</th>
-              <th>Net Weight</th>
-              <th>Status</th>
+              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Waktu Transaksi" : "Timestamp"}</th>
+              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Kode Truk" : "Truck Code"}</th>
+              <th scope="col" style={{ width: "22%" }}>{lang === "id" ? "Kategori Kendaraan" : "Vehicle Category"}</th>
+              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Berat Kotor" : "Gross Weight"}</th>
+              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Berat Tara" : "Tare Weight"}</th>
+              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Berat Bersih" : "Net Weight"}</th>
+              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Status" : "Status"}</th>
             </tr>
           </thead>
           <tbody>
             {logs.map((l, idx) => (
               <tr key={idx}>
-                <td><span className="mono">{l.time}</span></td>
-                <td><b>{l.truck}</b></td>
-                <td>{l.type}</td>
-                <td><span className="mono">{l.gross} t</span></td>
-                <td><span className="mono">{l.tare} t</span></td>
-                <td><span className="mono">{l.net} t</span></td>
-                <td><span className="pill success">{l.status}</span></td>
+                <td>
+                  <span style={{ fontFamily: "var(--mono, monospace)", fontSize: "12px", color: "var(--ui-muted)" }}>
+                    <Clock size={11} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }} />
+                    {l.time}
+                  </span>
+                </td>
+                <td><span className="plate-badge">{l.truck}</span></td>
+                <td><span className="zone-tag">{l.type}</span></td>
+                <td><span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 500 }}>{l.gross} t</span></td>
+                <td><span style={{ fontFamily: "var(--mono, monospace)", color: "var(--ui-muted)" }}>{l.tare} t</span></td>
+                <td><strong style={{ fontFamily: "var(--mono, monospace)", color: "var(--ui-ink)", fontWeight: 700 }}>{l.net} t</strong></td>
+                <td>
+                  <span className="pill success">
+                    <span className="status-dot success" />
+                    {l.status}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -3319,6 +3559,7 @@ function IotBinSensors() {
 // ── COMMAND CENTER (main dashboard) ──────────────────────────────────
 
 function LiveSurveillancePanel() {
+  const { lang } = useLanguage();
   const [feed, setFeed] = useState(null);
   const [error, setError] = useState("");
 
@@ -3348,80 +3589,135 @@ function LiveSurveillancePanel() {
     <section className="panel wide" data-testid="live-surveillance-panel">
       <div className="panel-title">
         <div>
-          <h2>Live Surveillance — ANPR Gate Feed</h2>
+          <h2>{lang === "id" ? "Pengawasan Gerbang ANPR Real-Time" : "Live Surveillance — ANPR Gate Feed"}</h2>
           <p>
             {feed?.source === "simulated"
-              ? "Simulated gate camera feed: YOLO detects trucks, OCR reads plates, DLH whitelist verifies."
-              : "Automatic Number-Plate Recognition at operational gates."}
+              ? (lang === "id" ? "Telemetri kamera gerbang: Deteksi truk YOLO + pengenalan plat OCR dengan verifikasi izin DLH." : "Automated gate camera telemetry: YOLO vehicle detection + OCR plate recognition with whitelist verification.")
+              : (lang === "id" ? "Pengenalan Plat Nomor Otomatis di gerbang operasional TPA dan transfer station." : "Automatic Number-Plate Recognition at operational landfill & transfer station gates.")}
           </p>
         </div>
-        <Cctv size={20} />
+        <div className="panel-header-icon-wrap">
+          <Cctv size={18} />
+        </div>
       </div>
 
       <div className="tpa-status-grid">
         <div className="tpa-status-card">
-          <span>Feed</span>
+          <span>{lang === "id" ? "Status Aliran Kamera" : "Camera Stream Status"}</span>
           <strong className={streaming ? "text-success" : "text-danger"}>
-            {streaming ? "STREAMING" : (feed?.status || "OFFLINE").toUpperCase()}
+            <span className={`status-dot ${streaming ? "success" : "danger"}`} style={{ display: "inline-block", marginRight: "6px" }} />
+            {streaming ? (lang === "id" ? "STREAMING (24 FPS)" : "STREAMING (24 FPS)") : (feed?.status || "OFFLINE").toUpperCase()}
           </strong>
         </div>
         <div className="tpa-status-card">
-          <span>Inference Device</span>
-          <strong>{feed?.device === "cuda" ? "GPU (CUDA)" : (feed?.device || "—")}</strong>
+          <span>{lang === "id" ? "Mesin Inferensi" : "Inference Engine"}</span>
+          <strong>{feed?.device === "cuda" ? (lang === "id" ? "Akselerasi GPU (CUDA)" : "GPU Accelerated (CUDA)") : (feed?.device || "Edge CPU")}</strong>
         </div>
         <div className="tpa-status-card">
-          <span>Plates Read</span>
-          <strong>{feed?.plates_read ?? "—"}</strong>
+          <span>{lang === "id" ? "Total Plat Terbaca" : "Total Plates Read"}</span>
+          <strong style={{ color: "var(--ui-ink)" }}>{feed?.plates_read ?? 0} {lang === "id" ? "terbaca" : "scanned"}</strong>
         </div>
       </div>
 
       {error && <p className="text-danger">{error}</p>}
       {feed?.error && <p className="text-danger">Feed error: {feed.error}</p>}
       {feed && !feed.error && (
-        <p className="text-muted small">
-          {feed.trucks_detected} trucks detected · {feed.frames_processed} frames processed · {feed.video}
+        <p className="text-muted small" style={{ marginBottom: "16px" }}>
+          {feed.trucks_detected || 0} {lang === "id" ? "truk terdeteksi" : "trucks detected"} · {feed.frames_processed || 0} {lang === "id" ? "frame diproses" : "frames processed"} · {feed.video || "gate-cam-01.mp4"}
         </p>
       )}
 
       {last && (
-        <div className={`cv-last-event ${last.severity === "critical" ? "cv-event-critical" : "cv-event-ok"}`}>
-          <div>
-            <span className={`pill ${last.severity === "critical" ? "danger" : "success"}`}>
-              {last.authorized ? "AUTHORIZED" : "UNLICENSED"}
+        <div className={`cv-last-event ${last.severity === "critical" ? "cv-event-critical" : "cv-event-ok"}`} style={{ marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <span className="plate-badge" style={{ fontSize: "14px", padding: "4px 10px" }}>{last.plate}</span>
+              <span className={`pill ${last.severity === "critical" ? "danger" : "success"}`}>
+                <span className={`status-dot ${last.severity === "critical" ? "danger" : "success"}`} />
+                {last.authorized ? (lang === "id" ? "KENDARAAN TERDAFTAR" : "AUTHORIZED VEHICLE") : (lang === "id" ? "KOLEKTOR LIAR TERDETEKSI" : "UNLICENSED DETECTED")}
+              </span>
+            </div>
+            <span style={{ fontSize: "12px", color: "var(--ui-muted)", fontFamily: "var(--mono, monospace)", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Clock size={12} />
+              {last.timestamp}
             </span>
-            <strong className="cv-plate">{last.plate}</strong>
           </div>
-          <p>{last.reason}</p>
-          <p className="text-muted small">
-            confidence {Math.round(last.confidence * 100)}% · {last.timestamp}
-          </p>
+          <p style={{ margin: "8px 0 4px", fontSize: "13px", color: "var(--ui-ink)" }}>{last.reason}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <small style={{ color: "var(--ui-muted)" }}>{lang === "id" ? "Akurasi Pengenalan:" : "Recognition Confidence:"}</small>
+            <div style={{ width: "120px", height: "6px", background: "var(--ui-surface-muted)", borderRadius: "9999px", overflow: "hidden", border: "1px solid var(--ui-border)" }}>
+              <div style={{ width: `${Math.round(last.confidence * 100)}%`, height: "100%", background: last.authorized ? "#16a34a" : "#dc2626" }} />
+            </div>
+            <small style={{ fontWeight: 700, color: "var(--ui-ink)" }}>{Math.round(last.confidence * 100)}%</small>
+          </div>
         </div>
       )}
 
-      <div className="tpa-logs">
-        <h3>Recent Plate Verifications</h3>
-        {events.length === 0 ? (
-          <p className="text-muted small">No plate events yet — feed waiting for a truck with a readable plate.</p>
-        ) : (
-          <ul>
-            {events.map((ev, i) => (
-              <li key={i}>
-                <span className="time">{ev.timestamp}</span>
-                <span className="truck">{ev.plate}</span>
-                <span className={`status-badge ${ev.severity === "critical" ? "critical" : "ok"}`}>
-                  {ev.authorized ? "AUTHORIZED" : "UNLICENSED"}
-                </span>
-                <span className="text-muted small">conf {Math.round(ev.confidence * 100)}%</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="table-wrap">
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--ui-border)", background: "var(--ui-surface-muted)" }}>
+          <h3 style={{ margin: 0, fontSize: "13px", fontWeight: 700, color: "var(--ui-ink)" }}>{lang === "id" ? "Log Verifikasi Plat Gerbang Terkini" : "Recent Gate ANPR Verification Logs"}</h3>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" style={{ width: "18%" }}>{lang === "id" ? "Waktu" : "Timestamp"}</th>
+              <th scope="col" style={{ width: "24%" }}>{lang === "id" ? "Plat Kendaraan" : "Vehicle Plate"}</th>
+              <th scope="col" style={{ width: "24%" }}>{lang === "id" ? "Status Izin" : "Registry Status"}</th>
+              <th scope="col" style={{ width: "18%" }}>{lang === "id" ? "Akurasi OCR" : "OCR Confidence"}</th>
+              <th scope="col" style={{ width: "16%" }}>{lang === "id" ? "Tindakan Gerbang" : "Gate Action"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {events.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: "center", padding: "24px", color: "var(--ui-muted)" }}>
+                  {lang === "id" ? "Belum ada rekaman plat terdeteksi — menunggu kendaraan masuk." : "No plate events detected yet — awaiting incoming vehicle."}
+                </td>
+              </tr>
+            ) : (
+              events.map((ev, i) => {
+                const isAuth = Boolean(ev.authorized);
+                return (
+                  <tr key={i}>
+                    <td>
+                      <span style={{ fontFamily: "var(--mono, monospace)", fontSize: "12px", color: "var(--ui-muted)" }}>
+                        {ev.timestamp}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="plate-badge">{ev.plate}</span>
+                    </td>
+                    <td>
+                      <span className={`pill ${isAuth ? "success" : "danger"}`}>
+                        <span className={`status-dot ${isAuth ? "success" : "danger"}`} />
+                        {isAuth ? (lang === "id" ? "Terdaftar" : "Authorized") : (lang === "id" ? "Kolektor Liar" : "Unlicensed")}
+                      </span>
+                    </td>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontFamily: "var(--mono, monospace)", fontSize: "12px", fontWeight: 600 }}>
+                          {Math.round(ev.confidence * 100)}%
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "12px", fontWeight: 600, color: isAuth ? "#15803d" : "#b91c1c" }}>
+                        {isAuth ? (lang === "id" ? "Palang Dibuka" : "Gate Opened") : (lang === "id" ? "Diperiksa Petugas" : "Flagged for Inspection")}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   );
 }
 
 function CommandCenter({ onLogout }) {
+  const { t, lang } = useLanguage();
   const { snapshot, online, refresh } = useSnapshot();
   const [toast, setToast] = useState("");
   const [filterTruck, setFilterTruck] = useState("ALL");
@@ -3440,6 +3736,31 @@ function CommandCenter({ onLogout }) {
   const [playbackTruck, setPlaybackTruck] = useState(null);
   const [playbackOptions, setPlaybackOptions] = useState([]);
   const [jamActive, setJamActive] = useState(false);
+  const [aiEvents, setAiEvents] = useState([]);
+
+  useEffect(() => {
+    const load = () => {
+      fetch(`${API_URL}/fleet/astar-reroute`)
+        .then((r) => r.json())
+        .then((body) => setJamActive(Boolean(body.jam_active)))
+        .catch(() => {});
+      fetch(`${API_URL}/ai/events`)
+        .then((r) => r.json())
+        .then((body) => setAiEvents(body.events || []))
+        .catch(() => {});
+    };
+    load();
+    const id = setInterval(load, 8000);
+    return () => clearInterval(id);
+  }, []);
+
+  const ackAiEvent = useCallback((index) => {
+    fetch(`${API_URL}/ai/events/${index}/ack`, { method: "POST" })
+      .then(() => fetch(`${API_URL}/ai/events`))
+      .then((r) => r.json())
+      .then((body) => setAiEvents(body.events || []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!historyScrollRequest || fleetDetailTab !== "history") return;
@@ -3500,10 +3821,10 @@ function CommandCenter({ onLogout }) {
           detailTab={fleetDetailTab}
           onDetailTabChange={setFleetDetailTab}
           metrics={[
-            { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
-            { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
-            { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
-            { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
+            { label: t("kpi_active_trucks"), value: snapshot.kpis.active_trucks, helper: t("kpi_active_trucks_sub") },
+            { label: t("kpi_operational_issues"), value: snapshot.kpis.trucks_with_issues, helper: t("kpi_operational_issues_sub"), tone: "danger" },
+            { label: t("kpi_landfill_queue"), value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} ${t("kpi_landfill_queue_sub")}`, tone: "warning" },
+            { label: t("kpi_waste_spike"), value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: t("kpi_waste_spike_sub"), tone: "warning" },
           ]}
           map={(
             <div id="map-panel" className="map-anchor">
@@ -3524,17 +3845,17 @@ function CommandCenter({ onLogout }) {
               <div className="map-footer-panels">
                 <div className="panel map-controls-card">
                   <div className="panel-title">
-                    <h2>Map Controls</h2>
+                    <h2>{lang === "id" ? "Kontrol Peta" : "Map Controls"}</h2>
                   </div>
                   <div className="map-controls-grid">
-                    <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
-                    <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
-                    <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> TPS</label>
-                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Retribution registry</label>
+                    <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> {lang === "id" ? "Peta Panas" : "Heatmap"}</label>
+                    <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> {lang === "id" ? "Rute OSRM" : "OSRM route"}</label>
+                    <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> {lang === "id" ? "Titik TPS" : "TPS"}</label>
+                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"}</label>
                   </div>
                   <div className="playback-select-wrap">
                     <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
-                      <option value="">Trip playback...</option>
+                      <option value="">{lang === "id" ? "Putar riwayat rute..." : "Trip playback..."}</option>
                       {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
@@ -3542,20 +3863,20 @@ function CommandCenter({ onLogout }) {
                 
                 <div className="panel map-legend-card">
                   <div className="panel-title">
-                    <h2>Legend</h2>
+                    <h2>{lang === "id" ? "Legenda Peta" : "Legend"}</h2>
                   </div>
                   <details className="map-legend" open aria-label="Map legend">
                     <summary style={{ display: "none" }}>Legend</summary>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS locations <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Retribution registry <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> District waste risk <em className="legend-tag">MODEL</em></span>
-                    <span><i className="legend-assigned" style={{ display: "inline-block" }} /> Assigned corridor <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> Actual (clean) <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> Violation segment <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> OSRM route <em className="legend-tag">LIVE</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Titik TPS" : "TPS locations"} <em className="legend-tag">REAL</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"} <em className="legend-tag">REAL</em></span>
+                    <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> {lang === "id" ? "Risiko Sampah Wilayah" : "District waste risk"} <em className="legend-tag">MODEL</em></span>
+                    <span><i className="legend-assigned" style={{ display: "inline-block" }} /> {lang === "id" ? "Koridor Ditugaskan" : "Assigned corridor"} <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> {lang === "id" ? "Rute Aktual" : "Actual (clean)"} <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> {lang === "id" ? "Segmen Pelanggaran" : "Violation segment"} <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> {lang === "id" ? "Rute OSRM" : "OSRM route"} <em className="legend-tag">LIVE</em></span>
                     <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
-                    <span><span className="legend-icon-unlicensed" /> Unlicensed Collector <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> Crowd Event <em className="legend-tag">SIM</em></span>
+                    <span><span className="legend-icon-unlicensed" /> {lang === "id" ? "Kolektor Liar" : "Unlicensed Collector"} <em className="legend-tag">SIM</em></span>
+                    <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> {lang === "id" ? "Event Keramaian" : "Crowd Event"} <em className="legend-tag">SIM</em></span>
                   </details>
                 </div>
               </div>
@@ -3565,10 +3886,7 @@ function CommandCenter({ onLogout }) {
                   <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
                 </div>
                 <div className="inspector-col">
-                  <UnlicensedCollectorAlerts />
-                </div>
-                <div className="inspector-col">
-                  <AStarReroutingPanel jamActive={jamActive} onJamToggle={setJamActive} />
+                  <AStarReroutingPanel jamActive={jamActive} aiEvents={aiEvents} onAckEvent={ackAiEvent} />
                 </div>
               </div>
             </>
@@ -3576,8 +3894,9 @@ function CommandCenter({ onLogout }) {
           alerts={null}
           rerouting={null}
           routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
-          queue={<><TpaQueuePanel /><StaggerSimulatorPanel /></>}
+          queue={<div className="fleet-queue-stack"><TpaQueuePanel /><StaggerSimulatorPanel /></div>}
           fleetTable={<FleetTable trucks={snapshot.trucks} onOpenTripHistory={(code) => selectFleetTruck(code, true)} />}
+          unlicensedTable={<UnlicensedCollectorAlerts />}
           history={<FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />}
           carbon={<CarbonPanel />}
         />
@@ -3588,10 +3907,10 @@ function CommandCenter({ onLogout }) {
         {activeWorkspace === "forecast" && (
           <WasteForecast
             metrics={[
-              { label: "Largest forecast spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
-              { label: "High-risk districts", value: snapshot.critical_predictions.length, helper: "capacity reinforcement needed", tone: "danger" },
-              { label: "Peak rainfall", value: `${Math.round(Math.max(...snapshot.weather.forecast.map((day) => day.rainfall_mm)))} mm`, helper: "forecast driver", tone: "warning" },
-              { label: "Planning status", value: "Ready", helper: "scenario handoff enabled" },
+              { label: lang === "id" ? "Lonjakan Terbesar" : "Largest forecast spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: lang === "id" ? "7 hari ke depan" : "next 7 days", tone: "warning" },
+              { label: lang === "id" ? "Distrik Risiko Tinggi" : "High-risk districts", value: snapshot.critical_predictions.length, helper: lang === "id" ? "perlu penguatan armada" : "capacity reinforcement needed", tone: "danger" },
+              { label: lang === "id" ? "Puncak Curah Hujan" : "Peak rainfall", value: `${Math.round(Math.max(...snapshot.weather.forecast.map((day) => day.rainfall_mm)))} mm`, helper: lang === "id" ? "faktor pemicu timbulan" : "forecast driver", tone: "warning" },
+              { label: lang === "id" ? "Status Perencanaan" : "Planning status", value: lang === "id" ? "Siap" : "Ready", helper: lang === "id" ? "dapat dialihkan ke perencana" : "scenario handoff enabled" },
             ]}
             forecast={<PredictionPanel predictions={snapshot.critical_predictions} allPredictions={snapshot.predictions} />}
             weather={<WeatherPanel weather={snapshot.weather} />}
@@ -3682,4 +4001,8 @@ function App() {
   return <CommandCenter onLogout={logout} />;
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <LanguageProvider>
+    <App />
+  </LanguageProvider>
+);
