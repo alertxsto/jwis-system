@@ -2313,7 +2313,7 @@ function AiNotificationFeed({ events, onAck }) {
     return <div className="ai-feed-empty">Belum ada event AI.</div>;
   }
   const latestFirst = events
-    .map((e, i) => ({ ...e, _index: i }))
+    .map((e, i) => ({ ...e, _index: e._serverIndex ?? i }))
     .reverse()
     .slice(0, 6);
   return (
@@ -2353,9 +2353,11 @@ function AStarReroutingPanel({ jamActive, aiEvents, onAckEvent }) {
     return () => clearInterval(id);
   }, []);
 
-  const rerouteEvents = (aiEvents || []).filter(
-    (e) => e.event_type === "auto_reroute" || e.event_type === "jam_cleared"
-  );
+  const rerouteEvents = (aiEvents || [])
+    .map((e, serverIndex) => ({ ...e, _serverIndex: serverIndex }))
+    .filter(
+      (e) => e.event_type === "auto_reroute" || e.event_type === "jam_cleared"
+    );
   const diverted = info?.diversion_applied;
   const dist = info?.active_route?.distance_km ?? 12.7;
   const eta = info?.active_route?.eta_minutes ?? 17;
