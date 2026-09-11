@@ -24,3 +24,20 @@ test("planning flow shows AI 7-day outlook panel", async ({ page }) => {
   await page.getByRole("button", { name: "Perencanaan Terpadu" }).click();
   await expect(page.getByText("AI 7-Day Outlook")).toBeVisible({ timeout: 15000 });
 });
+
+test("carbon panel shows live stats or honest placeholder", async ({ page }) => {
+  await page.getByRole("tab", { name: "Jejak Karbon" }).click();
+  await expect(
+    page.getByText(/Reference factors|Menunggu engine AI/)
+  ).toBeVisible({ timeout: 15000 });
+});
+
+test("unlicensed panel reads ai flags endpoint", async ({ page }) => {
+  const responsePromise = page.waitForResponse(
+    (res) => res.url().includes("/api/ai/unlicensed-flags"),
+    { timeout: 20000 }
+  );
+  await page.getByRole("tab", { name: "Kolektor Liar" }).click();
+  const response = await responsePromise;
+  expect(response.ok()).toBeTruthy();
+});

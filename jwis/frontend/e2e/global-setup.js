@@ -16,6 +16,8 @@ export default async function globalSetup() {
     "/api/tpa/queue-status",
     "/api/fleet/map-truth",
     "/api/routes/osrm",
+    "/api/ai/tpa-queue-live",
+    "/api/ai/events",
   ];
   for (const endpoint of endpoints) {
     try {

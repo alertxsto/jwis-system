@@ -2622,28 +2622,22 @@ function getDistrictFromCoords(lat, lng) {
 
 function UnlicensedCollectorAlerts() {
   const { t, lang } = useLanguage();
-  const [alerts, setAlerts] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [enforced, setEnforced] = useState({});
-
-  async function load() {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}/fleet/unlicensed-collectors`);
-      if (res.ok) setAlerts(await res.json());
-    } catch {}
-    setLoading(false);
-  }
+  const [flags, setFlags] = useState(null);
+  const [resolved, setResolved] = useState({});
 
   useEffect(() => {
+    const load = () => fetch(`${API_URL}/ai/unlicensed-flags`)
+      .then((r) => r.json())
+      .then((body) => setFlags(body.flags || []))
+      .catch(() => {});
     load();
+    const id = setInterval(load, 8000);
+    return () => clearInterval(id);
   }, []);
 
-  function handleEnforce(plate) {
-    setEnforced(prev => ({ ...prev, [plate]: true }));
-  }
+  const mark = (id, value) => setResolved((prev) => ({ ...prev, [id]: value }));
 
-  if (loading || !alerts || !alerts.alerts || alerts.alerts.length === 0) {
+  if (!flags || flags.length === 0) {
     return (
       <section className="panel wide unlicensed-alerts-panel">
         <div className="panel-title">
@@ -2655,14 +2649,16 @@ function UnlicensedCollectorAlerts() {
             <AlertTriangle size={18} />
           </div>
         </div>
-        <div className="empty-state compact">
-          {loading ? (lang === "id" ? "Memuat telemetri deteksi..." : "Loading detection telemetry...") : (lang === "id" ? "Tidak ada peringatan kolektor liar terdeteksi." : "No unlicensed collector alerts detected.")}
+        <div className="ai-feed-empty">
+          {flags === null
+            ? (lang === "id" ? "Memuat telemetri deteksi..." : "Loading detection telemetry...")
+            : "Tidak ada flag aktif — pola stop normal."}
         </div>
       </section>
     );
   }
 
-  const unauthCount = alerts.alerts.filter(a => !enforced[a.plate]).length;
+  const pendingCount = flags.filter((f) => !resolved[f.collector_id]).length;
 
   return (
     <section className="panel wide unlicensed-alerts-panel">
@@ -2672,8 +2668,9 @@ function UnlicensedCollectorAlerts() {
           <p>{t("unlicensed_subtitle")}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <StatusPill tone={unauthCount > 0 ? "danger" : "success"}>
-            {unauthCount} {lang === "id" ? "tanpa izin" : "unauthorized"}
+          <span className="pill text-normal">Auto-detected AI</span>
+          <StatusPill tone={pendingCount > 0 ? "danger" : "success"}>
+            {pendingCount} {lang === "id" ? "tanpa izin" : "unauthorized"}
           </StatusPill>
         </div>
       </div>
@@ -2681,50 +2678,53 @@ function UnlicensedCollectorAlerts() {
         <table>
           <thead>
             <tr>
-              <th scope="col" style={{ width: "20%" }}>{t("unlicensed_th_plate")}</th>
-              <th scope="col" style={{ width: "24%" }}>{t("unlicensed_th_loc")}</th>
-              <th scope="col" style={{ width: "22%" }}>{t("unlicensed_th_coords")}</th>
-              <th scope="col" style={{ width: "18%" }}>{t("unlicensed_th_status")}</th>
-              <th scope="col" style={{ width: "16%" }}>{t("unlicensed_th_action")}</th>
+              <th scope="col" style={{ width: "16%" }}>{t("unlicensed_th_plate")}</th>
+              <th scope="col" style={{ width: "22%" }}>{t("unlicensed_th_loc")}</th>
+              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Diam" : "Stop"}</th>
+              <th scope="col" style={{ width: "18%" }}>{lang === "id" ? "Situs Terdekat" : "Nearest Site"}</th>
+              <th scope="col" style={{ width: "12%" }}>Confidence</th>
+              <th scope="col" style={{ width: "18%" }}>{t("unlicensed_th_action")}</th>
             </tr>
           </thead>
           <tbody>
-            {alerts.alerts.map((a, i) => {
-              const isEnforced = Boolean(enforced[a.plate]);
-              const districtName = getDistrictFromCoords(a.lat, a.lng);
+            {flags.map((f) => {
+              const state = resolved[f.collector_id];
+              const districtName = getDistrictFromCoords(f.lat, f.lng);
               return (
-                <tr key={i}>
+                <tr key={f.collector_id}>
                   <td>
-                    <span className="plate-badge" style={{ fontSize: "13px" }}>{a.plate || "UNKNOWN"}</span>
+                    <span className="plate-badge" style={{ fontSize: "13px" }}>{f.collector_id || "UNKNOWN"}</span>
                   </td>
                   <td>
                     <span className="zone-tag">{districtName}</span>
                   </td>
+                  <td>{f.duration_min.toFixed(0)} min</td>
+                  <td>{f.nearest_site_m.toFixed(0)} m</td>
+                  <td>{(f.confidence * 100).toFixed(0)}%</td>
                   <td>
-                    <span className="coord-chip"><MapPin size={11} style={{ display: "inline-block", verticalAlign: "-1px", marginRight: "3px" }} />{a.lat.toFixed(4)}, {a.lng.toFixed(4)}</span>
-                  </td>
-                  <td>
-                    <span className={`pill ${isEnforced ? "success" : "danger"}`}>
-                      <span className={`status-dot ${isEnforced ? "success" : "danger"}`} />
-                      {isEnforced ? t("unlicensed_dispatched") : t("unlicensed_unauth")}
-                    </span>
-                  </td>
-                  <td>
-                    <button 
-                      className={`compact-enforce-btn ${isEnforced ? "enforced" : ""}`} 
-                      onClick={() => handleEnforce(a.plate)}
-                      disabled={isEnforced}
-                    >
-                      {isEnforced ? (
-                        <>
-                          <Check size={13} /> {t("btn_patrol_sent")}
-                        </>
-                      ) : (
-                        <>
-                          <Send size={13} /> {t("btn_dispatch_patrol")}
-                        </>
-                      )}
-                    </button>
+                    {state ? (
+                      <span className={`pill ${state === "verified" ? "success" : "text-normal"}`}>
+                        <span className={`status-dot ${state === "verified" ? "success" : ""}`} />
+                        {state === "verified"
+                          ? (lang === "id" ? "Terverifikasi" : "Verified")
+                          : (lang === "id" ? "Ditandai aman" : "Marked safe")}
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          className="compact-enforce-btn"
+                          onClick={() => mark(f.collector_id, "verified")}
+                        >
+                          <Check size={13} /> {lang === "id" ? "Verifikasi" : "Verify"}
+                        </button>
+                        <button
+                          className="compact-enforce-btn"
+                          onClick={() => mark(f.collector_id, "safe")}
+                        >
+                          <ShieldCheck size={13} /> {lang === "id" ? "Tandai Aman" : "Mark Safe"}
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               );
@@ -2734,7 +2734,7 @@ function UnlicensedCollectorAlerts() {
       </div>
       <div className="unlicensed-footer-meta">
         <ShieldCheck size={14} style={{ color: "var(--ui-accent)", flexShrink: 0 }} />
-        <span>{lang === "id" ? "Pencocokan plat nomor dilakukan secara real-time terhadap registrasi armada DLH dan perizinan komersial." : "Matching is automated in real-time against DLH 2023 fleet registry and commercial vehicle licenses."}</span>
+        <span>{lang === "id" ? "Flag dihasilkan otomatis oleh engine AI dari pola stop telemetri terhadap jarak situs resmi." : "Flags are auto-generated by the AI engine from telemetry stop patterns against official site distance."}</span>
       </div>
     </section>
   );
@@ -2844,32 +2844,38 @@ function CarbonPanel() {
   const [carbon, setCarbon] = useState(null);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(`${API_URL}/fleet/carbon`);
-        if (!res.ok) throw new Error("no api");
-        setCarbon(await res.json());
-      } catch {
-        setCarbon({
-          total_fleet_distance_km: 216.9,
-          total_co2_emitted_kg: 206.06,
-          carbon_saved_today_kg: 17.58,
-          fuel_saved_equivalent_liters: 6.5,
-          compliance_rate_percent: 86,
-        });
-      }
-    }
+    const load = () => fetch(`${API_URL}/ai/carbon-live`)
+      .then((r) => r.json())
+      .then(setCarbon)
+      .catch(() => {});
     load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
   }, []);
 
-  if (!carbon) return null;
+  if (!carbon || carbon.status === "no_data") {
+    return (
+      <section className="panel carbon-panel" id="carbon-panel">
+        <div className="panel-title">
+          <div>
+            <h2>{lang === "id" ? "Pelacak Jejak Karbon Armada" : "Carbon Footprint Tracker"}</h2>
+            <p>{lang === "id" ? "Emisi CO2 armada dan penghematan bahan bakar dari telemetri rute." : "Fleet CO2 emissions and fuel savings from route telemetry."}</p>
+          </div>
+          <div className="panel-header-icon-wrap">
+            <Leaf size={18} />
+          </div>
+        </div>
+        <div className="ai-feed-empty">Menunggu engine AI…</div>
+      </section>
+    );
+  }
 
   return (
     <section className="panel carbon-panel" id="carbon-panel">
       <div className="panel-title">
         <div>
           <h2>{lang === "id" ? "Pelacak Jejak Karbon Armada" : "Carbon Footprint Tracker"}</h2>
-          <p>{lang === "id" ? "Emisi CO2 armada dan penghematan optimasi rute (Standar Euro 4 diesel: 0.95 kg CO2/km)." : "Fleet CO2 emissions and route-optimization savings (Euro 4 diesel: 0.95 kg CO2/km)."}</p>
+          <p>{lang === "id" ? "Emisi CO2 armada dan penghematan bahan bakar dari telemetri rute." : "Fleet CO2 emissions and fuel savings from route telemetry."}</p>
         </div>
         <div className="panel-header-icon-wrap">
           <Leaf size={18} />
@@ -2877,25 +2883,27 @@ function CarbonPanel() {
       </div>
       <div className="carbon-grid">
         <div className="carbon-stat">
-          <span>{lang === "id" ? "Total Jarak Tempuh" : "Total Distance"}</span>
-          <strong>{carbon.total_fleet_distance_km} km</strong>
+          <span>{lang === "id" ? "Total Jarak" : "Total Distance"}</span>
+          <strong>{carbon.total_distance_km.toFixed(1)} km</strong>
         </div>
         <div className="carbon-stat">
-          <span>{lang === "id" ? "Emisi CO2 Dihasilkan" : "CO2 Emitted"}</span>
-          <strong>{carbon.total_co2_emitted_kg} kg</strong>
+          <span>{lang === "id" ? "Bahan Bakar" : "Fuel"}</span>
+          <strong>{carbon.fuel_l.toFixed(1)} L</strong>
         </div>
         <div className="carbon-stat">
-          <span>{lang === "id" ? "CO2 Berhasil Dihemat" : "CO2 Saved"}</span>
-          <strong style={{ color: "#15803d" }}>{carbon.carbon_saved_today_kg} kg</strong>
+          <span>CO₂</span>
+          <strong>{carbon.co2_kg.toFixed(1)} kg</strong>
         </div>
         <div className="carbon-stat">
-          <span>{lang === "id" ? "Bahan Bakar Dihemat" : "Fuel Saved"}</span>
-          <strong style={{ color: "#15803d" }}>{carbon.fuel_saved_equivalent_liters} L</strong>
+          <span>{lang === "id" ? "Hemat vs Baseline" : "Saved vs Baseline"}</span>
+          <strong style={{ color: "#15803d" }}>{carbon.fuel_saved_l.toFixed(1)} L</strong>
         </div>
       </div>
-      <div className="carbon-badge">
-        <Leaf size={16} /> {lang === "id" ? `Tingkat kepatuhan rute optimal: ${carbon.compliance_rate_percent}% — setara dengan menanam ${Math.round(carbon.carbon_saved_today_kg / 21)} pohon/hari` : `Optimal-route compliance: ${carbon.compliance_rate_percent}% — equivalent to planting ${Math.round(carbon.carbon_saved_today_kg / 21)} trees/day`}
-      </div>
+      {carbon.classification === "reference" && (
+        <div className="carbon-badge">
+          Reference factors (B35 2.68 kg/L) — bukan telemetri terukur
+        </div>
+      )}
     </section>
   );
 }
