@@ -1536,6 +1536,66 @@ input[type="range"]::-webkit-slider-thumb:hover {
   text-align: center;
 }
 
+.ai-outlook {
+  margin-bottom: 16px;
+  background: var(--ui-surface-muted);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.ai-outlook h4 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ui-ink);
+}
+
+.ai-outlook .ai-feed-empty {
+  margin-top: 0;
+}
+
+.ai-outlook-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ai-outlook-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ui-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.ai-outlook-table td {
+  padding: 6px 8px;
+  color: var(--ui-ink);
+  border-bottom: 1px solid var(--ui-border);
+  vertical-align: top;
+}
+
+.ai-outlook-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.manual-whatif {
+  margin-bottom: 16px;
+}
+
+.manual-whatif > summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-muted);
+  margin-bottom: 10px;
+  user-select: none;
+}
+
 .ai-feed-item {
   display: flex;
   flex-direction: column;

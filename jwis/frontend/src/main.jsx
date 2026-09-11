@@ -1903,6 +1903,18 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
   const role = localStorage.getItem("jwis_role") || "guest";
   const token = localStorage.getItem("jwis_token");
 
+  const [outlook, setOutlook] = useState([]);
+
+  useEffect(() => {
+    const load = () => fetch(`${API_URL}/ai/event-forecast`)
+      .then((r) => r.json())
+      .then((body) => setOutlook(body.outlook || []))
+      .catch(() => {});
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
+
   async function run() {
     setLoading(true);
     setPlan(null);
@@ -2008,6 +2020,38 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           <Users size={18} />
         </div>
       </div>
+      <div className="ai-outlook">
+        <h4>AI 7-Day Outlook</h4>
+        {outlook.length === 0 ? (
+          <div className="ai-feed-empty">Outlook belum tersedia.</div>
+        ) : (
+          <table className="ai-outlook-table">
+            <thead>
+              <tr><th>Tanggal</th><th>Hujan</th><th>Event</th><th>Δ Volume</th></tr>
+            </thead>
+            <tbody>
+              {outlook.map((d) => (
+                <tr key={d.date}>
+                  <td>
+                    {new Date(d.date).toLocaleDateString("id-ID", { day: "2-digit", month: "short" })}
+                    {d.is_holiday ? " (libur)" : ""}
+                  </td>
+                  <td>{(d.rainfall_mm ?? 0).toFixed(0)} mm</td>
+                  <td>{d.events.length
+                    ? d.events.map((e) => `${e.name} (${(e.expected_attendance / 1000).toFixed(0)}k)`).join(", ")
+                    : "—"}</td>
+                  <td className={d.volume_delta_pct > 15 ? "text-danger"
+                    : d.volume_delta_pct > 5 ? "text-warning" : "text-normal"}>
+                    {d.volume_delta_pct > 0 ? "+" : ""}{d.volume_delta_pct.toFixed(0)}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <details open className="manual-whatif">
+        <summary>Manual What-if</summary>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "16px" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>{t("plan_att")}</span>
@@ -2025,6 +2069,7 @@ function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setRainfall
           {loading ? (lang === "id" ? "Menghitung..." : "Calculating...") : t("btn_run_scenario")}
         </button>
       </div>
+      </details>
       <div className="scenario-result" style={{ marginBottom: "16px" }}>
         <strong>{lang === "id" ? `Total estimasi timbulan ${totalTons.toLocaleString("id-ID")} ton/hari (${data?.kecamatan_count || 42} distrik)` : `Total forecast ${totalTons.toLocaleString("en-US")} tons/day (${data?.kecamatan_count || 42} districts)`}</strong>
         <span>{lang === "id" ? "Titik Puncak:" : "Peak Hotspot:"} {top5[0]?.kecamatan || "..."} — {top5[0]?.predicted_tons?.toLocaleString(lang === "id" ? "id-ID" : "en-US") || "..."} {lang === "id" ? "ton" : "tons"}</span>
@@ -3814,6 +3859,19 @@ function CommandCenter({ onLogout }) {
   }, []);
 
   useEffect(() => {
+    const idx = aiEvents.findIndex(
+      (e) => e.event_type === "auto_replay" && e.status === "new"
+        && playbackOptions.includes(e.truck_code)
+    );
+    if (idx === -1) return;
+    const code = aiEvents[idx].truck_code;
+    setPlaybackTruck(code);
+    setToast(`Replay otomatis: ${code} menyimpang dari koridor`);
+    setTimeout(() => setToast(""), 4200);
+    ackAiEvent(idx);
+  }, [aiEvents, playbackOptions, ackAiEvent]);
+
+  useEffect(() => {
     if (!historyScrollRequest || fleetDetailTab !== "history") return;
     const el = document.getElementById("history-panel");
     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -3909,6 +3967,11 @@ function CommandCenter({ onLogout }) {
                       <option value="">{lang === "id" ? "Putar riwayat rute..." : "Trip playback..."}</option>
                       {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
+                    {playbackTruck && (
+                      <button className="compact-enforce-btn" onClick={() => setPlaybackTruck(null)}>
+                        Tutup replay
+                      </button>
+                    )}
                   </div>
                 </div>
                 

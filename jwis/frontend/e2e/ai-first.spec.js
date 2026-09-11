@@ -19,3 +19,8 @@ test("TPA queue panel shows live AI gauge by default", async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "What-if" })).toBeVisible();
 });
+
+test("planning flow shows AI 7-day outlook panel", async ({ page }) => {
+  await page.getByRole("button", { name: "Perencanaan Terpadu" }).click();
+  await expect(page.getByText("AI 7-Day Outlook")).toBeVisible({ timeout: 15000 });
+});
