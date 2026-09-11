@@ -1702,6 +1702,47 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .status-badge.cleared { background: var(--green-light); color: var(--green-dark); }
 .status-badge.weighing { background: #fef3c7; color: #b45309; }
 
+.text-warning { color: #d97706 !important; }
+.tpa-live-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+.tpa-wait-number {
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.tpa-wait-number span {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ui-muted);
+}
+.tpa-live-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+.tpa-live-stats > div {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  padding: 8px 10px;
+}
+.tpa-live-stats span {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.tpa-live-stats strong {
+  font-size: 15px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
 /* Crowd Events Panel */
 .events-list { display: flex; flex-direction: column; gap: 10px; }
 .forecast-decision-stack .events-list {
