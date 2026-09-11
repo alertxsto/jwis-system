@@ -7,6 +7,8 @@ frontend notification is acknowledge-only, not a gate.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from datetime import datetime, timezone
 
 from app.ai.actions.auto_state import AiEvent, EventFeed
@@ -19,6 +21,21 @@ from app.astar_routing import (
 )
 
 logger = logging.getLogger(__name__)
+
+MANUAL_JAM_OVERRIDE_HOLD_SECONDS = 90.0
+_manual_override_until = 0.0
+_manual_override_lock = threading.Lock()
+
+
+def note_manual_override(hold_seconds: float = MANUAL_JAM_OVERRIDE_HOLD_SECONDS) -> None:
+    global _manual_override_until
+    with _manual_override_lock:
+        _manual_override_until = time.time() + hold_seconds
+
+
+def manual_override_active() -> bool:
+    with _manual_override_lock:
+        return time.time() < _manual_override_until
 
 
 def _utc_now() -> str:
@@ -36,6 +53,11 @@ class AutoRerouter:
         jam_active = is_traffic_jam_active()
         rerouted: list[str] = []
         cleared = False
+
+        if manual_override_active():
+            return {"jammed_trucks": jammed, "jam_active": jam_active,
+                    "rerouted": rerouted, "cleared": cleared,
+                    "manual_override": True}
 
         if jammed and not jam_active:
             set_traffic_jam_active(True)

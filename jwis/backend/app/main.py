@@ -58,7 +58,7 @@ from app.storage import HistoryStore
 from app.whatsapp import OpenWAClient, build_alert_message
 from app.real_data import data_provenance, load_official_events, load_city_timbulan, load_fleet_composition, load_kecamatan_map, build_provenance_records, load_kelurahan_heatmap, load_real_tps_coordinates, load_real_wr_coordinates
 from app.astar_routing import is_traffic_jam_active, set_traffic_jam_active
-from app.ai.actions.auto_reroute import AutoRerouter
+from app.ai.actions.auto_reroute import AutoRerouter, note_manual_override
 from app.ai.actions.auto_state import EVENT_FEED
 from app.ai.detectors.deviation_trigger import DeviationTrigger
 from app.ai.detectors.speed_anomaly import SpeedAnomalyDetector
@@ -1313,6 +1313,7 @@ def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
 @app.post("/api/fleet/astar-simulate-jam")
 def post_astar_simulate_jam(active: bool) -> dict[str, Any]:
     set_traffic_jam_active(active)
+    note_manual_override()
     # Necessary: the toggled jam state feeds map-truth (jam_active, abandoned
     # route), so any cached payload would report stale state to clients — the
     # jam-toggle e2e reads map-truth right after POSTing the toggle.
