@@ -16,26 +16,40 @@ test("actual routes colored by violation state", async ({ page }) => {
   // This is the one assertion that genuinely depends on the basemap: the
   // feature hook is written inside renderFleet(), which builds GeoJSON sources
   // and therefore waits for the style to load. Under software rasterisation a
-  // 119-layer basemap can take tens of seconds, so this test gets its own
-  // budget rather than the suite default.
+  // 119-layer basemap can take tens of seconds.
   test.setTimeout(150000);
   await page.goto("/", { waitUntil: "domcontentloaded" });
+
+  // Poll for the condition the test asserts, not merely for a non-empty array.
+  // Waiting on `length > 0` was satisfied by the first truck to render, so the
+  // assertion then ran against `["astar-active"]` and failed intermittently.
   await page.waitForFunction(
-    () => (window.__jwisMapFeatures?.actualKinds || []).length > 0,
+    () => {
+      const kinds = window.__jwisMapFeatures?.actualKinds || [];
+      return kinds.includes("actual-clean") && kinds.includes("actual-violation");
+    },
     null,
     { timeout: 120000, polling: 250 },
   );
+
   const kinds = await page.evaluate(() => window.__jwisMapFeatures?.actualKinds || []);
-  // At least one clean (green) and, given T-047 deviates, one violation (red).
   expect(kinds).toContain("actual-clean");
   expect(kinds).toContain("actual-violation");
 });
 
 test("map legend shows provenance tags", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".map-legend")).toContainText("LIVE");
-  await expect(page.locator(".map-legend")).toContainText("MODEL");
-  await expect(page.locator(".map-legend")).toContainText("SIM");
+
+  // The legend is collapsed by default so it does not cover the map on a
+  // laptop. Expand it, then assert the provenance vocabulary a judge needs to
+  // read: which layer is measured, which is modelled, which is simulated.
+  const legend = page.locator(".map-legend");
+  await expect(legend).toBeVisible({ timeout: 20000 });
+  await legend.locator("summary").click();
+  await expect(legend).toContainText("LIVE");
+  await expect(legend).toContainText("MODEL");
+  await expect(legend).toContainText("SIM");
+  await expect(legend).toContainText("REAL");
 });
 
 test("fleet panel labeled Simulation not Live", async ({ page }) => {

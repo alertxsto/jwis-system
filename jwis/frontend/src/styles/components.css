@@ -850,6 +850,7 @@ td span {
 .field-shell .field-status {
   display: flex;
   align-items: center;
+  gap: var(--ui-space-2);
   min-height: var(--ui-touch);
   margin-bottom: var(--ui-space-4);
   padding: 0 var(--ui-space-3);
@@ -870,12 +871,16 @@ td span {
   background: var(--ui-warning-soft);
 }
 
+/* An incoming instruction is a task to act on, not a success state, so it is
+   not tinted with the positive accent. It gets a neutral surface and a single
+   accent rule on the leading edge to mark it as the thing to deal with. */
 .field-shell .instruction {
   margin-bottom: var(--ui-space-4);
   padding: var(--ui-space-4);
-  border: 1px solid var(--ui-accent-line);
+  border: 1px solid var(--ui-border);
+  border-left: 3px solid var(--ui-primary);
   border-radius: var(--ui-radius);
-  background: var(--ui-accent-soft);
+  background: var(--ui-surface);
 }
 
 .field-shell .instruction .alert-head svg {
@@ -894,7 +899,12 @@ td span {
   padding: 0 var(--ui-space-3);
 }
 
+/* Two equal actions. A grid rather than relying on width:100% on one button,
+   which left the secondary action content-width and visibly narrower. */
 .field-shell .field-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--ui-space-2);
   margin-top: 0;
 }
 

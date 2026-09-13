@@ -188,7 +188,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
 
         <div className="side-system-state">
           <span className="status-dot" data-tone={online ? "success" : "warning"} aria-hidden="true" />
-          <span>{online ? "Live API connected" : "Offline sample data"}</span>
+          <span>{online ? "API connected" : "Offline sample data"}</span>
         </div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}>
           <LogOut size={15} aria-hidden="true" />Logout
@@ -264,9 +264,12 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
           </div>
 
           <div className="top-actions">
+            {/* "Live" here would read as "this data is live", which is exactly
+                what the map's Simulation pill denies. This badge reports API
+                reachability, so it says so. */}
             <span className="connection-state" data-online={online ? "true" : "false"}>
               <span className="status-dot" data-tone={online ? "success" : "warning"} aria-hidden="true" />
-              {online ? "Live" : "Offline"}
+              {online ? "API connected" : "API offline"}
             </span>
             <a className="ghost-button" href="/field"><Truck size={15} aria-hidden="true" />Field app</a>
             <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">

@@ -46,20 +46,15 @@
   border-radius: 0;
 }
 
-/* The panel title of the map is redundant here: the workspace header already
-   names the screen, and the "Simulation" provenance pill lives on the map. */
-.fleet-map-stage .map-panel > .panel-title {
+/* Provenance marker for the map layer itself. It is the only thing allowed to
+   float over the map, because it tells the viewer that what they are looking at
+   is simulated — and it must never block a marker click. */
+.fleet-map-stage .map-provenance {
   position: absolute;
   top: var(--ui-space-3);
   left: var(--ui-space-3);
   z-index: var(--z-dropdown);
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.fleet-map-stage .map-panel > .panel-title p {
-  display: none;
+  pointer-events: none;
 }
 
 /* ── Map overlay toolbar ───────────────────────────────────────────────────
@@ -136,6 +131,7 @@
 .map-legend summary {
   display: flex;
   align-items: center;
+  gap: var(--ui-space-2);
   min-height: var(--ui-control);
   padding: 0 var(--ui-space-3);
   color: var(--ui-muted);
@@ -145,6 +141,18 @@
   text-transform: uppercase;
   cursor: pointer;
   list-style: none;
+}
+
+/* A collapsed legend must still look openable. */
+.map-legend summary::after {
+  content: "▾";
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform var(--ui-duration) var(--ui-ease);
+}
+
+.map-legend[open] summary::after {
+  transform: rotate(180deg);
 }
 
 .map-legend summary::-webkit-details-marker {

@@ -271,9 +271,30 @@
 
 .kec-meta b { font-size: 14px; }
 
-.kec-facility { font-weight: 600; font-size: 11px; }
+.kec-facility {
+  font-size: var(--ui-text-xs);
+  font-weight: var(--ui-weight-medium);
+}
 
-.kec-note { font-size: 11px; color: var(--muted, var(--ui-muted)); margin-top: 12px; }
+/* Facility readiness, toned by token. These replace inline hex values that
+   bypassed the palette and sat below AA contrast at this size. */
+.kec-facility.readiness-sufficient {
+  color: var(--ui-success);
+}
+
+.kec-facility.readiness-tight {
+  color: var(--ui-warning);
+}
+
+.kec-facility.readiness-under-capacity {
+  color: var(--ui-danger);
+}
+
+.kec-facility.readiness-unknown {
+  color: var(--ui-muted);
+}
+
+.kec-note { font-size: var(--ui-text-xs); color: var(--ui-muted); margin-top: var(--ui-space-3); }
 
 .kec-row {
   cursor: pointer;

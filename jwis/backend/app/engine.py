@@ -35,16 +35,42 @@ _KELURAHAN_SLUGS = [
     "cakung", "duren_sawit", "makasar", "ciracas", "cipayung",
 ]
 
+_MODEL_LOAD_FAILURES: dict[str, str] = {}
+
+
 @lru_cache(maxsize=128)
 def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
+    """Load the Prophet + XGBoost pair for a district, or None if unavailable.
+
+    A failure here is recorded rather than swallowed. This loader previously
+    wrapped everything in `except Exception: pass`, so a missing dependency
+    (pyarrow, needed to deserialise the Prophet pickles) made every one of the
+    42 districts return None and the API serve a hardcoded 150 t/day constant
+    for the whole city — with no error, no log line, and a UI still claiming
+    "Prophet + XGBoost". The failure reason is now kept so /api/ml/models and
+    the logs can say why the model path is degraded.
+    """
+    p_path = MODELS_DIR / f"prophet_{kelurahan_slug}.joblib"
+    x_path = MODELS_DIR / f"xgboost_{kelurahan_slug}.joblib"
+    if not (p_path.exists() and x_path.exists()):
+        _MODEL_LOAD_FAILURES[kelurahan_slug] = "model_file_missing"
+        return None
     try:
-        p_path = MODELS_DIR / f"prophet_{kelurahan_slug}.joblib"
-        x_path = MODELS_DIR / f"xgboost_{kelurahan_slug}.joblib"
-        if p_path.exists() and x_path.exists():
-            return joblib.load(p_path), joblib.load(x_path)
-    except Exception:
-        pass
-    return None
+        return joblib.load(p_path), joblib.load(x_path)
+    except Exception as exc:  # noqa: BLE001 — reason is recorded below
+        reason = f"{type(exc).__name__}: {exc}"
+        _MODEL_LOAD_FAILURES[kelurahan_slug] = reason
+        print(f"[engine] model load failed for {kelurahan_slug}: {reason}", flush=True)
+        return None
+
+
+def model_load_failures() -> dict[str, str]:
+    """Districts whose models could not be loaded, and why.
+
+    Empty means the hybrid path is healthy. Non-empty means predictions for
+    those districts are the labelled fallback heuristic, not model output.
+    """
+    return dict(_MODEL_LOAD_FAILURES)
 
 try:
     _ISOLATION_MODEL = joblib.load(MODELS_DIR / "isolation_forest_fleet.joblib")
@@ -439,16 +465,32 @@ def predict_waste_hybrid(
 
 
 def list_hybrid_models() -> list[dict[str, Any]]:
+    """Per-district model status.
+
+    `*_available` reflects the file being present on disk. `usable` is the field
+    that answers the question a caller actually has — will a prediction come
+    from the model or from the fallback heuristic — because a file can exist and
+    still fail to deserialise (a missing pyarrow, a version skew). Reporting
+    only file presence let this endpoint claim a model was available while
+    inference ran on a hardcoded constant.
+    """
+    failures = model_load_failures()
     results = []
     for slug in _KELURAHAN_SLUGS:
         p_exists = (MODELS_DIR / f"prophet_{slug}.joblib").exists()
         x_exists = (MODELS_DIR / f"xgboost_{slug}.joblib").exists()
+        files_present = p_exists and x_exists
+        failure = failures.get(slug)
         results.append({
             "kelurahan": slug.replace("_", " ").title(),
             "slug": slug,
             "prophet_available": p_exists,
             "xgboost_available": x_exists,
-            "hybrid_available": p_exists and x_exists,
+            "hybrid_available": files_present,
+            # False once a load has been attempted and failed; stays True for a
+            # model that has not been loaded yet but is on disk.
+            "usable": files_present and failure is None,
+            "load_failure_reason": failure,
         })
     return results
 

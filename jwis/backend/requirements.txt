@@ -1,10 +1,26 @@
+# Runtime dependencies for the JWIS backend.
+#
+# Keep this list complete. A missing entry does not fail loudly here: the
+# Prophet models are joblib pickles that need pyarrow to deserialise, and when
+# that import is absent engine._load_hybrid() returns None for every district
+# and the API silently serves the hardcoded 150 t/day fallback for all 42
+# kecamatan. The dependency list is therefore load-bearing, not advisory.
+
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.4
+
 numpy==2.4.4
 pandas==3.0.2
 joblib==1.5.3
 scikit-learn==1.8.0
 xgboost==3.2.0
 prophet==1.3.0
+# Prophet models in data/models/ are joblib pickles that require pyarrow to
+# deserialise. Without it every prediction falls back to a constant.
+pyarrow==25.0.1
 ortools==9.15.6755
+
+# Loaded by app/main.py (load_dotenv) and used by the test client.
+python-dotenv==1.2.1
+httpx==0.28.1

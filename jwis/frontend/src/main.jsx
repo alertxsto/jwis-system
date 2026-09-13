@@ -243,12 +243,12 @@ function LoginPage({ onLogin }) {
 function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded }) {
   return (
     <section className="panel map-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Live Fleet Supervision</h2>
-          <p>MapLibre tracking of assigned corridors, actual movement, and field status. Positions are simulated, not live GPS.</p>
-        </div>
-        <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
+      {/* The provenance pill stays as the map's own overlay. The title and
+          description that used to sit here are gone: the workspace header
+          already names the screen, and a heading floating over the map
+          collided with the markers it was describing. */}
+      <div className="map-provenance">
+        <StatusPill tone="warning"><Radio size={14} aria-hidden="true" /> Simulation</StatusPill>
       </div>
       <LiveFleetMap 
         trucks={trucks} 
@@ -336,11 +336,14 @@ function KecamatanMapPanel() {
 
   const rows = data?.kecamatan || [];
   const maxTons = rows.length ? rows[0].predicted_tons : 1;
-  const readinessColor = {
-    sufficient: "#16a34a",
-    tight: "#d97706",
-    under_capacity: "#dc2626",
-    unknown: "#64748b",
+  /* Readiness is described in words, and coloured by class in the stylesheet.
+     The previous version mapped it to inline hex values, which bypassed the
+     token palette and failed AA contrast at this text size. */
+  const readinessLabel = {
+    sufficient: "TPS capacity sufficient",
+    tight: "TPS capacity tight",
+    under_capacity: "TPS capacity insufficient",
+    unknown: "TPS status unknown",
   };
 
   const filteredRows = rows.filter((k) => {
@@ -513,9 +516,17 @@ function KecamatanMapPanel() {
             </div>
             <div className="kec-meta">
               <b>{k.predicted_tons.toLocaleString("id-ID")} t</b>
-              <span>{k.trucks_required} truk · {k.crews_required} kru · {k.man_hours_required} m-hr</span>
-              <span className="kec-facility" style={{ color: readinessColor[k.facility_readiness] }}>
-                {k.facility_over_capacity ? "⚠ TPS over-capacity" : "TPS " + k.facility_readiness}
+              <span>{k.trucks_required} trucks · {k.crews_required} crews · {k.man_hours_required} man-hr</span>
+              {/* Facility readiness is a three-level scale from the API, and
+                  the capacity figure behind it is a labelled proxy (see the
+                  dataset's own quality_note). The old markup collapsed that
+                  into a binary "over-capacity" badge driven by an inline hex,
+                  which fired for 40 of 42 districts and so carried no signal,
+                  while also bypassing the token palette. */}
+              <span className={`kec-facility readiness-${k.facility_readiness || "unknown"}`}>
+                {readinessLabel[k.facility_readiness] || "Facility status unknown"}
+                {typeof k.facility_coverage_ratio === "number" &&
+                  ` · ${Math.round(k.facility_coverage_ratio * 100)}% of TPS capacity (proxy)`}
               </span>
             </div>
           </article>
@@ -1506,7 +1517,7 @@ function CommandCenter({ onLogout }) {
             </div>
           )}
           legend={(
-            <details className="map-legend" open aria-label="Map legend">
+            <details className="map-legend" aria-label="Map legend">
               <summary>Legend</summary>
               <div className="map-legend-items">
                 <span><i className="legend-tps" /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>

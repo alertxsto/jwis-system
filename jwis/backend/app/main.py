@@ -55,7 +55,13 @@ from app.real_data import data_provenance, load_official_events, load_city_timbu
 from app.astar_routing import is_traffic_jam_active, set_traffic_jam_active
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
-history_store = HistoryStore()
+
+# The dispatch history lives in a SQLite file that the API both reads and writes,
+# so whatever talks to this process ends up in the demo's data. The e2e suite
+# posts real dispatches, which meant a test run left its fixtures sitting in the
+# field app as pending instructions. JWIS_HISTORY_DB lets a test run point at a
+# throwaway file instead of the demo database.
+history_store = HistoryStore(os.getenv("JWIS_HISTORY_DB") or Path("data/processed/jwis_history.db"))
 dispatch_center = DispatchCenter()
 
 

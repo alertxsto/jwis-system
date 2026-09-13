@@ -161,7 +161,7 @@ export default function FieldApp() {
               id="incident-reason"
               className="field-input"
               data-testid="incident-reason"
-              placeholder="Incident reason (if reporting an issue)"
+              placeholder="Describe the issue"
               value={incidentReason}
               onChange={(e) => setIncidentReason(e.target.value)}
             />

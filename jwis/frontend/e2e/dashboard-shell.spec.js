@@ -362,11 +362,12 @@ test("desktop shell dimensions and surfaces come from the token system", async (
   expect(Number.parseFloat(headerStyle.fontSize)).toBeLessThanOrEqual(12);
 });
 
-test("no visible text falls below its WCAG AA contrast requirement", async ({ page }) => {
-  // A token-level check cannot catch a component that pairs the right colour
-  // with the wrong surface, or reaches for a decorative token like
-  // --ui-muted-soft in a text role. This sweeps what is actually rendered.
-  const failures = await page.evaluate(() => {
+/**
+ * Returns every visible text node whose colour/surface pair misses its WCAG AA
+ * requirement. Runs in the page, so it sees computed values rather than tokens.
+ */
+async function contrastFailures(page) {
+  return page.evaluate(() => {
     const luminance = (value) => {
       const text = String(value);
       const rgb = text.startsWith("color(")
@@ -416,8 +417,38 @@ test("no visible text falls below its WCAG AA contrast requirement", async ({ pa
     }
     return [...new Set(bad)];
   });
+}
 
-  expect(failures).toEqual([]);
+test("no visible text falls below its WCAG AA contrast requirement", async ({ page }) => {
+  // Every workspace, not just the one that happens to be active on load. A
+  // token-level check cannot catch a component that pairs the right colour with
+  // the wrong surface, and a sweep of only the default screen misses any panel
+  // that sets its colour inline — which is how a set of sub-AA hex values in the
+  // forecast list survived an earlier pass of this test.
+  test.setTimeout(180000);
+
+  const workspaces = [
+    "Fleet Operations",
+    "Waste Forecast",
+    "Integrated Planning",
+    "Driver Analytics",
+    "Weighbridge Logs",
+    "WhatsApp Gateway",
+    "Bin Sensors",
+    "Data & ML Audit",
+  ];
+
+  const problems = {};
+  for (const name of workspaces) {
+    // `workspace-navigation` only labels the Operations group; the remaining
+    // workspaces live in sibling navs, so address the rail as a whole.
+    await page.locator(".nav-tab-btn", { hasText: name }).first().click();
+    await expect(page.locator(".workspace-header h1, .panel-title h2").first()).toBeVisible();
+    const failures = await contrastFailures(page);
+    if (failures.length > 0) problems[name] = failures;
+  }
+
+  expect(problems).toEqual({});
 });
 
 test("fleet workspace keeps the map and its inspector on screen together", async ({ page }) => {
