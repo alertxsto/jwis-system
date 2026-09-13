@@ -1,5 +1,10 @@
 # JWIS Frontend — Task Tracker
 
+> **Catatan status:** ini pelacak fase pertama (ekstraksi komponen dan pemecahan
+> CSS). Seluruh itemnya selesai. Fase berikutnya — penggantian sistem visual,
+> redesign layout, dan penghapusan fallback yang mengarang angka — dicatat di
+> [walkthrough.md](./walkthrough.md).
+
 ## Phase 1 — Quick Wins
 - [x] tokens.css — ganti accent color ke teal
 - [x] base.css — hapus outline:none global, fix font family

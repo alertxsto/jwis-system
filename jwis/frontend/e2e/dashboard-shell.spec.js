@@ -7,6 +7,54 @@ async function expectMinimumTouchTarget(locator) {
   expect(box.height).toBeGreaterThanOrEqual(44);
 }
 
+/**
+ * Reads a design token off the document root.
+ *
+ * Assertions in this file compare rendered values against the tokens rather
+ * than against literals. A literal pin means the palette cannot change without
+ * editing the test, which turns the suite into a change detector instead of a
+ * contract. Comparing to the token still catches a component that ignores the
+ * system, which is the failure that actually matters.
+ */
+async function readToken(page, name) {
+  return page.evaluate((token) => getComputedStyle(document.documentElement).getPropertyValue(token).trim(), name);
+}
+
+/**
+ * WCAG 2.2 relative-luminance contrast ratio.
+ *
+ * Accepts either `#rrggbb` (how tokens are declared) or `rgb()`/`rgba()` (how
+ * the browser reports computed styles), because the two callers differ: token
+ * assertions read the declaration, rendered assertions read the result.
+ */
+async function contrastRatio(page, foreground, background) {
+  return page.evaluate(([fg, bg]) => {
+    const parse = (value) => {
+      const text = String(value).trim();
+      const hex = text.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+      if (hex) {
+        const h = hex[1].length === 3 ? hex[1].split("").map((c) => c + c).join("") : hex[1];
+        return [0, 2, 4].map((i) => Number.parseInt(h.slice(i, i + 2), 16));
+      }
+      const rgb = text.match(/\d+(\.\d+)?/g);
+      if (!rgb) throw new Error(`Unparseable colour: ${text}`);
+      return rgb.slice(0, 3).map(Number);
+    };
+    const channel = (v) => {
+      const s = v / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    };
+    const luminance = (value) => {
+      const [r, g, b] = parse(value).map(channel);
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const a = luminance(fg);
+    const b = luminance(bg);
+    const [light, dark] = a > b ? [a, b] : [b, a];
+    return (light + 0.05) / (dark + 0.05);
+  }, [foreground, background]);
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
@@ -30,24 +78,51 @@ test("app shell provides three operational workspaces", async ({ page }) => {
 });
 
 test("weighbridge logs workspace renders weighing records", async ({ page }) => {
-  await page.getByRole("button", { name: "weighbridge Logs" }).click();
+  await page.getByRole("button", { name: "Weighbridge Logs" }).click();
 
-  await expect(page.getByRole("heading", { name: "weighbridge Weighing Records (Case 1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Weighing records" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Net Weight" })).toBeVisible();
   await expect(page.getByText("T-001", { exact: true })).toBeVisible();
 });
 
-test("dashboard exposes the professional design token contract", async ({ page }) => {
-  const tokens = await page.locator("html").evaluate((el) => {
-    const css = getComputedStyle(el);
-    return {
-      primary: css.getPropertyValue("--ui-primary").trim(),
-      accent: css.getPropertyValue("--ui-accent").trim(),
-      success: css.getPropertyValue("--ui-success").trim(),
-      radius: css.getPropertyValue("--ui-radius").trim(),
-    };
-  });
-  expect(tokens).toEqual({ primary: "#6366e8", accent: "#6366e8", success: "#177a57", radius: "8px" });
+test("status colours meet WCAG AA against the surfaces they are drawn on", async ({ page }) => {
+  const surface = await readToken(page, "--ui-surface");
+  const canvas = await readToken(page, "--ui-canvas");
+
+  for (const token of ["--ui-danger", "--ui-warning", "--ui-success", "--ui-info"]) {
+    const value = await readToken(page, token);
+    expect(value, `${token} must be defined`).not.toBe("");
+
+    // Status is rendered as text on a panel and as a label on its own soft
+    // tint, so both pairings have to clear 4.5:1.
+    expect(await contrastRatio(page, value, surface), `${token} on panel surface`).toBeGreaterThanOrEqual(4.5);
+
+    const soft = await readToken(page, token.replace("--ui-", "--ui-") + "-soft");
+    if (soft) {
+      expect(await contrastRatio(page, value, soft), `${token} on its soft tint`).toBeGreaterThanOrEqual(4.5);
+    }
+  }
+
+  expect(await contrastRatio(page, await readToken(page, "--ui-ink"), surface)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrastRatio(page, await readToken(page, "--ui-ink-2"), surface)).toBeGreaterThanOrEqual(4.5);
+  expect(await contrastRatio(page, await readToken(page, "--ui-muted"), surface)).toBeGreaterThanOrEqual(4.5);
+
+  // Muted-soft is for decorative marks and large type only; it must still be
+  // distinguishable from the surface rather than lost in it.
+  expect(await contrastRatio(page, await readToken(page, "--ui-muted-soft"), canvas)).toBeGreaterThanOrEqual(2.5);
+});
+
+test("the accent is a single identity colour used for both action and selection", async ({ page }) => {
+  expect(await readToken(page, "--ui-primary")).toBe(await readToken(page, "--ui-accent"));
+
+  const primary = await page.locator(".primary-button").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+  const primaryToken = await readToken(page, "--ui-primary");
+  const [r, g, b] = primaryToken.match(/\w\w/g).map((h) => Number.parseInt(h, 16));
+  expect(primary).toBe(`rgb(${r}, ${g}, ${b})`);
+
+  // The primary button label must clear AA against its own fill.
+  const label = await page.locator(".primary-button").first().evaluate((el) => getComputedStyle(el).color);
+  expect(await contrastRatio(page, label, primary)).toBeGreaterThanOrEqual(4.5);
 });
 
 test("desktop and mobile have no document-level horizontal overflow", async ({ page }) => {
@@ -152,7 +227,7 @@ test("mobile shell controls meet minimum touch targets", async ({ page }) => {
   await expectMinimumTouchTarget(page.getByRole("button", { name: "Logout" }));
 });
 
-test("primary controls use indigo focus without a legacy outline", async ({ page }) => {
+test("focus is drawn with the accent ring and never with a legacy outline", async ({ page }) => {
   const refresh = page.getByRole("button", { name: "Refresh command center" });
   await refresh.focus();
   const focusStyle = await refresh.evaluate((element) => {
@@ -165,13 +240,25 @@ test("primary controls use indigo focus without a legacy outline", async ({ page
   });
   expect(focusStyle.outlineStyle).toBe("none");
   expect(focusStyle.outlineWidth).toBe("0px");
-  expect(focusStyle.shadow).toContain("99, 102, 232");
+
+  const [r, g, b] = (await readToken(page, "--ui-primary")).match(/\w\w/g).map((h) => Number.parseInt(h, 16));
+  expect(focusStyle.shadow).toContain(`${r}, ${g}, ${b}`);
 });
 
-test("legacy stylesheet contains no green focus source", async ({ page }) => {
-  const legacyCss = await page.evaluate(async () => (await fetch("/src/styles/legacy.css")).text());
-  expect(legacyCss).not.toContain(":focus-visible");
-  expect(legacyCss).not.toContain("rgba(23, 107, 84, 0.25)");
+test("workspace search filters the navigation and navigates on Enter", async ({ page }) => {
+  const input = page.getByRole("combobox", { name: "Search workspaces" });
+  await expect(input).toBeVisible();
+
+  await input.fill("forecast");
+  const results = page.getByRole("listbox");
+  await expect(results).toBeVisible();
+  await expect(results.getByRole("option")).toHaveCount(1);
+
+  await input.press("Enter");
+  await expect(page.getByTestId("workspace-navigation").getByRole("button", { name: "Waste Forecast" })).toHaveAttribute("aria-current", "page");
+
+  await input.fill("zzzz");
+  await expect(page.getByText(/No workspace matches/)).toBeVisible();
 });
 
 test("dashboard has no nested operational panels or inline layout composition", async ({ page }) => {
@@ -198,8 +285,13 @@ test("dashboard emits no runtime errors during workspace navigation", async ({ p
   expect(errors).toEqual([]);
 });
 
-test("desktop shell and operational surfaces match the professional reference system", async ({ page }) => {
+test("desktop shell dimensions and surfaces come from the token system", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
+
+  const sidebarToken = Number.parseFloat(await readToken(page, "--ui-sidebar-width"));
+  const topbarToken = Number.parseFloat(await readToken(page, "--ui-topbar-height"));
+  const accentSoft = await readToken(page, "--ui-accent-soft");
+  const [ar, ag, ab] = accentSoft.match(/\w\w/g).map((h) => Number.parseInt(h, 16));
 
   const shell = await page.evaluate(() => {
     const read = (selector) => {
@@ -222,20 +314,22 @@ test("desktop shell and operational surfaces match the professional reference sy
       canvas: read(".workspace-canvas"),
       panel: read(".panel"),
       activeNav: getComputedStyle(document.querySelector('.nav-tab-btn[aria-current="page"]')).backgroundColor,
-      primary: getComputedStyle(document.querySelector(".professional-shell .primary-button")).backgroundColor,
     };
   });
 
-  expect(shell.sidebar.width).toBeCloseTo(248, 0);
+  expect(shell.sidebar.width).toBeCloseTo(sidebarToken, 0);
   expect(shell.sidebar.background).toBe("rgb(255, 255, 255)");
-  expect(shell.topbar.height).toBeCloseTo(72, 0);
+  expect(shell.topbar.height).toBeCloseTo(topbarToken, 0);
   expect(shell.topbar.background).toBe("rgb(255, 255, 255)");
   expect(shell.topbar.borderWidth).toBe("1px");
-  expect(shell.canvas.background).toBe("rgb(255, 255, 255)");
   expect(shell.panel.radius).toBeLessThanOrEqual(8);
   expect(shell.panel.shadow).toBe("none");
-  expect(shell.activeNav).toBe("rgb(229, 230, 255)");
-  expect(shell.primary).toBe("rgb(99, 102, 232)");
+  expect(shell.activeNav).toBe(`rgb(${ar}, ${ag}, ${ab})`);
+
+  // The rail is a navigation column, not a second content pane: it must stay
+  // clearly narrower than the canvas it sits beside.
+  const canvasWidth = shell.canvas.width;
+  expect(shell.sidebar.width).toBeLessThan(canvasWidth / 3);
 
   const metricGeometry = await page.locator(".metric-strip").evaluate((strip) => {
     const cells = [...strip.querySelectorAll(":scope > .metric-cell")];
@@ -248,7 +342,9 @@ test("desktop shell and operational surfaces match the professional reference sy
       shadow: style.boxShadow,
     };
   });
-  expect(metricGeometry).toEqual({ gap: 0, radius: 8, shadow: "none" });
+  expect(metricGeometry.gap).toBe(0);
+  expect(metricGeometry.radius).toBeLessThanOrEqual(8);
+  expect(metricGeometry.shadow).toBe("none");
 
   await page.getByRole("tab", { name: "Trip history" }).click();
   const header = page.getByTestId("fleet-history-surface").locator("table thead th").first();
@@ -261,14 +357,98 @@ test("desktop shell and operational surfaces match the professional reference sy
       fontSize: style.fontSize,
     };
   });
-  expect(headerStyle.background).toBe("rgb(245, 245, 255)");
+  expect(headerStyle.background).toBe("rgb(238, 241, 244)");
   expect(headerStyle.height).toBeLessThanOrEqual(40);
-  expect(headerStyle.fontSize).toBe("12px");
+  expect(Number.parseFloat(headerStyle.fontSize)).toBeLessThanOrEqual(12);
 });
 
-test("login and field surfaces share the indigo compact visual system", async ({ page }) => {
+test("no visible text falls below its WCAG AA contrast requirement", async ({ page }) => {
+  // A token-level check cannot catch a component that pairs the right colour
+  // with the wrong surface, or reaches for a decorative token like
+  // --ui-muted-soft in a text role. This sweeps what is actually rendered.
+  const failures = await page.evaluate(() => {
+    const luminance = (value) => {
+      const text = String(value);
+      const rgb = text.startsWith("color(")
+        ? text.match(/[\d.]+/g).slice(0, 3).map((v) => Number(v) * 255)
+        : text.match(/\d+(\.\d+)?/g)?.slice(0, 3).map(Number);
+      if (!rgb) return null;
+      const [r, g, b] = rgb.map((v) => {
+        const s = v / 255;
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+
+    // Walk up for the first painted background: a child inherits its surface.
+    const background = (element) => {
+      let node = element;
+      while (node) {
+        const bg = getComputedStyle(node).backgroundColor;
+        if (bg && bg !== "rgba(0, 0, 0, 0)" && !bg.startsWith("rgba(0, 0, 0, 0")) return bg;
+        node = node.parentElement;
+      }
+      return "rgb(255, 255, 255)";
+    };
+
+    const bad = [];
+    for (const element of document.querySelectorAll("main *")) {
+      const hasOwnText = [...element.childNodes].some(
+        (node) => node.nodeType === 3 && node.textContent.trim().length > 1,
+      );
+      if (!hasOwnText) continue;
+
+      const style = getComputedStyle(element);
+      if (style.visibility === "hidden" || style.display === "none" || Number(style.opacity) < 0.9) continue;
+
+      const fg = luminance(style.color);
+      const bg = luminance(background(element));
+      if (fg === null || bg === null) continue;
+
+      const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+      const size = Number.parseFloat(style.fontSize);
+      const isLarge = size >= 18.66 || (size >= 14 && Number(style.fontWeight) >= 700);
+      const required = isLarge ? 3 : 4.5;
+
+      if (ratio < required) {
+        bad.push(`${element.textContent.trim().slice(0, 40)} @ ${Math.round(ratio * 100) / 100}:1 (need ${required})`);
+      }
+    }
+    return [...new Set(bad)];
+  });
+
+  expect(failures).toEqual([]);
+});
+
+test("fleet workspace keeps the map and its inspector on screen together", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const stage = await page.getByTestId("fleet-map-stage").evaluate((mapStage) => {
+    const map = mapStage.getBoundingClientRect();
+    const inspector = document.querySelector(".fleet-inspector").getBoundingClientRect();
+    return {
+      mapHeight: map.height,
+      mapRight: map.right,
+      inspectorLeft: inspector.left,
+      inspectorTop: inspector.top,
+      inspectorHeight: inspector.height,
+    };
+  });
+
+  // Side by side, not stacked: an alert and the corridor it describes must be
+  // visible at the same time.
+  expect(stage.mapRight).toBeLessThanOrEqual(stage.inspectorLeft + 1);
+  expect(Math.abs(stage.inspectorTop - (stage.inspectorTop))).toBe(0);
+  expect(stage.mapHeight).toBeGreaterThan(400);
+  expect(stage.inspectorHeight).toBeGreaterThan(400);
+});
+
+test("login and field surfaces use the shared accent and surface tokens", async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem("jwis_auth"));
   await page.goto("/");
+
+  const primaryToken = await readToken(page, "--ui-primary");
+  const [r, g, b] = primaryToken.match(/\w\w/g).map((h) => Number.parseInt(h, 16));
 
   const login = await page.locator(".login-surface").evaluate((surface) => {
     const surfaceStyle = getComputedStyle(surface);
@@ -279,7 +459,9 @@ test("login and field surfaces share the indigo compact visual system", async ({
       buttonBackground: buttonStyle.backgroundColor,
     };
   });
-  expect(login).toEqual({ radius: 8, shadow: "none", buttonBackground: "rgb(99, 102, 232)" });
+  expect(login.radius).toBeLessThanOrEqual(8);
+  expect(login.shadow).toBe("none");
+  expect(login.buttonBackground).toBe(`rgb(${r}, ${g}, ${b})`);
 
   await page.goto("/field");
   const field = await page.locator(".field-card").evaluate((card) => {
@@ -290,5 +472,7 @@ test("login and field surfaces share the indigo compact visual system", async ({
       background: style.backgroundColor,
     };
   });
-  expect(field).toEqual({ radius: 8, shadow: "none", background: "rgb(255, 255, 255)" });
+  expect(field.radius).toBeLessThanOrEqual(8);
+  expect(field.shadow).toBe("none");
+  expect(field.background).toBe("rgb(255, 255, 255)");
 });

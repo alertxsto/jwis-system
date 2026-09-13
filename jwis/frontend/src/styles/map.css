@@ -1,14 +1,24 @@
-/* ── Map & MapLibre specific styles ── */
+/* ============================================================================
+   Map surface: MapLibre container, vehicle markers, popups.
 
-/* Feature-specific map, forecast, planning, report, and simulation rules. */
+   The legend and layer-control overlays are NOT here — they belong to the
+   workspace that composes them (workspaces.css). This file only styles what
+   MapLibre itself renders: the canvas shell, the DOM markers attached to it,
+   and the popup content injected into its container.
+
+   Popup and marker markup is created by LiveFleetMap as strings/elements and
+   appended to MapLibre's DOM, so it sits outside the React tree. It therefore
+   uses these class rules, while the colours inside the popup strings come from
+   src/map/palette.js so the map cannot drift from the token system.
+   ========================================================================= */
 
 .maplibre-shell {
   position: relative;
   height: 470px;
-  border-radius: 8px;
+  border-radius: var(--ui-radius-surface);
+  border: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface-sunken);
   overflow: hidden;
-  border: 1px solid #cbd5df;
-  background: #d9e6df;
 }
 
 .maplibre-container {
@@ -16,22 +26,27 @@
   height: 100%;
 }
 
+/* ── Vehicle markers ──────────────────────────────────────────────────────
+   A marker is a label first and a colour second: it always shows the truck
+   code, and the fill only reinforces the state. */
+
 .truck-marker {
   position: absolute;
+  display: block;
   min-width: 48px;
   min-height: 36px;
-  border: 2px solid #ffffff;
-  border-radius: 8px;
-  color: #ffffff;
-  box-shadow: 0 10px 24px rgba(20, 32, 43, 0.22);
-  cursor: pointer;
-  display: block;
   padding: 6px 8px;
-  font-size: 12px;
-  font-weight: 900;
+  border: 2px solid var(--ui-canvas-ink);
+  border-radius: var(--ui-radius);
+  color: var(--ui-canvas-ink);
+  font-size: var(--ui-text-xs);
+  font-weight: var(--ui-weight-semibold);
   line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(16, 32, 43, 0.22);
 }
 
+/* The pointer tail inherits the marker's own fill, so one colour drives both. */
 .truck-marker::after {
   content: "";
   position: absolute;
@@ -39,30 +54,82 @@
   bottom: -8px;
   width: 12px;
   height: 12px;
+  border-right: 2px solid var(--ui-canvas-ink);
+  border-bottom: 2px solid var(--ui-canvas-ink);
   background: inherit;
-  border-right: 2px solid #ffffff;
-  border-bottom: 2px solid #ffffff;
   transform: translateX(-50%) rotate(45deg);
-  box-shadow: 5px 5px 10px rgba(20, 32, 43, 0.12);
+  box-shadow: 5px 5px 10px rgba(16, 32, 43, 0.12);
 }
 
 .truck-marker.is-normal {
-  background: #176b54;
+  background: var(--ui-success);
 }
 
 .truck-marker.is-warning {
-  background: #d78a00;
+  background: var(--ui-warning);
 }
 
 .truck-marker.is-critical {
-  background: #b42318;
-  animation: pulseMarker 1.6s ease-in-out infinite;
+  background: var(--ui-danger);
+  animation: pulse-marker 1.6s ease-in-out infinite;
 }
 
-@keyframes pulseMarker {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.08); }
+@keyframes pulse-marker {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
 }
+
+.playback-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--ui-radius-pill);
+  border: 3px solid var(--ui-canvas-ink);
+  background: var(--ui-viz-6);
+}
+
+.tpa-marker {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--ui-canvas-ink);
+  border-radius: var(--ui-radius);
+  background: var(--ui-primary);
+  cursor: pointer;
+}
+
+.tpa-marker::after {
+  content: "TPA";
+  color: var(--ui-canvas-ink);
+  font-size: 8px;
+  font-weight: var(--ui-weight-semibold);
+}
+
+.unlicensed-marker {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--ui-canvas-ink);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-danger);
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(180, 35, 24, 0.5);
+}
+
+.unlicensed-marker::after {
+  content: "!";
+  color: var(--ui-canvas-ink);
+  font-size: 14px;
+  font-weight: var(--ui-weight-semibold);
+}
+
+/* ── Popups ─────────────────────────────────────────────────────────────── */
 
 .map-popup {
   min-width: 190px;
@@ -70,213 +137,51 @@
 
 .map-popup strong {
   display: block;
-  font-size: 14px;
+  font-size: var(--ui-text-md);
 }
 
 .map-popup span {
   display: block;
-  font-size: 12px;
-  color: #526170;
   margin-top: 3px;
+  color: var(--ui-muted);
+  font-size: var(--ui-text-sm);
 }
 
 .map-popup p {
-  margin: 8px 0 2px;
-  color: #b42318;
-  font-weight: 900;
+  margin: var(--ui-space-2) 0 2px;
+  color: var(--ui-danger);
+  font-weight: var(--ui-weight-semibold);
 }
 
 .map-popup small {
   display: block;
-  font-size: 11px;
-  color: #526170;
+  color: var(--ui-muted);
+  font-size: var(--ui-text-xs);
 }
 
-.map-legend{position:absolute;left:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid rgba(203, 213, 223, 0.8);background:rgba(255, 255, 255, 0.95);box-shadow:none;width:240px;}
-
-.map-legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #344452;
-  font-size: 12px;
-  font-weight: 800;
+/* Provenance line on every popup. A number on this map must always say whether
+   it was measured, modelled, or simulated. */
+.popup-src {
+  margin-top: var(--ui-space-1);
+  color: var(--ui-muted);
+  font-size: var(--ui-text-2xs);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 
-.map-legend i {
-  width: 18px;
-  height: 4px;
-  border-radius: 6px;
-  display: inline-block;
-}
-
-.legend-assigned {
-  background: var(--ui-accent-soft);
-  border: 1px dashed var(--ui-accent);
-}
-
-.legend-actual {
-  background: var(--ui-accent);
-}
-
-.legend-heatmap {
-  background: #a5b4fc;
-}
-
-.legend-critical {
-  width: 10px !important;
-  height: 10px !important;
-  border-radius: 50% !important;
-  background: #b42318;
-}
-
-.legend-osrm {
-  background: #0891b2;
-}
-
-.legend-tag{font-style:normal;font-size:9px;font-weight:700;letter-spacing:.04em;padding:1px 4px;margin-left:4px;border-radius:4px;background:#eef2f6;color:#5b6a78;vertical-align:middle;}
-
-.legend-osrm{display:inline-block;width:14px;height:3px;background:#0891b2;border-radius:2px;vertical-align:middle;}
-
-.tpa-marker{width:26px;height:26px;border-radius:6px;background:var(--ui-accent);border:2px solid #fff;box-shadow:none;cursor:pointer;display:grid;place-items:center;}
-
-.tpa-marker::after{content:'TPA';color:#fff;font-size:8px;font-weight:800;}
-
-.popup-src{font-size:10px;color:#5b6a78;margin-top:4px;letter-spacing:.03em;}
-
-.popup-dispatch{margin-top:8px;width:100%;padding:6px 10px;border:0;border-radius:6px;background:var(--ui-accent);color:#fff;font-weight:700;font-size:12px;cursor:pointer;}
-
-.popup-dispatch:hover{background:var(--ui-primary-hover);}
-
-.unlicensed-marker{width:24px;height:24px;border-radius:50%;background:#dc2626;border:3px solid #fff;box-shadow:0 2px 8px rgba(220,38,38,.5);cursor:pointer;display:grid;place-items:center;}
-
-.unlicensed-marker::after{content:'!';color:#fff;font-weight:800;font-size:14px;}
-
-.map-controls{position:absolute;top:12px;right:12px;z-index:5;background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:6px;font-size:12px;box-shadow:none;}
-
-.map-controls label{display:flex;align-items:center;gap:6px;cursor:pointer;}
-
-.map-controls select{font-size:12px;padding:4px;border:1px solid var(--border);border-radius:6px;}
-
-.playback-marker{width:18px;height:18px;border-radius:50%;background:#818cf8;border:3px solid #fff;box-shadow:none;}
-
-.map-legend summary{cursor:pointer;font-weight:700;font-size:11px;list-style:none;padding:2px 0;}
-
-.map-legend summary::-webkit-details-marker{display:none;}
-
-.legend-icon-tpa {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  display: inline-flex;
-  border: 1px solid #fff;
-  margin: 0;
-  position: static;
-  background: var(--ui-accent);
-}
-
-.legend-icon-unlicensed {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  display: inline-flex;
-  border: 1px solid #fff;
-  margin: 0;
-  position: static;
-  background: #dc2626;
-}
-
-/* Map controls and legend outside/below map card style */
-.map-footer-panels {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-  flex-shrink: 0;
-}
-
-.map-footer-panels > .panel {
-  grid-column: auto !important;
-  flex: 1;
-}
-
-.map-footer-panels .map-controls-card .panel-title,
-.map-footer-panels .map-legend-card .panel-title {
-  margin-bottom: 12px;
-}
-
-.map-footer-panels .map-controls-card .panel-title h2,
-.map-footer-panels .map-legend-card .panel-title h2 {
-  font-size: 14px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.map-footer-panels .map-controls {
-  position: static !important;
-  box-shadow: none !important;
-  border: none !important;
-  padding: 0 !important;
-  background: transparent !important;
-  width: 100% !important;
-}
-
-.map-footer-panels .map-legend {
-  position: static !important;
-  box-shadow: none !important;
-  border: none !important;
-  padding: 0 !important;
-  background: transparent !important;
-  width: 100% !important;
-}
-
-.map-controls-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.map-controls-grid label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 800;
-  color: #344452;
-}
-
-.playback-select-wrap {
-  margin-top: 12px;
-}
-
-.playback-select-wrap select {
+.popup-dispatch {
   width: 100%;
-  font-size: 12px;
-  padding: 6px;
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-  background: #fff;
+  margin-top: var(--ui-space-2);
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-canvas-ink);
+  background: var(--ui-primary);
+  font-size: var(--ui-text-sm);
+  font-weight: var(--ui-weight-semibold);
+  cursor: pointer;
 }
 
-.map-legend-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.map-legend-grid span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: #344452;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.map-legend-grid i {
-  width: 18px;
-  height: 4px;
-  border-radius: 6px;
-  display: inline-block;
+.popup-dispatch:hover {
+  background: var(--ui-primary-hover);
 }

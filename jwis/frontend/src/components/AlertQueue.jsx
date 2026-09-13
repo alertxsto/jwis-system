@@ -6,12 +6,17 @@ export function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
     <section className="panel">
       <div className="panel-title">
         <div>
-          <h2>Action Queue</h2>
-          <p>Alerts are linked to route recommendations and field instructions.</p>
+          <h2>Action queue</h2>
+          <p>Alerts linked to route recommendations and field instructions.</p>
         </div>
-        <span className={`pill danger`}>{alerts.length} active</span>
+        <span className="pill danger">{alerts.length} active</span>
       </div>
       <div className="alert-list">
+        {alerts.length === 0 && (
+          <p className="panel-state" role="status">
+            No active alerts — every truck is inside its assigned corridor.
+          </p>
+        )}
         {alerts.map((alert) => (
           <article className="alert-item" key={alert.id}>
             <div className="alert-head">

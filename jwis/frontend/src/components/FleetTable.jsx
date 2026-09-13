@@ -7,10 +7,15 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Fleet State</h2>
+          <h2>Fleet state</h2>
           <p>Each row is directly actionable and audit-ready.</p>
         </div>
       </div>
+      {trucks.length === 0 ? (
+        <p className="panel-state" role="status">
+          No vehicle positions available. The fleet feed has not returned data.
+        </p>
+      ) : (
       <div className="table-wrap">
         <table>
           <thead>
@@ -56,6 +61,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }

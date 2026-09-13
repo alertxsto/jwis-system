@@ -1,76 +1,174 @@
-* { box-sizing: border-box; }
+/* ============================================================================
+   Base layer: reset, document defaults, typographic scale.
+   ========================================================================= */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 html {
-  color: var(--ui-ink);
   background: var(--ui-canvas);
-  font-family: "Geist Sans", ui-sans-serif, system-ui, sans-serif;
+  color: var(--ui-ink);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-md);
+  line-height: var(--ui-leading-normal);
   letter-spacing: 0;
-  color-scheme: light;
   font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   background: var(--ui-canvas);
-  color: var(--ui-ink);
+  color: var(--ui-ink-2);
 }
 
+/* Controls inherit the console ramp instead of the engine default, which is
+   ~13.33px in several browsers and breaks row alignment against 12.5px cells. */
 button,
 input,
 select,
 textarea {
   font: inherit;
+  color: inherit;
   letter-spacing: 0;
   -webkit-tap-highlight-color: transparent;
 }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
-  transform: none !important;
+button {
+  cursor: pointer;
 }
 
-/* Removed global outline: none — browser default focus indicators are kept.
-   Custom focus styles are applied via :focus-visible per-component where needed.
-   See button:focus-visible, a:focus-visible, etc. below. */
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
 
+/* Headings: sentence case, tight leading, no fluid scaling. A console that
+   resizes its own type between 1280 and 1920 changes its density per monitor,
+   which is the opposite of what an operator needs. */
 h1,
 h2,
-h3 {
+h3,
+h4 {
+  margin: 0;
   color: var(--ui-ink);
-  letter-spacing: 0;
+  font-weight: var(--ui-weight-semibold);
+  line-height: var(--ui-leading-tight);
+  letter-spacing: -0.005em;
   text-wrap: balance;
 }
 
 h1 {
-  font-size: 24px;
-  line-height: 1.2;
+  font-size: var(--ui-text-2xl);
 }
 
 h2 {
-  font-size: 16px;
-  line-height: 1.3;
+  font-size: var(--ui-text-lg);
 }
 
 h3 {
-  font-size: 15px;
-  line-height: 1.35;
+  font-size: var(--ui-text-md);
 }
 
-table td,
-.kec-meta b,
-.scenario-result strong,
-.req-chip b {
-  font-family: var(--mono);
+h4 {
+  font-size: var(--ui-text-sm);
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--ui-accent-foreground);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--ui-font-mono);
+  font-size: 0.94em;
+}
+
+/* Every numeric surface: table cells, metric values, coordinates, wait times.
+   Tabular figures stop columns shimmering when a value refreshes. */
+table,
+[data-numeric],
+.metric-cell strong,
+.mono {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
 }
 
-button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
-  box-shadow: var(--ui-focus);
+hr {
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--ui-border);
 }
+
+::selection {
+  background: var(--ui-accent-soft);
+  color: var(--ui-ink);
+}
+
+/* Focus is only drawn for non-pointer navigation, so a mouse click never
+   leaves a ring behind on a control the operator just used. */
+:focus-visible {
+  outline: 0;
+  box-shadow: var(--ui-focus);
+  border-radius: var(--ui-radius-control);
+}
+
+/* Scrollbars: thin and neutral, invisible until there is something to scroll. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-border-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-border-strong);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ui-muted-soft);
+  background-clip: content-box;
+}
+
+/* Announced to assistive tech, invisible on screen. */
+
+
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

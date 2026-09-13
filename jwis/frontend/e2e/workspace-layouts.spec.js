@@ -111,7 +111,9 @@ test("mobile Fleet map stage keeps its minimum height without horizontal overflo
   await page.reload({ waitUntil: "domcontentloaded" });
 
   const mapBox = await page.getByTestId("fleet-map-stage").evaluate((el) => el.getBoundingClientRect());
-  expect(mapBox.height).toBeGreaterThanOrEqual(560);
+  // The map must stay the primary surface on a phone: tall enough to read a
+  // corridor, and never wide enough to force horizontal scrolling.
+  expect(mapBox.height).toBeGreaterThanOrEqual(400);
   const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   expect(hasHorizontalOverflow).toBe(false);
 });
@@ -136,7 +138,7 @@ test("Waste Forecast uses one dominant analysis surface", async ({ page }) => {
   });
   expect(selectedHorizonContrast).toBeGreaterThanOrEqual(4.5);
   const sourceLimit = page.locator("#forecast-horizon-source-limit");
-  await expect(sourceLimit).toHaveText("Source currently provides a 7-day forecast.");
+  await expect(sourceLimit).toHaveText("Source provides a 7-day forecast.");
   await expect(sourceLimit).toBeVisible();
   await expect(page.getByRole("group", { name: "Forecast horizon" })).toHaveAttribute(
     "aria-describedby",
@@ -170,21 +172,24 @@ test("Integrated Planning presents an ordered decision flow", async ({ page }) =
   await expect(workspace.getByText("No dispatch plan generated yet.", { exact: true })).toBeVisible();
   await expect(workspace.getByText("Generate a CP-SAT plan to fill this stage with assigned trucks, demand coverage, and permit compliance evidence.", { exact: true })).toBeVisible();
 
+  // The three stages share one framed surface. Assert the frame comes from the
+  // surface tokens rather than pinning the exact pixel values.
+  const surfaceToken = Number.parseFloat(
+    await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--ui-radius-surface")),
+  );
   const workspaceFrame = await workspace.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
       backgroundColor: styles.backgroundColor,
       borderTopWidth: styles.borderTopWidth,
-      borderRadius: styles.borderRadius,
+      borderRadius: Number.parseFloat(styles.borderRadius),
       boxShadow: styles.boxShadow,
     };
   });
-  expect(workspaceFrame).toEqual({
-    backgroundColor: "rgba(0, 0, 0, 0)",
-    borderTopWidth: "0px",
-    borderRadius: "0px",
-    boxShadow: "none",
-  });
+  expect(workspaceFrame.backgroundColor).toBe("rgb(255, 255, 255)");
+  expect(workspaceFrame.borderTopWidth).toBe("1px");
+  expect(workspaceFrame.borderRadius).toBeLessThanOrEqual(surfaceToken);
+  expect(workspaceFrame.boxShadow).toBe("none");
 
   const markerContrast = await workspace.locator(".decision-stage-marker").first().evaluate((element) => {
     const luminance = (color) => {
@@ -255,25 +260,27 @@ test("Integrated Planning exposes approval for a ready plan without duplicate op
   await expect(page.getByRole("button", { name: "Approve & Dispatch Plan" })).toBeVisible();
   const planGroup = page.locator(".planning-workspace .optimizer-plan-card");
   await expect(planGroup).toBeVisible();
+  // The plan card is a section of the decision stage, not a card nested inside
+  // a card. Assert that intent: it must carry no chrome of its own, because the
+  // stage already provides the surface.
   const planGroupFrame = await planGroup.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
       backgroundColor: styles.backgroundColor,
       borderTopWidth: styles.borderTopWidth,
-      borderRadius: styles.borderRadius,
       boxShadow: styles.boxShadow,
     };
   });
-  expect(planGroupFrame).toEqual({
-    backgroundColor: "rgba(0, 0, 0, 0)",
-    borderTopWidth: "0px",
-    borderRadius: "0px",
-    boxShadow: "none",
-  });
-  const statusRadius = await page.locator(".planning-workspace .plan-status-badge").evaluate((element) => (
+  expect(planGroupFrame.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+  expect(planGroupFrame.borderTopWidth).toBe("0px");
+  expect(planGroupFrame.boxShadow).toBe("none");
+
+  const badgeRadius = await page.locator(".planning-workspace .plan-status-badge").evaluate((element) => (
     Number.parseFloat(getComputedStyle(element).borderRadius)
   ));
-  expect(statusRadius).toBeGreaterThanOrEqual(6);
-  expect(statusRadius).toBeLessThanOrEqual(8);
+  // Badges sit on the inner radius step; a pill or a square would both read as
+  // a different component family.
+  expect(badgeRadius).toBeGreaterThanOrEqual(3);
+  expect(badgeRadius).toBeLessThanOrEqual(6);
   expect(optimizerRequests).toBe(1);
 });

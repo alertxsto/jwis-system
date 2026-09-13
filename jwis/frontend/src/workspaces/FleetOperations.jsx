@@ -1,6 +1,8 @@
 import React, { useRef } from "react";
 import { MetricStrip } from "../ui/MetricStrip.jsx";
 
+/* One surface at a time. Each tab owns a region of the workspace below the map
+   rather than being one more block in a vertical stream. */
 const detailTabs = [
   { id: "fleet", label: "Fleet", surface: "fleet-table-surface" },
   { id: "history", label: "Trip history", surface: "fleet-history-surface" },
@@ -14,10 +16,10 @@ export function FleetOperations({
   onDetailTabChange,
   metrics,
   map,
-  mapFooter,
-  alerts,
+  mapTools,
+  legend,
+  inspector,
   routeEvidence,
-  rerouting,
   queue,
   fleetTable,
   history,
@@ -55,12 +57,15 @@ export function FleetOperations({
       <MetricStrip metrics={metrics} />
 
       <div className="fleet-stage">
-        <div className="fleet-map-stage" data-testid="fleet-map-stage" style={{ width: "100%", borderRight: "none" }}>
+        <div className="fleet-map-stage" data-testid="fleet-map-stage">
           {map}
+          {mapTools}
+          {legend}
         </div>
+        <aside className="fleet-inspector" aria-label="Fleet inspector">
+          {inspector}
+        </aside>
       </div>
-
-      {mapFooter}
 
       <div className="workspace-tabs" role="tablist" aria-label="Fleet details">
         {detailTabs.map((tab, index) => (

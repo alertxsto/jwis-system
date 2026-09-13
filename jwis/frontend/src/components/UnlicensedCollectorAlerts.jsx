@@ -36,7 +36,7 @@ export function UnlicensedCollectorAlerts() {
         <AlertTriangle size={20} />
       </div>
       <div className="table-wrap">
-        <table className="audit-table" role="grid" aria-label="Deteksi kolektor liar">
+        <table aria-label="Deteksi kolektor liar">
           <thead>
             <tr>
               <th scope="col">Plat Nomor</th>

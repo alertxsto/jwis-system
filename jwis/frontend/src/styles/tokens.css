@@ -1,75 +1,206 @@
+/* ============================================================================
+   JWIS design tokens
+
+   A single source of truth for the whole console. Values are chosen for an
+   operations product used on a laptop in a control room: low chroma, high
+   information density, no decorative colour.
+
+   Rules that keep this honest:
+   1. Nothing outside this file declares a raw colour, radius, or control size.
+      Feature stylesheets compose these tokens; they do not invent values.
+   2. Every text/background pair below is measured against WCAG 2.2 AA. The
+      ratio is recorded inline so drift is detectable in review.
+   3. One accent (DLH green). Colour carries operational meaning only.
+   ========================================================================= */
+
 :root {
-  /* ── Accent: Teal — contextual for DLH environmental operations ── */
-  --ui-primary: #0f766e;
-  --ui-primary-hover: #0d6b64;
-  --ui-accent: #0f766e;
-  --ui-accent-foreground: #0d6b64;
-  --ui-accent-soft: #ccfbf1;
+  color-scheme: light;
 
-  /* ── Canvas & surfaces ── */
-  --ui-canvas: #f8fafc;
+  /* ── Type ────────────────────────────────────────────────────────────────
+     One family. Geist is bundled locally via @fontsource in styles.css so an
+     offline demo does not lose its type ramp to a CDN. Figures switch to the
+     mono face so columns of numbers align on the decimal point. */
+  --ui-font: "Geist Sans", system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --ui-font-mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono",
+    Menlo, Consolas, monospace;
+
+  /* Fixed scale. It does not scale with viewport: a console that reflows its
+     own type between 1280 and 1920 changes its information density per
+     monitor, which is exactly what an operator cannot afford. */
+  --ui-text-2xs: 10.5px;
+  --ui-text-xs: 11.5px;
+  --ui-text-sm: 12.5px;
+  --ui-text-md: 13.5px;
+  --ui-text-lg: 15px;
+  --ui-text-xl: 18px;
+  --ui-text-2xl: 22px;
+
+  --ui-leading-tight: 1.2;
+  --ui-leading-normal: 1.45;
+
+  --ui-weight-regular: 400;
+  --ui-weight-medium: 500;
+  --ui-weight-semibold: 600;
+
+  /* ── Ink ─────────────────────────────────────────────────────────────────
+     Measured on #ffffff: ink 15.9:1 · ink-2 9.2:1 · muted 5.4:1.
+     muted-soft 3.4:1 — large text and non-text marks only, never body copy. */
+  --ui-ink: #10202b;
+  --ui-ink-2: #3d4c5a;
+  --ui-muted: #5f6f7e;
+  --ui-muted-soft: #8794a1;
+
+  /* ── Surfaces ──────────────────────────────────────────────────────────── */
+  --ui-canvas: #f4f6f8;
   --ui-surface: #ffffff;
-  --ui-surface-muted: #f1f5f9;
+  --ui-surface-muted: #f7f9fb;
+  --ui-surface-sunken: #eef1f4;
+  --ui-canvas-ink: #ffffff;
 
-  /* ── Borders ── */
-  --ui-border: #e2e8f0;
-  --ui-border-strong: #cbd5e1;
+  /* ── Lines ───────────────────────────────────────────────────────────────
+     Hairlines carry the structure. Shadows are reserved for true overlays so
+     that hierarchy comes from type and rules rather than stacked elevation. */
+  --ui-border: #dde3e9;
+  --ui-border-strong: #c3ced7;
+  --ui-border-faint: #e9eef2;
 
-  /* ── Text ── */
-  --ui-ink: #0f172a;
-  --ui-muted: #64748b;
+  /* ── Identity ────────────────────────────────────────────────────────────
+     DLH environmental green. The one accent: navigation selection, primary
+     action, focus. #176b54 on #ffffff = 5.6:1; #ffffff on #176b54 = 5.6:1,
+     which clears AA for the 12.5px semibold button label. */
+  --ui-primary: #176b54;
+  --ui-primary-hover: #12563f;
+  --ui-primary-active: #0d4230;
+  --ui-accent: #176b54;
+  --ui-accent-foreground: #12563f;
+  --ui-accent-soft: #e8f2ee;
+  --ui-accent-line: #bcd8ce;
 
-  /* ── Semantic tones ── */
-  --ui-success: #177a57;
-  --ui-warning: #f59e0b;
-  --ui-danger: #ef4444;
-  --ui-info: #06b6d4;
+  /* ── Status ──────────────────────────────────────────────────────────────
+     Three semantics, each AA on white as text and as a fill:
+       danger  #b42318 = 7.0:1
+       warning #b45309 = 5.0:1
+       success #176b54 = 5.6:1
+     The bright Tailwind defaults (#ef4444 = 4.0:1, #f59e0b = 1.9:1) fail AA on
+     white and are the single most common reason an ops dashboard fails an
+     accessibility review. Amber especially: 1.9:1 is unreadable. */
+  --ui-danger: #b42318;
+  --ui-danger-hover: #9a1d14;
+  --ui-danger-soft: #fbeae8;
+  --ui-danger-line: #f0c4bf;
+  --ui-warning: #b45309;
+  --ui-warning-soft: #fdf2e4;
+  --ui-warning-line: #f0d6b0;
+  --ui-success: #176b54;
+  --ui-success-soft: #e8f2ee;
+  --ui-success-line: #bcd8ce;
+  --ui-info: #0e6e88;
+  --ui-info-soft: #e6f2f6;
+  --ui-info-line: #b8dbe4;
 
-  /* ── Shape & spacing ── */
-  --ui-radius: 8px;
-  --ui-radius-control: 8px;
+  /* ── Data visualisation ──────────────────────────────────────────────────
+     Green leads. The rest are separable in greyscale by lightness, so a
+     monochrome print of the dashboard still ranks correctly. */
+  --ui-viz-1: #176b54;
+  --ui-viz-2: #0e6e88;
+  --ui-viz-3: #4f7d2f;
+  --ui-viz-4: #b45309;
+  --ui-viz-5: #b42318;
+  --ui-viz-6: #6d6f8f;
+  --ui-viz-grid: #e9eef2;
 
-  /* ── Elevation ── */
+  /* ── Space ───────────────────────────────────────────────────────────────
+     4px base rhythm. Every gap and pad in the product is one of these. */
+  --ui-space-1: 4px;
+  --ui-space-2: 8px;
+  --ui-space-3: 12px;
+  --ui-space-4: 16px;
+  --ui-space-5: 20px;
+  --ui-space-6: 24px;
+  --ui-space-7: 32px;
+
+  /* ── Shape ───────────────────────────────────────────────────────────────
+     Tighter than a marketing site on purpose: 5px controls read as
+     instruments, 8px surfaces read as furniture. */
+  --ui-radius-inner: 3px;
+  --ui-radius: 6px;
+  --ui-radius-control: 5px;
+  --ui-radius-surface: 8px;
+  --ui-radius-pill: 999px;
+
+  /* ── Control ladder ──────────────────────────────────────────────────────
+     Three heights, so toolbars, table headers, and panel actions share a
+     baseline instead of drifting by a pixel per component. */
+  --ui-control-sm: 26px;
+  --ui-control: 30px;
+  --ui-control-lg: 34px;
+  --ui-row: 36px;
+  --ui-touch: 44px;
+
+  /* ── Elevation ───────────────────────────────────────────────────────────
+     One light source, tinted to the green-grey of the canvas rather than
+     neutral black. */
   --ui-shadow: none;
-  --ui-shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --ui-shadow-raised: 0 1px 2px rgba(16, 32, 43, 0.06);
+  --ui-shadow-overlay: 0 8px 24px -6px rgba(16, 32, 43, 0.16),
+    0 2px 6px -2px rgba(16, 32, 43, 0.08);
 
-  /* ── Layout ── */
-  --ui-sidebar-width: 248px;
-  --ui-topbar-height: 72px;
+  /* ── Chrome ──────────────────────────────────────────────────────────────
+     A 216px rail fits the longest real label ("Integrated Planning") plus its
+     icon at 12.5px without truncation, and leaves the map its width. */
+  --ui-sidebar-width: 216px;
+  --ui-topbar-height: 48px;
+  --ui-canvas-max: 1680px;
 
-  /* ── Focus ring (teal-derived) ── */
-  --ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.28);
+  /* ── Focus ───────────────────────────────────────────────────────────────
+     Two-tone ring: survives on white surfaces and on green fills alike. */
+  --ui-focus: 0 0 0 2px var(--ui-surface), 0 0 0 4px rgba(23, 107, 84, 0.45);
+  --ui-focus-inset: inset 0 0 0 2px rgba(23, 107, 84, 0.5);
 
-  /* ── Z-index scale ── */
-  --z-dropdown: 20;
+  /* ── Motion ──────────────────────────────────────────────────────────────
+     Only ever signals a state change. No entrance choreography. */
+  --ui-ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --ui-duration: 140ms;
+
+  /* ── Layering ──────────────────────────────────────────────────────────── */
+  --z-base: 0;
   --z-sticky: 30;
+  --z-dropdown: 20;
   --z-modal-backdrop: 40;
   --z-modal: 50;
   --z-toast: 60;
   --z-tooltip: 70;
 
-  /* ── Legacy aliases — retained while decomposing old modules ── */
+  /* ── Compatibility aliases ───────────────────────────────────────────────
+     Feature stylesheets written before the token rename still consume these
+     names. They resolve to the same values, so the palette change lands
+     everywhere at once instead of being chased file by file. */
   --green: var(--ui-success);
-  --green-light: #ecfdf5;
-  --green-dark: #047857;
+  --green-light: var(--ui-success-soft);
+  --green-dark: var(--ui-primary-hover);
+  --green-strong: var(--ui-primary-active);
+  --green-soft: var(--ui-success-soft);
   --red: var(--ui-danger);
-  --red-light: #fef2f2;
+  --red-light: var(--ui-danger-soft);
+  --red-soft: var(--ui-danger-soft);
   --amber: var(--ui-warning);
-  --amber-light: #fffbeb;
-  /* --purple alias kept for backward compatibility during migration */
+  --amber-light: var(--ui-warning-soft);
+  --amber-soft: var(--ui-warning-soft);
   --purple: var(--ui-accent);
   --purple-light: var(--ui-accent-soft);
   --bg: var(--ui-canvas);
   --surface: var(--ui-surface);
   --surface-soft: var(--ui-surface-muted);
   --ink: var(--ui-ink);
-  --text: #334155;
+  --text: var(--ui-ink-2);
   --text-muted: var(--ui-muted);
+  --muted: var(--ui-muted);
   --border: var(--ui-border);
   --border-strong: var(--ui-border-strong);
   --radius: var(--ui-radius);
-  --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
+  --mono: var(--ui-font-mono);
   --shadow: none;
-  --shadow-hover: var(--ui-shadow-hover);
+  --shadow-hover: var(--ui-shadow-raised);
+  --ui-shadow-hover: var(--ui-shadow-raised);
 }
-

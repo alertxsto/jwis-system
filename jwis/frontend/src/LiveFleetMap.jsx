@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { getMapColors, getMapPopupStyles } from "./map/palette.js";
 
 const JAKARTA_CENTER = [106.8456, -6.2088];
 const MAP_STYLE = "https://tiles.openfreemap.org/styles/bright";
@@ -124,6 +125,12 @@ export function LiveFleetMap({
   const [unlicensed, setUnlicensed] = useState([]);
   const unlicensedMarkersRef = useRef([]);
   const playbackMarkerRef = useRef(null);
+
+  // Design tokens for MapLibre paint values and popup markup. Resolved per
+  // render on purpose: the stylesheet lands after this module is evaluated,
+  // so a module-level constant would capture empty strings (see map/palette.js).
+  const c = getMapColors();
+  const popupStyles = getMapPopupStyles();
 
 
   useEffect(() => {
@@ -312,8 +319,8 @@ export function LiveFleetMap({
             "line-color": [
               "case",
               ["==", ["get", "kind"], "astar-abandoned"],
-              "#b42318",
-              "#176b54",
+              c.danger,
+              c.primary,
             ],
             "line-width": [
               "case",
@@ -339,10 +346,10 @@ export function LiveFleetMap({
             "line-color": [
               "case",
               ["==", ["get", "kind"], "actual-violation"],
-              "#b42318",
+              c.danger,
               ["==", ["get", "kind"], "astar-active"],
-              "#0891b2",
-              "#176b54",
+              c.info,
+              c.primary,
             ],
             "line-width": [
               "case",
@@ -373,7 +380,7 @@ export function LiveFleetMap({
           
           const popup = new maplibregl.Popup({ offset: 25 })
             .setHTML(`
-              <div class="event-popup" style="color: #0f172a; padding: 6px;">
+              <div class="event-popup" style="color: ${popupStyles.ink}; padding: 6px;">
                 <h4 style="margin: 0 0 6px; font-weight: bold;">Event: ${ev.name}</h4>
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>Permit:</b> ${ev.permit_number}</p>
                 <p style="margin: 0 0 4px; font-size: 11px;"><b>Forecast:</b> ${ev.predicted_waste_tons} tons of waste</p>
@@ -505,10 +512,10 @@ export function LiveFleetMap({
           source: "jam-points",
           paint: {
             "circle-radius": 14,
-            "circle-color": "#dc2626",
+            "circle-color": c.danger,
             "circle-opacity": 0.85,
             "circle-stroke-width": 3,
-            "circle-stroke-color": "#ffffff",
+            "circle-stroke-color": c.surface,
           },
         });
       } else {
@@ -530,7 +537,7 @@ export function LiveFleetMap({
           type: "line",
           source: "jam-segments",
           paint: {
-            "line-color": "#dc2626",
+            "line-color": c.danger,
             "line-width": 7,
             "line-opacity": 0.7,
           },
@@ -590,15 +597,15 @@ export function LiveFleetMap({
                   ["linear"],
                   ["coalesce", ["get", "predicted_tons"], -1],
                   -1,
-                  "#c6d2dc",
+                  c.borderStrong,
                   0,
-                  "#e7f2ee",
+                  c.accentSoft,
                   60,
-                  "#9ed3bb",
+                  c.viz3,
                   140,
-                  "#3f9d7c",
+                  c.primaryHover,
                   260,
-                  "#0f4d3b",
+                  c.primary,
                 ],
                 "fill-opacity": [
                   "case",
@@ -615,7 +622,7 @@ export function LiveFleetMap({
             type: "line",
             source: "kelurahan-heatmap",
             paint: {
-              "line-color": "#ffffff",
+              "line-color": c.surface,
               "line-width": 1,
               "line-opacity": 0.72,
             },
@@ -669,7 +676,7 @@ export function LiveFleetMap({
             type: "line",
             source: "osrm-route",
             paint: {
-              "line-color": "#0891b2",
+              "line-color": c.info,
               "line-width": 4,
               "line-opacity": 0.85,
             },
@@ -735,22 +742,39 @@ export function LiveFleetMap({
     }
 
     let cancelled = false;
-    function renderWhenReady() {
+
+    /* DOM markers are MapLibre overlays: they are positioned by the map but do
+       not belong to its style, so they can be attached as soon as the map
+       object exists. Only `addSource`/`addLayer` require a loaded style.
+       Gating the markers on `isStyleLoaded()` meant a slow or blocked basemap
+       silently produced an empty map with no markers and no explanation — and
+       it made every marker assertion race the tile CDN. */
+    function renderMarkersWhenReady() {
       if (cancelled) return;
-      const map = mapInstance;
-      if (!map) {
-        window.setTimeout(renderWhenReady, 150);
+      if (!mapInstance) {
+        window.setTimeout(renderMarkersWhenReady, 150);
         return;
       }
-      if (!map.isStyleLoaded()) {
-        window.setTimeout(renderWhenReady, 150);
-        return;
-      }
-      renderOsrm();
       renderTpa();
       renderUnlicensed();
     }
-    renderWhenReady();
+
+    function renderLayersWhenReady() {
+      if (cancelled) return;
+      const map = mapInstance;
+      if (!map) {
+        window.setTimeout(renderLayersWhenReady, 150);
+        return;
+      }
+      if (!map.isStyleLoaded()) {
+        window.setTimeout(renderLayersWhenReady, 150);
+        return;
+      }
+      renderOsrm();
+    }
+
+    renderMarkersWhenReady();
+    renderLayersWhenReady();
     return () => {
       cancelled = true;
     };
@@ -788,9 +812,9 @@ export function LiveFleetMap({
               source: "tps-points",
               paint: {
                 "circle-radius": 5,
-                "circle-color": "#22c55e",
+                "circle-color": c.viz3,
                 "circle-stroke-width": 1.5,
-                "circle-stroke-color": "#ffffff",
+                "circle-stroke-color": c.surface,
                 "circle-opacity": 0.85
               },
               layout: {
@@ -811,7 +835,7 @@ export function LiveFleetMap({
               
               popup.setLngLat(coordinates)
                 .setHTML(`
-                  <div style="color: #0f172a; padding: 4px; font-size: 11px;">
+                  <div style="color: ${popupStyles.ink}; padding: 4px; font-size: 11px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">TPS: ${props.name}</strong>
                     <span>Kel. ${props.kelurahan}, Kec. ${props.kecamatan}</span>
                   </div>
@@ -852,11 +876,11 @@ export function LiveFleetMap({
                 "circle-color": [
                   "step",
                   ["get", "point_count"],
-                  "#fed7aa", // orange muda untuk count kecil
+                  c.warningSoft, // heat ramp: lightest step, sparse clusters
                   100,
-                  "#fdba74", // sedang
+                  c.viz4, // heat ramp: mid step
                   500,
-                  "#f97316"  // pekat untuk area sangat padat
+                  c.warning // heat ramp: darkest step, densest clusters
                 ],
                 "circle-radius": [
                   "step",
@@ -869,7 +893,7 @@ export function LiveFleetMap({
                 ],
                 "circle-opacity": 0.75,
                 "circle-stroke-width": 1.5,
-                "circle-stroke-color": "#ea580c"
+                "circle-stroke-color": c.warning
               },
               layout: {
                 "visibility": layers.wr ? "visible" : "none"
@@ -889,7 +913,7 @@ export function LiveFleetMap({
                 "visibility": layers.wr ? "visible" : "none"
               },
               paint: {
-                "text-color": "#431407"
+                "text-color": c.ink
               }
             });
 
@@ -900,10 +924,10 @@ export function LiveFleetMap({
               source: "wr-points",
               filter: ["!", ["has", "point_count"]],
               paint: {
-                "circle-color": "#f97316",
+                "circle-color": c.warning,
                 "circle-radius": 4,
                 "circle-stroke-width": 1,
-                "circle-stroke-color": "#ffffff",
+                "circle-stroke-color": c.surface,
                 "circle-opacity": 0.8
               },
               layout: {
@@ -937,10 +961,10 @@ export function LiveFleetMap({
               
               wrPopup.setLngLat(coordinates)
                 .setHTML(`
-                  <div style="color: #0f172a; padding: 4px; font-size: 11px; max-width: 200px;">
+                  <div style="color: ${popupStyles.ink}; padding: 4px; font-size: 11px; max-width: 200px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">WR: ${props.name}</strong>
                     <span style="display: block; margin-bottom: 2px;">Tipe: ${props.type}</span>
-                    <span style="display: block; color: #64748b; font-size: 10px;">${props.address || ""}</span>
+                    <span style="display: block; color: ${popupStyles.muted}; font-size: 10px;">${props.address || ""}</span>
                   </div>
                 `)
                 .addTo(map);

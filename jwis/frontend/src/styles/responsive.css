@@ -24,18 +24,18 @@
     position: fixed;
     inset: 0 auto 0 0;
     z-index: var(--z-modal);
-    width: min(248px, calc(100vw - 48px));
+    width: min(var(--ui-sidebar-width), calc(100vw - 48px));
     height: 100dvh;
     display: flex;
     align-items: stretch;
     flex-direction: column;
     flex-wrap: nowrap;
-    padding: 16px 12px;
-    border-right: 1px solid #e8eaf0;
+    padding: var(--ui-space-4) var(--ui-space-3);
+    border-right: 1px solid var(--ui-border);
     border-bottom: 0;
-    background: #ffffff;
+    background: var(--ui-surface);
     transform: translateX(-100%);
-    transition: transform 180ms ease;
+    transition: transform var(--ui-duration) var(--ui-ease);
   }
 
   .professional-shell .side-rail.mobile-nav-open {
@@ -43,9 +43,9 @@
   }
 
   .professional-shell .side-brand {
-    padding: 4px 6px 14px;
+    padding: 0 var(--ui-space-2) var(--ui-space-4);
     border-right: 0;
-    border-bottom: 1px solid #e8eaf0;
+    border-bottom: 1px solid var(--ui-border);
   }
 
   .professional-shell .nav-section-label {
@@ -63,7 +63,7 @@
   .professional-shell .nav-tab-btn,
   .professional-shell .side-logout {
     width: 100%;
-    min-height: 44px;
+    min-height: var(--ui-touch);
   }
 
   .professional-shell .side-system-state {
@@ -77,23 +77,24 @@
 
   .professional-shell .mobile-nav-trigger {
     position: fixed;
-    top: 14px;
-    left: 16px;
+    top: var(--ui-space-2);
+    left: var(--ui-space-3);
     z-index: var(--z-modal);
     display: inline-flex;
-    flex: 0 0 44px;
-    width: 44px;
-    min-height: 44px;
+    flex: 0 0 var(--ui-touch);
+    width: var(--ui-touch);
+    min-height: var(--ui-touch);
   }
 
+  /* Parks the trigger beside the open drawer instead of over its contents. */
   .professional-shell .mobile-nav-trigger[aria-expanded="true"] {
-    left: 192px;
+    left: calc(min(var(--ui-sidebar-width), calc(100vw - 48px)) - var(--ui-touch) - var(--ui-space-3));
   }
 
   .professional-shell .top-actions .ghost-button,
   .professional-shell .top-actions .icon-button {
-    min-width: 44px;
-    min-height: 44px;
+    min-width: var(--ui-touch);
+    min-height: var(--ui-touch);
   }
 
   .mobile-nav-backdrop {
@@ -106,32 +107,50 @@
     padding: 0;
     border: 0;
     border-radius: 0;
-    background: rgba(23, 32, 42, 0.24);
+    background: color-mix(in srgb, var(--ui-ink) 32%, transparent);
   }
 
   .professional-shell .topbar {
-    min-height: 72px;
-    padding: 12px 16px 12px 72px;
+    flex-wrap: wrap;
+    gap: var(--ui-space-2);
+    min-height: auto;
+    padding: var(--ui-space-2) var(--ui-space-4) var(--ui-space-2)
+      calc(var(--ui-touch) + var(--ui-space-4));
     justify-content: flex-start;
   }
 
+  .professional-shell .workspace-search {
+    flex: 1 1 100%;
+    max-width: none;
+    order: 3;
+  }
+
   .field-brand {
-    min-height: 44px;
+    min-height: var(--ui-touch);
+  }
+
+  /* Every interactive control in the field app is touch-sized. The header
+     brand is a link home, so it is a control too, and the truck selector and
+     incident field sit on the same thumb grid. */
+  .field-app-header .field-brand,
+  .field-shell .field-card select,
+  .field-shell .field-input,
+  .field-shell .field-actions button,
+  .field-shell .back-link {
+    min-height: var(--ui-touch);
   }
 
   .professional-shell .top-actions {
     margin-left: auto;
   }
 
-  .professional-shell .workspace-canvas,
-  .professional-shell .workspace-canvas:has(.fleet-workspace),
-  .professional-shell .workspace-canvas:has(.planning-workspace) {
+  .professional-shell .workspace-canvas {
     width: 100%;
-    padding: 16px;
+    padding: var(--ui-space-4);
   }
 
   .login-shell {
-    padding: 20px;
+    padding: var(--ui-space-5);
   }
 
   .login-surface {
@@ -141,7 +160,7 @@
   .login-shell .login-proof {
     display: flex;
     padding: 24px 28px;
-    border-top: 1px solid #e8eaf0;
+    border-top: 1px solid var(--ui-border);
     border-left: 0;
   }
 
@@ -181,9 +200,7 @@
     justify-content: flex-start;
   }
 
-  .professional-shell .workspace-canvas,
-  .professional-shell .workspace-canvas:has(.fleet-workspace),
-  .professional-shell .workspace-canvas:has(.planning-workspace) {
+  .professional-shell .workspace-canvas {
     width: 100%;
     padding: 12px;
   }
@@ -195,7 +212,7 @@
   .professional-shell .metric-cell {
     min-height: 88px;
     padding: 12px;
-    border-top: 1px solid #e8eaf0;
+    border-top: 1px solid var(--ui-border);
   }
 
   .professional-shell .metric-cell:nth-child(odd) {
@@ -203,7 +220,7 @@
   }
 
   .professional-shell .metric-cell:nth-child(even) {
-    border-left: 1px solid #e8eaf0;
+    border-left: 1px solid var(--ui-border);
   }
 
   .professional-shell .metric-cell:nth-child(-n + 2) {
@@ -231,17 +248,13 @@
   }
 
   .map-legend {
-    max-width: min(190px, calc(100vw - 48px));
+    max-width: min(200px, calc(100vw - 48px));
   }
 
+  /* Touch target for the legend disclosure. `<details>` already hides its
+     content while closed, so no rule is needed to collapse the list. */
   .map-legend summary {
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-  }
-
-  .map-legend:not([open]) > span {
-    display: none;
+    min-height: var(--ui-touch);
   }
 
   .login-shell {

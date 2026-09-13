@@ -1,41 +1,49 @@
-.professional-shell {
-  min-height: 100dvh;
+/* ============================================================================
+   Application shell: navigation rail, command bar, workspace canvas.
+   ========================================================================= */
+
+.dashboard-frame.professional-shell {
   display: grid;
   grid-template-columns: var(--ui-sidebar-width) minmax(0, 1fr);
+  min-height: 100dvh;
   background: var(--ui-canvas);
 }
+
+/* ── Navigation rail ─────────────────────────────────────────────────────── */
 
 .side-rail {
   position: sticky;
   top: 0;
-  height: 100dvh;
-  padding: 20px 16px;
+  z-index: var(--z-sticky);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--ui-space-5);
+  height: 100dvh;
+  padding: var(--ui-space-4) var(--ui-space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--ui-border);
   background: var(--ui-surface);
-  overflow-y: auto;
 }
 
 .side-brand {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  padding: 4px 6px 14px;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-2) var(--ui-space-4);
   border-bottom: 1px solid var(--ui-border);
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
   border-radius: var(--ui-radius-control);
-  color: var(--ui-accent);
-  background: var(--ui-accent-soft);
+  color: var(--ui-canvas-ink);
+  background: var(--ui-primary);
 }
 
 .side-brand strong,
@@ -45,169 +53,149 @@
 
 .side-brand strong {
   color: var(--ui-ink);
-  font-size: 16px;
+  font-size: var(--ui-text-md);
+  font-weight: var(--ui-weight-semibold);
+  line-height: 1.1;
 }
 
 .side-brand small {
-  margin-top: 2px;
+  margin-top: 1px;
   color: var(--ui-muted);
+  font-size: var(--ui-text-2xs);
+  font-weight: var(--ui-weight-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .nav-section-label {
-  margin: 2px 8px -8px;
+  margin: 0 0 calc(var(--ui-space-2) * -1) var(--ui-space-2);
   color: var(--ui-muted);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--ui-text-2xs);
+  font-weight: var(--ui-weight-semibold);
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .side-nav {
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .nav-tab-btn,
 .side-logout {
-  min-height: 40px;
-  border: 0;
-  border-radius: 6px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
+  gap: var(--ui-space-2);
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--ui-space-2);
+  border: 0;
+  border-radius: var(--ui-radius);
   color: var(--ui-muted);
   background: transparent;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+  font-size: var(--ui-text-sm);
+  font-weight: var(--ui-weight-medium);
+  text-align: left;
+  transition: background var(--ui-duration) var(--ui-ease),
+    color var(--ui-duration) var(--ui-ease);
+}
+
+.nav-tab-btn svg,
+.side-logout svg {
+  flex: 0 0 auto;
+  color: var(--ui-muted-soft);
+  transition: color var(--ui-duration) var(--ui-ease);
 }
 
 .nav-tab-btn {
-  width: 100%;
-  text-align: left;
+  position: relative;
 }
 
 .nav-tab-btn:hover {
-  color: var(--ui-accent-foreground);
-  background: color-mix(in srgb, var(--ui-accent-soft) 70%, transparent);
+  color: var(--ui-ink);
+  background: var(--ui-surface-sunken);
 }
 
+.nav-tab-btn:hover svg {
+  color: var(--ui-muted);
+}
+
+/* Selection carries three signals — a rule, a weight step, and a tint — so it
+   survives greyscale, projector contrast loss, and forced-colours modes. */
 .nav-tab-btn.active {
-  color: var(--ui-accent-foreground);
+  color: var(--ui-primary-hover);
   background: var(--ui-accent-soft);
+  font-weight: var(--ui-weight-semibold);
 }
 
-.topbar-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #ffffff;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-control);
-  padding: 0 12px;
-  min-width: 240px;
-  height: 38px;
-  margin: 0 auto 0 24px;
+.nav-tab-btn.active svg {
+  color: var(--ui-primary);
 }
 
-.topbar-search svg {
-  flex: 0 0 auto;
-  color: var(--ui-muted);
-}
-
-.topbar-search input {
-  border: 0;
-  background: transparent;
-  font-size: 13px;
-  width: 100%;
-  color: var(--ui-ink);
-  outline: none;
-}
-
-.topbar-search .kbd {
-  font-size: 10px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border-strong);
-  border-radius: 4px;
-  padding: 2px 5px;
-  color: var(--ui-muted);
-  font-family: inherit;
-}
-
-.profile-widget {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-left: 12px;
-  border-left: 1px solid var(--ui-border);
-}
-
-.profile-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: inline-grid;
-  place-items: center;
-  color: var(--ui-accent-foreground);
-  background: var(--ui-accent-soft);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.profile-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.profile-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ui-ink);
-  line-height: 1.2;
-}
-
-.profile-role {
-  font-size: 11px;
-  color: var(--ui-muted);
+.nav-tab-btn.active::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: calc(var(--ui-space-3) * -1);
+  width: 2px;
+  height: 16px;
+  border-radius: 0 2px 2px 0;
+  background: var(--ui-primary);
+  transform: translateY(-50%);
 }
 
 .side-system-state {
-  margin-top: auto;
-  padding: 12px 8px;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ui-space-2);
+  margin-top: auto;
+  padding: var(--ui-space-3) var(--ui-space-2) var(--ui-space-2);
   border-top: 1px solid var(--ui-border);
   color: var(--ui-muted);
-  font-size: 12px;
+  font-size: var(--ui-text-xs);
 }
 
-.side-system-state .status-badge {
-  margin-left: auto;
+.side-system-state > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .side-logout {
-  width: 100%;
-  color: var(--ui-danger);
+  color: var(--ui-muted);
 }
 
 .side-logout:hover {
   color: var(--ui-danger);
-  background: #fff1f1;
+  background: var(--ui-danger-soft);
 }
 
+.side-logout:hover svg {
+  color: var(--ui-danger);
+}
+
+/* ── Command bar ───────────────────────────────────────────────────────────
+   One 48px row holding navigation context and global actions only. Anything
+   workspace-specific belongs in the workspace header, not here. */
+
 .app-shell {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
 .topbar {
-  min-height: var(--ui-topbar-height);
-  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--ui-space-4);
+  min-height: var(--ui-topbar-height);
+  padding: 0 var(--ui-space-6);
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-surface);
 }
@@ -216,35 +204,276 @@
 .top-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--ui-space-2);
 }
 
 .breadcrumb {
   min-width: 0;
   color: var(--ui-muted);
-  font-size: 13px;
+  font-size: var(--ui-text-sm);
+}
+
+.breadcrumb > span:first-child {
+  color: var(--ui-muted);
 }
 
 .breadcrumb-separator {
   color: var(--ui-border-strong);
-  font-size: 10px;
+  font-size: var(--ui-text-2xs);
 }
 
 .breadcrumb strong {
   overflow: hidden;
   color: var(--ui-ink);
+  font-weight: var(--ui-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .top-actions {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 14px;
+  flex: 0 0 auto;
 }
 
+.profile-widget {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding-left: var(--ui-space-3);
+  border-left: 1px solid var(--ui-border);
+}
+
+.profile-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-primary-hover);
+  background: var(--ui-accent-soft);
+  font-size: var(--ui-text-2xs);
+  font-weight: var(--ui-weight-semibold);
+  letter-spacing: 0.02em;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.profile-name {
+  color: var(--ui-ink);
+  font-size: var(--ui-text-sm);
+  font-weight: var(--ui-weight-medium);
+}
+
+.profile-role {
+  color: var(--ui-muted);
+  font-size: var(--ui-text-2xs);
+  text-transform: capitalize;
+}
+
+/* -- Inline status mark ---------------------------------------------------
+   A dot is a redundant cue: it always sits beside the words that carry the
+   meaning, so it never has to be read on its own. */
+
+.status-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-muted-soft);
+}
+
+.status-dot[data-tone="success"] {
+  background: var(--ui-success);
+}
+
+.status-dot[data-tone="warning"] {
+  background: var(--ui-warning);
+}
+
+.connection-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: 0 var(--ui-space-2);
+  min-height: var(--ui-control-sm);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-ink-2);
+  font-size: var(--ui-text-xs);
+  font-weight: var(--ui-weight-medium);
+}
+
+.connection-state[data-online="false"] {
+  color: var(--ui-warning);
+  border-color: var(--ui-warning-line);
+  background: var(--ui-warning-soft);
+}
+
+/* -- Workspace search -----------------------------------------------------
+   Filters the navigation list. It replaces a decorative box that accepted
+   keystrokes and did nothing. */
+
+.workspace-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  flex: 1 1 260px;
+  max-width: 320px;
+  min-height: var(--ui-control);
+  padding: 0 var(--ui-space-2) 0 var(--ui-space-3);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-muted);
+  transition: border-color var(--ui-duration) var(--ui-ease),
+    background var(--ui-duration) var(--ui-ease);
+}
+
+.workspace-search:focus-within {
+  border-color: var(--ui-primary);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-focus);
+}
+
+.workspace-search > svg {
+  flex: 0 0 auto;
+  color: var(--ui-muted-soft);
+}
+
+.workspace-search input {
+  width: 100%;
+  min-height: calc(var(--ui-control) - 2px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ui-ink);
+  font-size: var(--ui-text-sm);
+}
+
+.workspace-search input:focus {
+  box-shadow: none;
+}
+
+.workspace-search input::placeholder {
+  color: var(--ui-muted);
+}
+
+.workspace-search kbd {
+  flex: 0 0 auto;
+  padding: 1px var(--ui-space-1);
+  border: 1px solid var(--ui-border-strong);
+  border-radius: var(--ui-radius-inner);
+  color: var(--ui-muted);
+  background: var(--ui-surface);
+  font-family: var(--ui-font);
+  font-size: var(--ui-text-2xs);
+  letter-spacing: 0.03em;
+}
+
+.workspace-search-results {
+  position: absolute;
+  top: calc(100% + var(--ui-space-1));
+  left: 0;
+  right: 0;
+  z-index: var(--z-dropdown);
+  margin: 0;
+  padding: var(--ui-space-1);
+  list-style: none;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-overlay);
+}
+
+.workspace-search-results button {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  width: 100%;
+  min-height: var(--ui-control);
+  padding: 0 var(--ui-space-2);
+  border: 0;
+  border-radius: var(--ui-radius-inner);
+  color: var(--ui-ink-2);
+  background: transparent;
+  font-size: var(--ui-text-sm);
+  text-align: left;
+}
+
+.workspace-search-results button:hover,
+.workspace-search-results button[aria-selected="true"] {
+  color: var(--ui-primary-hover);
+  background: var(--ui-accent-soft);
+}
+
+.workspace-search-results button span {
+  flex: 1 1 auto;
+}
+
+.workspace-search-results button em {
+  color: var(--ui-muted);
+  font-size: var(--ui-text-2xs);
+  font-style: normal;
+}
+
+.workspace-search-empty {
+  padding: var(--ui-space-2);
+  color: var(--ui-muted);
+  font-size: var(--ui-text-xs);
+}
+
+/* ── Canvas ──────────────────────────────────────────────────────────────── */
+
 .workspace-canvas {
-  width: min(1500px, calc(100% - 48px));
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--ui-canvas-max);
   margin: 0 auto;
-  padding: 24px 0 40px;
+  padding: var(--ui-space-5) var(--ui-space-6) var(--ui-space-7);
+}
+
+/* ── Workspace header ──────────────────────────────────────────────────────
+   Every workspace opens with the same block: what this screen is, and the
+   controls that scope it. It replaces three different ad-hoc heading styles. */
+
+.workspace-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--ui-space-4);
+}
+
+.workspace-header h1 {
+  font-size: var(--ui-text-xl);
+  font-weight: var(--ui-weight-semibold);
+}
+
+.workspace-header p {
+  margin-top: 2px;
+  max-width: 72ch;
+  color: var(--ui-muted);
+  font-size: var(--ui-text-sm);
+}
+
+.workspace-header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  flex-wrap: wrap;
+}
+
+/* ── Mobile drawer ─────────────────────────────────────────────────────────
+   Both controls are inert above 860px. They must stay `display: none` rather
+   than merely invisible: the shell is a grid, and a non-hidden trigger becomes
+   a grid item that steals the canvas column. responsive.css reveals them. */
+
+.mobile-nav-trigger,
+.mobile-nav-backdrop {
+  display: none;
 }

@@ -1,7 +1,11 @@
 import React, { useState } from "react";
 import { MetricStrip } from "../ui/MetricStrip.jsx";
 import { SegmentedControl } from "../ui/SegmentedControl.jsx";
+import { WorkspaceHeader } from "../ui/WorkspaceHeader.jsx";
 
+/* Only 7 days exists upstream. The other two are shown disabled rather than
+   hidden, so the control states the real capability instead of implying a
+   longer horizon is one click away. */
 const horizonOptions = [
   { value: "7d", label: "7 days" },
   { value: "14d", label: "14 days", disabled: true, title: "Unavailable: source provides 7 days" },
@@ -21,11 +25,10 @@ export function WasteForecast({
 
   return (
     <section className="forecast-workspace" data-testid="forecast-workspace">
-      <div className="forecast-heading">
-        <div>
-          <h1>Waste Forecast</h1>
-          <p>Forecast demand and inspect the operating conditions behind the projected spike.</p>
-        </div>
+      <WorkspaceHeader
+        title="Waste Forecast"
+        description="Projected district demand, the weather and event drivers behind it, and the resources required to absorb the spike."
+      >
         <div className="forecast-horizon-control">
           <SegmentedControl
             label="Forecast horizon"
@@ -35,10 +38,10 @@ export function WasteForecast({
             onChange={setHorizon}
           />
           <p id="forecast-horizon-source-limit" className="forecast-source-limit">
-            Source currently provides a 7-day forecast.
+            Source provides a 7-day forecast.
           </p>
         </div>
-      </div>
+      </WorkspaceHeader>
 
       <MetricStrip metrics={metrics} />
 

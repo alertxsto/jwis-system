@@ -1,290 +1,495 @@
+/* ============================================================================
+   Fleet Operations
+
+   Layout intent: the map is the workspace. It takes the whole left region and
+   the inspector sits beside it, so an alert and the corridor it refers to are
+   on screen at the same time. The previous build stacked map, controls, legend
+   and three inspector panels vertically, which meant the operator scrolled
+   away from the map to read an alert about it.
+   ========================================================================= */
+
 .fleet-workspace {
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.workspace-canvas:has(.fleet-workspace) {
-  width: min(1500px, calc(100% - 32px));
+  gap: var(--ui-space-4);
+  min-width: 0;
 }
 
 .fleet-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  height: 540px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  height: clamp(520px, calc(100dvh - 320px), 760px);
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius);
-  overflow: hidden;
+  border-radius: var(--ui-radius-surface);
   background: var(--ui-surface);
+  overflow: hidden;
 }
 
 .fleet-map-stage {
   position: relative;
   min-width: 0;
   height: 100%;
-  border-right: none;
+  background: var(--ui-surface-sunken);
 }
 
 .fleet-map-stage .map-anchor,
-.fleet-map-stage .map-panel {
-  height: 100%;
-}
-
-.fleet-map-stage .map-panel {
-  grid-column: auto;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
+.fleet-map-stage .map-panel,
 .fleet-map-stage .maplibre-shell,
 .fleet-map-stage .maplibre-container {
   height: 100%;
+}
+
+.fleet-map-stage .map-panel {
+  grid-column: auto;
+  padding: 0;
+  border: 0;
   border-radius: 0;
 }
 
+/* The panel title of the map is redundant here: the workspace header already
+   names the screen, and the "Simulation" provenance pill lives on the map. */
+.fleet-map-stage .map-panel > .panel-title {
+  position: absolute;
+  top: var(--ui-space-3);
+  left: var(--ui-space-3);
+  z-index: var(--z-dropdown);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fleet-map-stage .map-panel > .panel-title p {
+  display: none;
+}
+
+/* ── Map overlay toolbar ───────────────────────────────────────────────────
+   Layer switches belong to the map, not to a separate card three screens down.
+   Rendered as an overlay so it never competes with the map for height. */
+
+.map-overlay {
+  position: absolute;
+  top: var(--ui-space-3);
+  right: var(--ui-space-3);
+  z-index: var(--z-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  width: 168px;
+  padding: var(--ui-space-2);
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: color-mix(in srgb, var(--ui-surface) 94%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+.map-overlay-label {
+  color: var(--ui-muted);
+  font-size: var(--ui-text-2xs);
+  font-weight: var(--ui-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.map-overlay label {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  color: var(--ui-ink-2);
+  font-size: var(--ui-text-xs);
+  cursor: pointer;
+}
+
+.map-overlay input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  min-height: 0;
+  margin: 0;
+  accent-color: var(--ui-primary);
+}
+
+.map-overlay select {
+  width: 100%;
+  min-height: var(--ui-control-sm);
+  font-size: var(--ui-text-xs);
+}
+
+/* ── Legend ────────────────────────────────────────────────────────────────
+   Provenance tags (REAL / MODEL / SIM / LIVE) are the point of this legend:
+   they tell a judge which layer is measured and which is simulated. */
+
+.map-legend {
+  position: absolute;
+  bottom: var(--ui-space-3);
+  left: var(--ui-space-3);
+  z-index: var(--z-dropdown);
+  max-width: 264px;
+  max-height: 44%;
+  overflow-y: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: color-mix(in srgb, var(--ui-surface) 94%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: var(--ui-shadow-raised);
+}
+
+.map-legend summary {
+  display: flex;
+  align-items: center;
+  min-height: var(--ui-control);
+  padding: 0 var(--ui-space-3);
+  color: var(--ui-muted);
+  font-size: var(--ui-text-2xs);
+  font-weight: var(--ui-weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  list-style: none;
+}
+
+.map-legend summary::-webkit-details-marker {
+  display: none;
+}
+
+.map-legend-items {
+  display: grid;
+  gap: 3px;
+  padding: 0 var(--ui-space-3) var(--ui-space-2);
+}
+
+.map-legend-items > span {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  color: var(--ui-ink-2);
+  font-size: var(--ui-text-xs);
+  white-space: nowrap;
+}
+
+.map-legend i,
+.map-legend .legend-icon-tpa,
+.map-legend .legend-icon-unlicensed {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--ui-radius-pill);
+}
+
+.map-legend .legend-tag {
+  margin-left: auto;
+  padding: 0 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-inner);
+  color: var(--ui-muted);
+  background: var(--ui-surface-muted);
+  font-size: var(--ui-text-2xs);
+  font-style: normal;
+  font-weight: var(--ui-weight-semibold);
+  letter-spacing: 0.04em;
+}
+
+/* Swatch colours live here rather than in inline JSX styles. */
+
+
+.legend-tps {
+  background: var(--ui-viz-3);
+}
+
+.legend-wr {
+  background: var(--ui-viz-4);
+}
+
+.legend-risk {
+  background: var(--ui-viz-6);
+}
+
+.legend-assigned {
+  background: var(--ui-border-strong);
+}
+
+.legend-actual {
+  background: var(--ui-primary);
+}
+
+.legend-critical {
+  background: var(--ui-danger);
+}
+
+.legend-osrm {
+  background: var(--ui-info);
+}
+
+.legend-event {
+  width: 14px;
+  height: 10px;
+  border-radius: var(--ui-radius-inner);
+  background: var(--ui-warning);
+}
+
+.legend-icon-tpa {
+  background: var(--ui-viz-6);
+  box-shadow: 0 0 0 2px var(--ui-surface);
+}
+
+.legend-icon-unlicensed {
+  background: var(--ui-warning);
+  box-shadow: 0 0 0 2px var(--ui-surface);
+}
+
+/* ── Inspector ─────────────────────────────────────────────────────────────
+   A scrolling column of panels beside the map. Panels stack without their own
+   borders so the column reads as one surface, not as nested cards. */
+
 .fleet-inspector {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--ui-border);
   background: var(--ui-surface);
 }
 
-.fleet-inspector .panel {
+.fleet-inspector > .panel {
   grid-column: auto;
+  padding: var(--ui-space-4);
   border: 0;
-  border-bottom: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border-faint);
   border-radius: 0;
-  box-shadow: none;
 }
 
-.fleet-inspector .panel:last-child {
+.fleet-inspector > .panel:last-child {
   border-bottom: 0;
 }
 
+/* ── Detail tabs ───────────────────────────────────────────────────────────
+   One surface at a time below the map. The rule sits under the active label
+   rather than around it, so the strip reads as tabs, not as buttons. */
+
 .workspace-tabs {
   display: flex;
-  gap: 2px;
-  margin-top: 8px;
+  gap: var(--ui-space-1);
   border-bottom: 1px solid var(--ui-border);
-  flex-shrink: 0;
 }
 
 .workspace-tab {
-  min-height: 42px;
-  padding: 0 14px;
+  position: relative;
+  min-height: var(--ui-control-lg);
+  padding: 0 var(--ui-space-3);
   border: 0;
   border-bottom: 2px solid transparent;
   color: var(--ui-muted);
   background: transparent;
-  font-weight: 700;
-  cursor: pointer;
+  font-size: var(--ui-text-sm);
+  font-weight: var(--ui-weight-medium);
+  transition: color var(--ui-duration) var(--ui-ease),
+    border-color var(--ui-duration) var(--ui-ease);
 }
 
 .workspace-tab:hover {
   color: var(--ui-ink);
-  background: var(--ui-surface-muted);
 }
 
 .workspace-tab[aria-selected="true"] {
-  color: var(--ui-accent);
-  border-bottom-color: var(--ui-accent);
+  color: var(--ui-primary-hover);
+  border-bottom-color: var(--ui-primary);
+  font-weight: var(--ui-weight-semibold);
 }
 
 .fleet-detail-surface {
-  margin-top: 0;
-  height: 200px;
-  min-height: 0;
-  flex-shrink: 0;
-  overflow: hidden;
+  min-height: 240px;
+  max-height: 420px;
+  overflow-y: auto;
 }
 
-.fleet-detail-surface .panel {
+.fleet-detail-surface > .panel {
   width: 100%;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  box-shadow: none;
-  border-radius: var(--ui-radius);
-  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-surface);
 }
+
+@media (max-width: 1180px) {
+  .fleet-stage {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+}
+
+@media (max-width: 980px) {
+  .fleet-stage {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .fleet-map-stage {
+    height: 520px;
+    min-height: 420px;
+  }
+
+  .fleet-inspector {
+    max-height: 420px;
+    border-top: 1px solid var(--ui-border);
+    border-left: 0;
+  }
+}
+
+
+/* ============================================================================
+   Waste Forecast
+
+   One dominant analysis surface (district ranking + forecast) with the drivers
+   that explain it in a sticky rail. The rail sticks so the rainfall figure that
+   justifies a spike stays on screen while the operator reads the ranking.
+   ========================================================================= */
 
 .forecast-workspace {
-  grid-column: 1 / -1;
   min-width: 0;
-}
-
-.forecast-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.forecast-heading h1 {
-  margin: 0;
-  color: var(--ui-ink);
-  font-size: 24px;
-  line-height: 1.2;
-}
-
-.forecast-heading p {
-  max-width: 70ch;
-  margin: 6px 0 0;
-  color: var(--ui-muted);
 }
 
 .forecast-horizon-control {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
+  gap: var(--ui-space-1);
 }
 
 .forecast-source-limit {
-  margin: 0;
   color: var(--ui-muted);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: var(--ui-text-xs);
+  line-height: var(--ui-leading-normal);
 }
 
 .forecast-analysis-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(360px, 0.85fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.7fr) minmax(320px, 0.85fr);
+  gap: var(--ui-space-4);
   align-items: start;
-  margin-top: 4px;
 }
 
 .forecast-primary-analysis,
 .forecast-driver-rail,
-.forecast-districts,
 .forecast-tools {
   min-width: 0;
 }
 
 .forecast-primary-analysis .panel,
 .forecast-driver-rail .panel,
-.forecast-districts .panel,
 .forecast-tools .panel {
   grid-column: auto;
 }
 
-.forecast-primary-analysis > .panel,
-.forecast-driver-rail > .panel,
-.forecast-districts > .panel,
-.forecast-tools > .panel {
-  border-radius: var(--ui-radius);
-}
-
-.forecast-primary-analysis .panel {
-  min-height: auto;
-}
-
 .forecast-primary-analysis {
   display: grid;
-  gap: 16px;
+  gap: var(--ui-space-4);
 }
 
 .forecast-driver-rail {
   position: sticky;
-  top: 88px;
+  top: calc(var(--ui-topbar-height) + var(--ui-space-4));
   display: grid;
-  gap: 16px;
-  max-height: calc(100dvh - 108px);
+  gap: var(--ui-space-4);
+  max-height: calc(100dvh - var(--ui-topbar-height) - var(--ui-space-6));
   overflow: auto;
   padding-right: 2px;
   scrollbar-gutter: stable;
 }
 
-.forecast-districts {
-  margin-top: 16px;
-}
-
-.forecast-districts .panel {
-  width: 100%;
-}
-
 .forecast-tools {
   display: grid;
-  grid-template-columns: minmax(340px, 1.15fr) repeat(2, minmax(240px, 0.7fr));
-  gap: 14px;
-  margin-top: 16px;
+  grid-template-columns: minmax(320px, 1.15fr) repeat(2, minmax(220px, 0.7fr));
+  gap: var(--ui-space-4);
+  margin-top: var(--ui-space-4);
   align-items: stretch;
-}
-
-.forecast-tools .panel {
-  margin: 0;
-  padding: 16px;
-  box-shadow: none;
 }
 
 .forecast-tools .assistant-panel {
   min-width: 0;
 }
 
-.workspace-canvas:has(.planning-workspace) {
-  width: min(1500px, calc(100% - 32px));
+@media (max-width: 1180px) {
+  .forecast-analysis-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .forecast-driver-rail {
+    position: static;
+    max-height: none;
+  }
+
+  .forecast-tools {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
+/* ============================================================================
+   Integrated Planning
+
+   Three stages left to right, in decision order: scenario, recommendation,
+   evidence and approval. Approval stays disabled while constraints are unmet,
+   and the header states how many.
+   ========================================================================= */
+
 .planning-workspace {
-  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: minmax(250px, 0.85fr) minmax(340px, 1.15fr) minmax(280px, 0.95fr);
+  grid-template-columns: minmax(240px, 0.85fr) minmax(320px, 1.15fr) minmax(260px, 0.95fr);
   min-width: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-surface);
+  background: var(--ui-surface);
+  overflow: hidden;
+}
+
+.planning-workspace > .workspace-header {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: var(--ui-space-4) var(--ui-space-5) var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .decision-stage {
   min-width: 0;
-  padding: 20px;
-  border-left: 1px solid var(--ui-border);
-  background: var(--ui-surface);
+  padding: var(--ui-space-5);
+  border-left: 1px solid var(--ui-border-faint);
 }
 
-.decision-stage:first-child {
+.decision-stage:first-of-type {
   border-left: 0;
 }
 
 .decision-stage-header {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
-  min-height: 38px;
-  margin-bottom: 18px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--ui-border);
+  gap: var(--ui-space-2);
+  margin-bottom: var(--ui-space-4);
+  padding-bottom: var(--ui-space-3);
+  border-bottom: 1px solid var(--ui-border-faint);
 }
 
 .decision-stage-marker {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
   display: inline-grid;
   place-items: center;
-  border-radius: 50%;
-  color: #ffffff;
-  background: var(--ui-primary-hover);
-  font-size: 12px;
-  font-weight: 800;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--ui-radius-pill);
+  color: var(--ui-canvas-ink);
+  background: var(--ui-primary);
+  font-size: var(--ui-text-2xs);
+  font-weight: var(--ui-weight-semibold);
   font-variant-numeric: tabular-nums;
 }
 
 .decision-stage-header h2 {
-  margin: 3px 0 0;
-  color: var(--ui-ink);
-  font-size: 17px;
-  line-height: 1.3;
+  margin-top: 1px;
+  font-size: var(--ui-text-md);
 }
 
 .decision-stage-title-row {
-  min-width: 0;
-  flex: 1;
   display: flex;
+  flex: 1 1 auto;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--ui-space-2);
+  min-width: 0;
 }
 
 .decision-stage-content,
@@ -293,12 +498,26 @@
 }
 
 .planning-workspace .panel-title h2 {
-  font-size: 15px;
-  line-height: 1.35;
+  font-size: var(--ui-text-md);
 }
 
 .planning-workspace .scenario-panel .control-row {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (max-width: 1180px) {
+  .planning-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .decision-stage {
+    border-left: 0;
+    border-top: 1px solid var(--ui-border-faint);
+  }
+
+  .decision-stage:first-of-type {
+    border-top: 0;
+  }
 }
 
 .planning-workspace .scenario-reqs {
@@ -323,13 +542,13 @@
   white-space: nowrap;
 }
 
+/* The plan card is a section of the decision stage, not a card inside a card:
+   the stage already provides the surface, so the card carries no chrome. */
 .planning-workspace .optimizer-plan-card {
-  margin-top: 14px;
+  margin-top: var(--ui-space-3);
   padding: 0;
   border: 0;
-  border-radius: 0;
   background: transparent;
-  box-shadow: none;
 }
 
 .planning-workspace .plan-header {
@@ -420,11 +639,11 @@
 }
 
 .planning-approval-blocked {
-  padding: 10px;
-  border: 1px solid #efc1c1;
+  padding: var(--ui-space-3);
+  border: 1px solid var(--ui-danger-line);
   border-radius: var(--ui-radius-control);
   color: var(--ui-danger);
-  background: #fff0f0;
+  background: var(--ui-danger-soft);
 }
 
 .approval-evidence-list {
@@ -628,87 +847,26 @@
   background: var(--ui-success);
 }
 
-@media (max-width: 1180px) {
-  .planning-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .decision-stage {
-    border-top: 1px solid var(--ui-border);
-    border-left: 0;
-  }
-
-  .decision-stage:first-child {
-    border-top: 0;
-  }
-
-  .planning-workspace .scenario-panel .control-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .planning-workspace .scenario-panel .control-row .primary-button {
-    grid-column: 1 / -1;
-  }
-
-  .planning-workspace .scenario-reqs {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 1100px) {
   .wa-workspace {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 980px) {
-  .forecast-analysis-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .forecast-driver-rail {
-    position: static;
-    max-height: none;
-    overflow: visible;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .forecast-tools {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 640px) {
-  .forecast-heading {
-    flex-direction: column;
-  }
-
-  .forecast-heading .segmented-control {
-    align-self: stretch;
-  }
-
   .forecast-horizon-control {
     width: 100%;
     align-items: stretch;
   }
 
-  .forecast-driver-rail {
-    display: flex;
-  }
-
-  .workspace-canvas:has(.planning-workspace) {
-    width: min(calc(100% - 20px), 1500px);
-  }
-
   .decision-stage {
-    padding: 16px;
+    padding: var(--ui-space-4);
   }
 
   .planning-workspace .scenario-panel .control-row,
   .planning-workspace .scenario-reqs,
   .planning-workspace .plan-stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .planning-workspace .assign-card,
@@ -722,21 +880,3 @@
   }
 }
 
-/* Map footer inspector row styles (desktop 3-column grid, mobile stacked) */
-.map-footer-inspector-row {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 16px;
-  min-width: 0;
-}
-
-.inspector-col {
-  min-width: 0;
-}
-
-@media (max-width: 1024px) {
-  .map-footer-inspector-row {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}

@@ -8,7 +8,7 @@
 .summary-panel ul {
   margin: 0 0 18px;
   padding-left: 18px;
-  color: #344452;
+  color: var(--ui-ink-2);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -18,10 +18,10 @@
 }
 
 .queue-box {
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--ui-border-strong);
   border-radius: 8px;
   padding: 14px;
-  background: #fbfcfd;
+  background: var(--ui-surface-muted);
 }
 
 .queue-box strong {
@@ -31,7 +31,7 @@
 .queue-box span {
   display: block;
   font-size: 13px;
-  color: #526170;
+  color: var(--ui-muted);
   margin-top: 2px;
 }
 
@@ -52,21 +52,21 @@
   display: block;
   font-size: 12px;
   font-weight: 800;
-  color: #526170;
+  color: var(--ui-muted);
   margin-bottom: 4px;
 }
 
 .scenario-panel input {
   width: 100%;
   border-radius: 8px;
-  border: 1px solid #cbd5df;
+  border: 1px solid var(--ui-border-strong);
   padding: 10px 12px;
   min-height: 44px;
 }
 
 .scenario-result {
-  border: 1px solid #d8d9f5;
-  background: #f5f5ff;
+  border: 1px solid var(--ui-accent-line);
+  background: var(--ui-surface-sunken);
   border-radius: 8px;
   padding: 12px;
   text-align: center;
@@ -98,7 +98,7 @@
   padding: 10px;
   border-radius: 8px;
   text-align: center;
-  border: 1px solid #d8d9f5;
+  border: 1px solid var(--ui-accent-line);
 }
 
 .req-chip b {
@@ -117,7 +117,7 @@
   align-items: center;
   justify-content: space-around;
   margin-top: 16px;
-  background: #f8fafc;
+  background: var(--ui-surface-muted);
   padding: 16px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -159,7 +159,7 @@
   top: -10px;
   right: 12px;
   background: var(--green-dark);
-  color: #fff;
+  color: var(--ui-canvas-ink);
   font-size: 11px;
   font-weight: 700;
   padding: 2px 8px;
@@ -274,7 +274,7 @@
 
 .status-badge.cleared { background: var(--green-light); color: var(--green-dark); }
 
-.status-badge.weighing { background: #fef3c7; color: #b45309; }
+.status-badge.weighing { background: var(--ui-warning-soft); color: var(--ui-warning); }
 
 /* Operations Optimizer UI styling */
 .optimizer-section {
@@ -297,13 +297,9 @@
   color: var(--ink);
 }
 
-.optimizer-plan-card {
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 14px;
-  margin-top: 14px;
-}
+/* The plan card renders only inside the planning workspace, where it is a
+   section of the decision stage rather than a card of its own. Its chrome is
+   therefore defined once, in workspaces.css. */
 
 .plan-header {
   display: flex;
@@ -340,7 +336,7 @@
 
 .unmet-reasons-box {
   background: var(--red-light);
-  border: 1px solid rgba(180, 35, 24, 0.2);
+  border: 1px solid var(--ui-danger-line);
   border-radius: 6px;
   padding: 10px;
   margin-bottom: 14px;
@@ -406,7 +402,7 @@
 
 .optimizer-success {
   background: var(--green-light);
-  border: 1px solid rgba(23, 107, 84, 0.2);
+  border: 1px solid var(--ui-success-line);
   border-radius: 6px;
   padding: 10px;
   margin-top: 14px;
@@ -425,11 +421,11 @@
 }
 
 .plan-status-badge.proposed {
-  background: var(--amber-light);
-  color: var(--amber);
+  background: var(--ui-surface-sunken);
+  color: var(--ui-muted);
 }
 
 .plan-status-badge.approved {
-  background: var(--green-light);
-  color: var(--green);
+  background: var(--ui-success-soft);
+  color: var(--ui-success);
 }

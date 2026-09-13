@@ -1,39 +1,42 @@
-/* ── Legacy remainder styles ── */
+/* ============================================================================
+   Remnants
 
-.marker.diverted span { background: var(--red) !important; }
+   Rules here belong to feature modules that have not been folded into a
+   dedicated stylesheet yet. Nothing new should be added to this file: a rule
+   that outlives its module belongs in that module's stylesheet, or in the
+   primitives layer if it is genuinely shared.
 
-@media(min-width:641px){.map-legend[open] summary,.map-legend summary{}.map-legend{position:absolute;left:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid rgba(203, 213, 223, 0.8);background:rgba(255, 255, 255, 0.95);box-shadow:none;width:240px;}}
+   The previous contents included two duplicated `.map-legend` blocks that
+   re-declared position/width and overrode the map overlay layout. The overlay
+   is now defined once, in workspaces.css.
+   ========================================================================= */
 
-@media(max-width:640px){.map-legend{position:absolute;left:12px;top:12px;z-index:2;display:flex;flex-direction:column;gap:8px;padding:8px 12px;border-radius:8px;border:1px solid rgba(203, 213, 223, 0.8);background:rgba(255, 255, 255, 0.95);box-shadow:none;width:240px;}.map-legend:not([open]) span{display:none;}}
+.marker.diverted span {
+  background: var(--ui-danger) !important;
+}
 
 .assignments-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--ui-space-2);
   max-height: 180px;
+  margin-bottom: var(--ui-space-3);
+  padding-right: var(--ui-space-1);
   overflow-y: auto;
-  margin-bottom: 14px;
-  padding-right: 4px;
 }
 
-@media (max-width: 768px) {
-  .map-footer-panels {
-    flex-direction: column;
-  }
+.status-overcapacity {
+  color: var(--ui-danger);
+  font-weight: var(--ui-weight-semibold);
+}
+
+.status-normal {
+  color: var(--ui-success);
+  font-weight: var(--ui-weight-semibold);
 }
 
 @media (max-width: 768px) {
   .kec-details-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.status-overcapacity {
-  color: #d92d20;
-  font-weight: 700;
-}
-
-.status-normal {
-  color: #039855;
-  font-weight: 700;
 }

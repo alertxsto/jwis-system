@@ -1,14 +1,19 @@
-@import url("https://cdn.jsdelivr.net/npm/@fontsource/geist-sans@5/index.css");
-@import url("https://cdn.jsdelivr.net/npm/@fontsource/geist-mono@5/index.css");
+/* Local font files, bundled by Vite. A competition demo may run on a venue
+   network with no CDN reachability, so the type ramp must not depend on one. */
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
+
 @import "./styles/tokens.css";
 @import "./styles/base.css";
-@import "./styles/legacy.css";
+@import "./styles/components.css";
+@import "./styles/shell.css";
 @import "./styles/map.css";
 @import "./styles/forecast.css";
 @import "./styles/planning.css";
 @import "./styles/panels.css";
-
-@import "./styles/shell.css";
-@import "./styles/components.css";
 @import "./styles/workspaces.css";
+@import "./styles/legacy.css";
 @import "./styles/responsive.css";

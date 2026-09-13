@@ -7,6 +7,7 @@ import { FleetOperations } from "./workspaces/FleetOperations.jsx";
 import { IntegratedPlanning } from "./workspaces/IntegratedPlanning.jsx";
 import { WasteForecast } from "./workspaces/WasteForecast.jsx";
 import { StatusPill } from "./ui/StatusPill.jsx";
+import { WorkspaceHeader } from "./ui/WorkspaceHeader.jsx";
 import { AlertQueue } from "./components/AlertQueue.jsx";
 import { RouteEvidencePanel } from "./components/RouteEvidencePanel.jsx";
 import { WeatherPanel } from "./components/WeatherPanel.jsx";
@@ -73,141 +74,31 @@ if (import.meta.env.DEV && "serviceWorker" in navigator) {
   }).catch(() => {});
 }
 
-const fallbackSnapshot = {
-  kpis: {
-    active_trucks: 5,
-    trucks_with_issues: 2,
-    tpa_queue_trucks: 47,
-    tpa_wait_minutes: 116,
-    predicted_spike_percent: 41,
-    pending_dispatches: 0,
-  },
-  tpa_queue: {
-    status: "red",
-    trucks_waiting: 47,
-    estimated_wait_minutes: 116,
-    throughput_trucks_per_hour: 31,
-    recommendation: "Delay non-critical departures by 45 minutes and prioritize West Jakarta event waste.",
-  },
-  trucks: [
-    {
-      truck_code: "T-001",
-      plate_number: "B 1234 CD",
-      driver_name: "Budi Santoso",
-      assigned_zone: "Jakarta Utara",
-      status: "active",
-      is_damaged: false,
-      latest_position: { lat: -6.151, lng: 106.841, speed_kmh: 34, updated_seconds_ago: 24 },
-      assigned_path: [{ lat: -6.132, lng: 106.826 }, { lat: -6.145, lng: 106.835 }, { lat: -6.158, lng: 106.848 }],
-      deviation: { violated: false, distance_meters: 220, severity: "normal" },
-    },
-    {
-      truck_code: "T-047",
-      plate_number: "B 5678 EF",
-      driver_name: "Agus Pratama",
-      assigned_zone: "Jakarta Barat",
-      status: "deviation",
-      is_damaged: false,
-      latest_position: { lat: -6.221, lng: 106.785, speed_kmh: 18, updated_seconds_ago: 24 },
-      assigned_path: [{ lat: -6.172, lng: 106.764 }, { lat: -6.181, lng: 106.781 }, { lat: -6.195, lng: 106.802 }],
-      deviation: { violated: true, distance_meters: 2924, severity: "critical" },
-    },
-    {
-      truck_code: "T-112",
-      plate_number: "B 4410 KL",
-      driver_name: "Rizky Maulana",
-      assigned_zone: "Jakarta Timur",
-      status: "active",
-      is_damaged: true,
-      latest_position: { lat: -6.211, lng: 106.874, speed_kmh: 23, updated_seconds_ago: 24 },
-      assigned_path: [{ lat: -6.229, lng: 106.9 }, { lat: -6.218, lng: 106.883 }, { lat: -6.205, lng: 106.865 }],
-      deviation: { violated: false, distance_meters: 331, severity: "normal" },
-    },
-  ],
-  alerts: [
-    {
-      id: "ALT-T-047",
-      type: "route_deviation",
-      severity: "critical",
-      truck_code: "T-047",
-      title: "T-047 deviated from assigned corridor",
-      description: "Truck is 2924 meters from the assigned corridor.",
-      recommended_routes: [
-        {
-          name: "Route B - Daan Mogot Recovery",
-          eta_minutes: 48,
-          score: 39.0,
-          reason: "recommended because it is permit-compliant, has the lowest combined ETA/traffic/flood risk score",
-        },
-      ],
-      status: "active",
-    },
-  ],
-  critical_predictions: [
-    {
-      district: "Jakarta Barat",
-      date: "2026-06-01",
-      predicted_tons: 3136.7,
-      spike_percent: 41,
-      risk_level: "critical",
-      recommended_extra_trucks: 29,
-      recommended_extra_crews: 14,
-      factors: [
-        "Heavy rainfall adds flood-related waste and slows collection (+16%).",
-        "Large permitted event increases waste around crowded areas (+18%).",
-        "Weekend activity raises commercial and public-space waste (+7%).",
-      ],
-    },
-  ],
-  osrm_route: {
-    name: "Route B - Daan Mogot Recovery",
-    source: "fallback",
-    eta_minutes: 48,
-    distance_km: 18.2,
-    reason: "fallback route used when OSRM public service is unavailable",
-  },
-  weather: {
-    source: "fallback-demo",
-    location: "Jakarta, Indonesia",
-    forecast: [
-      {
-        date: "2026-06-01",
-        temperature_max_c: 31.2,
-        temperature_min_c: 24.8,
-        rainfall_mm: 42,
-        precipitation_probability: 91,
-        wind_speed_kmh: 17.1,
-        risk_level: "critical",
-        waste_impact_percent: 22,
-        operational_advice: "Delay low-priority departures, protect flood-prone TPS routes, and prepare backup crews.",
-      },
-      {
-        date: "2026-06-02",
-        temperature_max_c: 30.4,
-        temperature_min_c: 24.1,
-        rainfall_mm: 18.5,
-        precipitation_probability: 68,
-        wind_speed_kmh: 14.2,
-        risk_level: "watch",
-        waste_impact_percent: 11,
-        operational_advice: "Monitor rain bands and keep dispatch timing flexible.",
-      },
-    ],
-  },
+/**
+ * Offline placeholder.
+ *
+ * This deliberately carries no operational figures. The previous version
+ * substituted invented ones — a 116-minute landfill queue with 47 trucks, a
+ * 3,136.7 t/day district spike — so an operator (or a judge) looking at an
+ * unreachable API saw confident numbers that no engine had produced. The
+ * backend's own impact harness retires exactly those claims, and the shell
+ * already tells the user it is offline. Empty is the honest state; every
+ * surface below renders "unavailable" rather than a placeholder value.
+ */
+const EMPTY_SNAPSHOT = {
+  kpis: null,
+  tpa_queue: null,
+  trucks: [],
+  alerts: [],
+  critical_predictions: [],
+  osrm_route: null,
+  weather: null,
   dispatches: [],
-  executive_summary: {
-    headline: "West Jakarta requires immediate capacity reinforcement within 48 hours.",
-    points: [
-      "Largest forecasted spike is driven by heavy rainfall, a large permitted event, and weekend activity.",
-      "T-047 is outside the assigned corridor and should be redirected through Route B.",
-      "TPA Bantargebang queue is above the operational threshold; dispatch timing should be staggered.",
-      "Recommended action: add 28 trucks and 14 crews across high-risk districts for the next two days.",
-    ],
-  },
+  executive_summary: null,
 };
 
 function useSnapshot() {
-  const [snapshot, setSnapshot] = useState(fallbackSnapshot);
+  const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
   const [online, setOnline] = useState(false);
 
   async function load() {
@@ -217,7 +108,7 @@ function useSnapshot() {
       setSnapshot(await response.json());
       setOnline(true);
     } catch {
-      setSnapshot(fallbackSnapshot);
+      setSnapshot(EMPTY_SNAPSHOT);
       setOnline(false);
     }
   }
@@ -266,19 +157,20 @@ function LoginPage({ onLogin }) {
       <section className="login-surface" aria-labelledby="login-title">
         <div className="login-card">
           <div className="login-brand">
-            <span><ShieldCheck size={22} /></span>
+            <span aria-hidden="true"><ShieldCheck size={20} /></span>
             <div>
               <p className="login-kicker">DLH Command Access</p>
               <h1 id="login-title">JWIS Control Center</h1>
             </div>
           </div>
           <p className="login-copy">
-            Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.
+            Fleet monitoring, waste forecasting, and dispatch supervision for Jakarta's
+            waste operations.
           </p>
           <form className="login-form" onSubmit={submit}>
             <label htmlFor="username">Username</label>
             <div className="input-shell">
-              <User size={18} />
+              <User size={16} aria-hidden="true" />
               <input
                 id="username"
                 value={username}
@@ -289,7 +181,7 @@ function LoginPage({ onLogin }) {
             </div>
             <label htmlFor="password">Password</label>
             <div className="input-shell">
-              <Lock size={18} />
+              <Lock size={16} aria-hidden="true" />
               <input
                 id="password"
                 type="password"
@@ -307,51 +199,44 @@ function LoginPage({ onLogin }) {
               disabled={isSubmitting}
               aria-busy={isSubmitting}
             >
-              <Lock size={16} />
+              <Lock size={15} aria-hidden="true" />
               {isSubmitting ? "Signing in…" : "Sign in"}
             </button>
           </form>
           <div className="login-demo-note">
             <strong>Demo roles</strong>
-            <span>dispatcher / supervisor / auditor · password &lt;role&gt;-demo-pass</span>
+            <span>dispatcher · supervisor · auditor — password &lt;role&gt;-demo-pass</span>
           </div>
         </div>
-        <aside className="login-proof" aria-label="JWIS operating scope">
+
+        <aside className="login-proof" aria-label="Operating scope">
           <div className="login-proof-intro">
-            <span className="brand-mark"><Route size={19} /></span>
+            <span className="brand-mark" aria-hidden="true"><Route size={16} /></span>
             <div>
               <strong>Jakarta Waste Intelligence System</strong>
-              <p>Operational access for DLH command personnel.</p>
+              <p>Decision support for the Dinas Lingkungan Hidup command centre.</p>
             </div>
           </div>
           <div className="login-proof-metrics">
             <div>
-              <span className="metric-label">Queue model</span>
-              <strong>Discrete event</strong>
-              <p>Simulated landfill waiting-time operations.</p>
+              <span>Coverage</span>
+              <strong>42 kecamatan</strong>
+              <p>District-level demand across all six Jakarta administrative cities.</p>
             </div>
             <div>
-              <span className="metric-label">Coverage</span>
-              <strong>Case 1 + 2</strong>
-              <p>Fleet supervision and resource planning.</p>
+              <span>Method</span>
+              <strong>Model + simulation</strong>
+              <p>Forecasts and queue behaviour are modelled, not field-measured. Every screen labels which is which.</p>
+            </div>
+            <div>
+              <span>Field link</span>
+              <strong>Driver dispatch</strong>
+              <p>Approved plans reach drivers through the field app and WhatsApp gateway.</p>
             </div>
           </div>
         </aside>
       </section>
     </main>
-  );
-}
-
-function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
-  return (
-    <section className={`kpi ${tone}`}>
-      <div className="kpi-icon"><Icon size={20} /></div>
-      <div>
-        <p>{label}</p>
-        <strong>{value}</strong>
-        <span>{helper}</span>
-      </div>
-    </section>
   );
 }
 
@@ -385,11 +270,16 @@ function PredictionPanel({ predictions }) {
     <section className="panel">
       <div className="panel-title">
         <div>
-          <h2>Predictive Readiness</h2>
+          <h2>Predictive readiness</h2>
           <p>Seven-day spatial risk forecast with explainable demand drivers.</p>
         </div>
-        <CloudRain size={20} />
+        <CloudRain size={18} aria-hidden="true" />
       </div>
+      {predictions.length === 0 ? (
+        <p className="panel-state" role="status">
+          No forecast available. The prediction endpoint has not returned data.
+        </p>
+      ) : (
       <div className="prediction-list">
         {predictions.map((item) => (
           <article className="prediction" key={`${item.district}-${item.date}`}>
@@ -407,6 +297,7 @@ function PredictionPanel({ predictions }) {
           </article>
         ))}
       </div>
+      )}
     </section>
   );
 }
@@ -651,24 +542,43 @@ function KecamatanMapPanel() {
 
 
 function ExecutiveSummary({ summary, queue }) {
+  if (!summary) {
+    return (
+      <section className="panel summary-panel">
+        <div className="panel-title">
+          <div>
+            <h2>Executive summary</h2>
+            <p>Prepared for DLH leadership and case-provider review.</p>
+          </div>
+          <ShieldCheck size={18} aria-hidden="true" />
+        </div>
+        <p className="panel-state" role="status">
+          No summary available. The command-centre feed has not returned data.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="panel summary-panel">
       <div className="panel-title">
         <div>
-          <h2>Executive Summary</h2>
+          <h2>Executive summary</h2>
           <p>Prepared for DLH leadership and case-provider review.</p>
         </div>
-        <ShieldCheck size={20} />
+        <ShieldCheck size={18} aria-hidden="true" />
       </div>
       <h3>{summary.headline}</h3>
       <ul>
         {summary.points.map((point) => <li key={point}>{point}</li>)}
       </ul>
-      <div className="queue-box">
-        <strong>TPA Bantargebang queue</strong>
-        <span>{queue.trucks_waiting} trucks waiting - {queue.estimated_wait_minutes} min estimated delay</span>
-        <p>{queue.recommendation}</p>
-      </div>
+      {queue && (
+        <div className="queue-box">
+          <strong>TPA Bantargebang queue</strong>
+          <span>{queue.trucks_waiting} trucks waiting — {queue.estimated_wait_minutes} min estimated delay</span>
+          <p>{queue.recommendation}</p>
+        </div>
+      )}
     </section>
   );
 }
@@ -1101,10 +1011,10 @@ function DriverAnalytics() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>Driver Performance Analytics (Case 1)</h2>
-          <p>Real-time scoring of route corridor compliance, safety, and fuel efficiency.</p>
+          <h2>Corridor compliance by driver</h2>
+          <p>Scores are computed from simulated trip data, not observed field performance.</p>
         </div>
-        <Truck size={20} />
+        <Truck size={18} aria-hidden="true" />
       </div>
       <div className="table-wrap mt-16">
         <table>
@@ -1153,10 +1063,10 @@ function WeighbridgeLogs() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>weighbridge Weighing Records (Case 1)</h2>
-          <p>Real-time transactions ingested from Bantargebang's weighbridge scales.</p>
+          <h2>Weighing records</h2>
+          <p>Sample of entry-scale transactions at Bantargebang. These rows are fixture data for the demonstration, not a live scale feed.</p>
         </div>
-        <Workflow size={20} />
+        <Workflow size={18} aria-hidden="true" />
       </div>
       <div className="table-wrap mt-16">
         <table>
@@ -1431,10 +1341,10 @@ function IotBinSensors() {
     <section className="panel wide">
       <div className="panel-title">
         <div>
-          <h2>IoT Radar Bin Sensors (Case 2 Facility Readiness)</h2>
-          <p>Radar ultrasonic volume capacity tracking deployed at public trash bins.</p>
+          <h2>Bin fill levels</h2>
+          <p>Simulated readings. No sensor hardware is connected to this deployment.</p>
         </div>
-        <Activity size={20} />
+        <Activity size={18} aria-hidden="true" />
       </div>
       <div className="grid-autofit mt-16">
         {sensors.map((s) => (
@@ -1483,6 +1393,14 @@ function CommandCenter({ onLogout }) {
   const [layers, setLayers] = useState({ heatmap: false, osrm: true, unlicensed: true, tps: true, wr: true });
   const [playbackTruck, setPlaybackTruck] = useState(null);
   const [playbackOptions, setPlaybackOptions] = useState([]);
+
+  /* Null rather than a number when the feed is absent: Math.max over an empty
+     forecast yields -Infinity, which would have rendered as a rainfall figure. */
+  const peakRainfall = useMemo(() => {
+    const days = snapshot.weather?.forecast;
+    if (!days?.length) return null;
+    return Math.round(Math.max(...days.map((day) => day.rainfall_mm)));
+  }, [snapshot.weather]);
 
   useEffect(() => {
     if (!historyScrollRequest || fleetDetailTab !== "history") return;
@@ -1543,80 +1461,75 @@ function CommandCenter({ onLogout }) {
           detailTab={fleetDetailTab}
           onDetailTabChange={setFleetDetailTab}
           metrics={[
-            { label: "Active Trucks", value: snapshot.kpis.active_trucks, helper: "live fleet in operation" },
-            { label: "Operational Issues", value: snapshot.kpis.trucks_with_issues, helper: "deviation or damage", tone: "danger" },
-            { label: "Landfill Queue", value: `${snapshot.kpis.tpa_wait_minutes}m`, helper: `${snapshot.kpis.tpa_queue_trucks} trucks waiting`, tone: "warning" },
-            { label: "Largest Waste Spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
+            { label: "Active trucks", value: snapshot.kpis?.active_trucks ?? "—", helper: "fleet in operation" },
+            { label: "Operational issues", value: snapshot.kpis?.trucks_with_issues ?? "—", helper: "deviation or damage", tone: "danger" },
+            { label: "Landfill queue", value: snapshot.kpis ? `${snapshot.kpis.tpa_wait_minutes} min` : "—", helper: snapshot.kpis ? `${snapshot.kpis.tpa_queue_trucks} trucks waiting` : "feed unavailable", tone: "warning" },
+            { label: "Largest waste spike", value: snapshot.kpis ? `+${snapshot.kpis.predicted_spike_percent}%` : "—", helper: "next 7 days", tone: "warning" },
           ]}
           map={(
             <div id="map-panel" className="map-anchor">
-              <MapPanel 
-                trucks={snapshot.trucks} 
-                attendance={attendance} 
-                rainfall={rainfall} 
-                onSelectTruck={selectFleetTruck} 
+              <MapPanel
+                trucks={snapshot.trucks}
+                attendance={attendance}
+                rainfall={rainfall}
+                onSelectTruck={selectFleetTruck}
                 layers={layers}
                 playbackTruck={playbackTruck}
                 onBreadcrumbsLoaded={setPlaybackOptions}
               />
             </div>
           )}
-          mapFooter={(
+          mapTools={(
+            <div className="map-overlay">
+              <span className="map-overlay-label">Layers</span>
+              <label>
+                <input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} />
+                Waste risk heatmap
+              </label>
+              <label>
+                <input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} />
+                OSRM corridor
+              </label>
+              <label>
+                <input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} />
+                TPS sites
+              </label>
+              <label>
+                <input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} />
+                Wajib retribusi
+              </label>
+              <span className="map-overlay-label">Trip playback</span>
+              <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
+                <option value="">Select a trip…</option>
+                {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )}
+          legend={(
+            <details className="map-legend" open aria-label="Map legend">
+              <summary>Legend</summary>
+              <div className="map-legend-items">
+                <span><i className="legend-tps" /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>
+                <span><i className="legend-wr" /> Wajib Retribusi <em className="legend-tag">REAL</em></span>
+                <span><i className="legend-risk" /> District waste risk <em className="legend-tag">MODEL</em></span>
+                <span><i className="legend-assigned" /> Assigned corridor <em className="legend-tag">SIM</em></span>
+                <span><i className="legend-actual" /> Actual (clean) <em className="legend-tag">SIM</em></span>
+                <span><i className="legend-critical" /> Violation segment <em className="legend-tag">SIM</em></span>
+                <span><i className="legend-osrm" /> OSRM route <em className="legend-tag">LIVE</em></span>
+                <span><i className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
+                <span><i className="legend-icon-unlicensed" /> Unlicensed collector <em className="legend-tag">SIM</em></span>
+                <span><i className="legend-event" /> Crowd event <em className="legend-tag">SIM</em></span>
+              </div>
+            </details>
+          )}
+          inspector={(
             <>
-              <div className="map-footer-panels">
-                <div className="panel map-controls-card">
-                  <div className="panel-title">
-                    <h2>Map Controls</h2>
-                  </div>
-                  <div className="map-controls-grid">
-                    <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> Heatmap</label>
-                    <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> OSRM route</label>
-                    <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> TPS</label>
-                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> Wajib Retribusi</label>
-                  </div>
-                  <div className="playback-select-wrap">
-                    <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
-                      <option value="">Trip playback…</option>
-                      {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="panel map-legend-card">
-                  <div className="panel-title">
-                    <h2>Legend</h2>
-                  </div>
-                  <details className="map-legend" open aria-label="Map legend">
-                    <summary style={{ display: "none" }}>Legend</summary>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> TPS (Tempat Sampah) <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> Wajib Retribusi <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> District waste risk <em className="legend-tag">MODEL</em></span>
-                    <span><i className="legend-assigned" style={{ display: "inline-block" }} /> Assigned corridor <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> Actual (clean) <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> Violation segment <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> OSRM route <em className="legend-tag">LIVE</em></span>
-                    <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
-                    <span><span className="legend-icon-unlicensed" /> Unlicensed Collector <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> Crowd Event <em className="legend-tag">SIM</em></span>
-                  </details>
-                </div>
-              </div>
-
-              <div className="map-footer-inspector-row">
-                <div className="inspector-col">
-                  <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
-                </div>
-                <div className="inspector-col">
-                  <UnlicensedCollectorAlerts />
-                </div>
-                <div className="inspector-col">
-                  <AStarReroutingPanel />
-                </div>
-              </div>
+              <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
+              <AStarReroutingPanel />
+              <UnlicensedCollectorAlerts />
             </>
           )}
-          alerts={null}
-          rerouting={null}
+          routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
           queue={<><TpaQueuePanel /><StaggerSimulatorPanel /></>}
           fleetTable={<FleetTable trucks={snapshot.trucks} onOpenTripHistory={(code) => selectFleetTruck(code, true)} />}
           history={<FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />}
@@ -1625,13 +1538,13 @@ function CommandCenter({ onLogout }) {
       )}
 
       {activeWorkspace !== "fleet" && (
-        <section className="main-grid">
+        <>
         {activeWorkspace === "forecast" && (
           <WasteForecast
             metrics={[
-              { label: "Largest forecast spike", value: `+${snapshot.kpis.predicted_spike_percent}%`, helper: "next 7 days", tone: "warning" },
+              { label: "Largest forecast spike", value: snapshot.kpis ? `+${snapshot.kpis.predicted_spike_percent}%` : "—", helper: "next 7 days", tone: "warning" },
               { label: "High-risk districts", value: snapshot.critical_predictions.length, helper: "capacity reinforcement needed", tone: "danger" },
-              { label: "Peak rainfall", value: `${Math.round(Math.max(...snapshot.weather.forecast.map((day) => day.rainfall_mm)))} mm`, helper: "forecast driver", tone: "warning" },
+              { label: "Peak rainfall", value: peakRainfall === null ? "—" : `${peakRainfall} mm`, helper: "forecast driver", tone: "warning" },
               { label: "Planning status", value: "Ready", helper: "scenario handoff enabled" },
             ]}
             forecast={<PredictionPanel predictions={snapshot.critical_predictions} />}
@@ -1663,31 +1576,47 @@ function CommandCenter({ onLogout }) {
         )}
 
         {activeWorkspace === "drivers" && (
-          <div className="grid-col-12">
+          <section className="secondary-workspace">
+            <WorkspaceHeader
+              title="Driver Analytics"
+              description="Corridor compliance, safety score, and fuel efficiency per driver. Scores are computed from simulated trip data, not from observed field performance."
+            />
             <DriverAnalytics />
-          </div>
+          </section>
         )}
 
         {activeWorkspace === "weighbridge" && (
-          <div className="grid-col-12">
+          <section className="secondary-workspace">
+            <WorkspaceHeader
+              title="Weighbridge Logs"
+              description="Weighing transactions recorded at the Bantargebang entry scale."
+            />
             <WeighbridgeLogs />
-          </div>
+          </section>
         )}
 
         {activeWorkspace === "wa" && (
-          <div className="grid-col-12">
+          <section className="secondary-workspace">
+            <WorkspaceHeader
+              title="WhatsApp Gateway"
+              description="Driver and group routing for dispatch instructions, used to reach crews in the field."
+            />
             <WhatsAppGateway />
-          </div>
+          </section>
         )}
 
         {activeWorkspace === "iot" && (
-          <div className="grid-col-12">
+          <section className="secondary-workspace">
+            <WorkspaceHeader
+              title="Bin Sensors"
+              description="Ultrasonic fill-level readings from public waste bins. Readings shown here are simulated; no sensor hardware is connected to this deployment."
+            />
             <IotBinSensors />
-          </div>
+          </section>
         )}
 
         {activeWorkspace === "audit" && <DataAuditWorkspace />}
-      </section>
+        </>
       )}
       {toast && <div className="toast"><Check size={16} /> {toast}</div>}
     </AppShell>

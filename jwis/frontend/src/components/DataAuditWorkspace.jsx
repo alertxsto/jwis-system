@@ -51,7 +51,7 @@ export function DataAuditWorkspace() {
             <Database size={20} />
           </div>
           <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Data provenance registry">
+            <table aria-label="Data provenance registry">
               <thead>
                 <tr>
                   <th scope="col">Nama Dataset</th>
@@ -134,7 +134,7 @@ export function DataAuditWorkspace() {
             <Truck size={20} />
           </div>
           <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Karakteristik armada fisik">
+            <table aria-label="Karakteristik armada fisik">
               <thead>
                 <tr>
                   <th scope="col">Tipe Kendaraan</th>
@@ -163,7 +163,7 @@ export function DataAuditWorkspace() {
             <Users size={20} />
           </div>
           <div className="table-wrap">
-            <table className="audit-table" role="grid" aria-label="Distribusi wilayah sensus">
+            <table aria-label="Distribusi wilayah sensus">
               <thead>
                 <tr>
                   <th scope="col">Wilayah Administrasi</th>

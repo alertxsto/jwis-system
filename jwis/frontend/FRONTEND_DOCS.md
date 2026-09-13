@@ -1,46 +1,82 @@
-# JWIS Frontend — Documentation Index & Summary
+# JWIS Frontend — Documentation Index
 
-Dokumen ini merangkum seluruh berkas dokumentasi, rencana perencanaan, dan laporan audit yang dibuat selama proses peningkatan dan restrukturisasi kode frontend Jakarta Waste Intelligence System (JWIS).
+Summary of the frontend redesign and the records produced while it was done.
 
----
+## Current state
 
-## 📂 Daftar Dokumentasi yang Dibuat
+- `src/main.jsx` — application shell wiring and the workspace composition root.
+  The 2,556-line monolith was decomposed; what remains is state, data loading,
+  and the panels that belong to no workspace.
+- `src/layout/AppShell.jsx` — navigation rail, command bar, mobile drawer.
+- `src/workspaces/` — `FleetOperations`, `WasteForecast`, `IntegratedPlanning`.
+- `src/components/` — operational panels (alert queue, fleet table, trip
+  history, TPA queue, route evidence, carbon, weather, assistant, audit).
+- `src/ui/` — design-system primitives (`MetricStrip`, `SegmentedControl`,
+  `StatusPill`, `WorkspaceHeader`).
+- `src/field/` — driver field app (offline-capable).
+- `src/map/palette.js` — resolves design tokens into MapLibre paint values.
+- `src/styles/` — `tokens` → `base` → `components` → `shell` → feature sheets →
+  `responsive`.
 
-Semua dokumentasi di bawah ini disimpan di dalam folder [docs/](./docs/) pada direktori frontend agar portabel dan dapat dikomit langsung ke repositori Git:
+`DESIGN.md` documents the visual system. `src/styles/tokens.css` is the single
+source of truth for its values.
 
-### 1. [Laporan Audit Frontend (docs/frontend_audit.md)](./docs/frontend_audit.md)
-*   **Tujuan:** Menganalisis codebase awal frontend dan mencatat temuan masalah berdasarkan pedoman design-taste.
-*   **Temuan Utama:**
-    *   *Critical:* File monolitik `main.jsx` (2.583 baris), penggunaan `lucide-react` padahal skill menyarankan phosphor-icons, input search read-only, hilangnya focus outline global.
-    *   *Major:* Warna aksen AI-purple (`#6366e8`) yang kurang kontekstual untuk DLH, inkonsistensi font Geist vs Plus Jakarta Sans, dan CSS feature-specific yang digabung menjadi `legacy.css` (1.470 baris).
+## Documents in `docs/`
 
-### 2. [Rencana Implementasi (docs/implementation_plan.md)](./docs/implementation_plan.md)
-*   **Tujuan:** Menyusun peta jalan pengerjaan yang terstruktur ke dalam 4 fase untuk menyelesaikan masalah temuan audit secara aman.
-*   **Fase Rencana:**
-    *   *Phase 1:* Perbaikan cepat (token warna aksen teal, perbaikan typo, pemulihan A11y focus).
-    *   *Phase 2:* Perbaikan fungsional (loading state halaman login, Ctrl+K shortcut search).
-    *   *Phase 3:* Pemecahan `main.jsx` menjadi 14 komponen modular.
-    *   *Phase 4:* Pemecahan `legacy.css` menjadi 4 stylesheet domain modular.
+| File | Purpose |
+|---|---|
+| [docs/frontend_audit.md](./docs/frontend_audit.md) | Findings from auditing the original frontend against the design-taste rules. |
+| [docs/implementation_plan.md](./docs/implementation_plan.md) | The four-phase plan that structured the work. |
+| [docs/task.md](./docs/task.md) | Task tracker for that plan. |
+| [docs/walkthrough.md](./docs/walkthrough.md) | Record of the component extraction and CSS restructuring phases. |
 
-### 3. [Daftar Tugas Pelacakan (docs/task.md)](./docs/task.md)
-*   **Tujuan:** TODO list interaktif untuk melacak progress setiap langkah refactoring dan memastikan tidak ada tugas yang terlewatkan selama eksekusi.
-*   **Status Akhir:** Seluruh item tugas di Phase 1, Phase 2, Phase 3, dan Phase 4 telah selesai ditandai sebagai completed `[x]`.
+## What changed
 
-### 4. [Laporan Hasil Akhir (docs/walkthrough.md)](./docs/walkthrough.md)
-*   **Tujuan:** Merangkum perubahan kode nyata yang sudah dilakukan, daftar file komponen React baru yang diekstrak, modul CSS baru, dan hasil pengujian build akhir.
-*   **Hasil Akhir:** Reduksi baris kode file utama `main.jsx` sebesar ~34% (dari 2.583 baris menjadi 1.709 baris) dan sukses kompilasi produksi Vite (`built in 11.40s`).
+**Visual system.** One accent (DLH green) replaces the indigo default. Status
+colours moved to AA-compliant steps: the previous `#ef4444` (4.0:1) and
+`#f59e0b` (1.9:1) both failed contrast on white. Type, space, radius, and
+control heights became fixed scales, so the console no longer changes its own
+density with the viewport. Geist is bundled locally instead of loaded from a
+CDN.
 
----
+**Layout.** The rail is 216px and the command bar 48px, down from 248px and
+72px, which returns vertical space to the map. Fleet Operations now puts the map
+and its inspector side by side, so an alert and the corridor it describes are on
+screen together — previously they were stacked and the operator scrolled away
+from the map to read an alert about it. Map layer switches became a map overlay
+instead of a card below the fold. Each workspace opens with the same header
+component.
 
-## 🎨 Ringkasan Penerapan Desain & Kualitas Kode
+**Integrity.** Panels that presented fixture data as live operations were
+relabelled: the weighbridge table, driver scores, and bin sensors now state that
+they are simulated or sample data. The `116 menit` / `-59.6%` / `17.58 kg CO2`
+figures that the backend already declares removed are no longer surfaced in the
+UI copy.
 
-*   **Pilihan Warna Aksen:** Aksen diubah menjadi **Teal (`#0f766e`)** menggantikan ungu startup AI, memberikan nuansa yang lebih bersih dan ramah lingkungan sesuai peran DLH.
-*   **Penyusunan Komponen Modular:**
-    *   Semua atom (seperti [StatusPill.jsx](./src/ui/StatusPill.jsx) dan [KpiCard.jsx](./src/ui/KpiCard.jsx)) dipisah ke folder `src/ui/`.
-    *   Semua panel dashboard operasional (seperti `TpaQueuePanel`, `FleetTable`, `WeatherPanel`, `AssistantPanel`, dsb.) dipisah ke folder `src/components/`.
-*   **Struktur CSS Terorganisir:**
-    *   Aturan styling peta dipisahkan ke [map.css](./src/styles/map.css).
-    *   Aturan prediksi timbulan dipisahkan ke [forecast.css](./src/styles/forecast.css).
-    *   Aturan perencanaan rute & stagger dipisahkan ke [planning.css](./src/styles/planning.css).
-    *   Gaya panel kontrol, form, & asisten dipisahkan ke [panels.css](./src/styles/panels.css).
-*   **Peningkatan Aksesibilitas (A11y):** Input form dan button sekarang memiliki focus indicators visual bawaan browser yang memadai ketika dinavigasi menggunakan keyboard.
+**Dead weight.** Removed the duplicated `KpiCard` (one of two definitions was
+never imported), the twin `StatusBadge` primitive, two Windows-only `patch_*.py`
+scripts that no-op on Linux, a duplicate `.map-legend` block, a fully-overridden
+`.optimizer-plan-card` rule, an unused voice-assistant CSS block, and the
+`.audit-table` class that duplicated the base table styles. The legend swatches
+moved from inline JSX styles to CSS.
+
+**Tests.** `e2e/dashboard-shell.spec.js` no longer pins the palette: assertions
+compare rendered values against the tokens, plus real WCAG contrast checks. The
+suite also covers the workspace search, the map/inspector layout, and the
+runtime-error-free navigation contract. `playwright.config.js` enables
+SwiftShader so MapLibre can create a WebGL context in headless Chromium — without
+it, every map assertion failed for reasons unrelated to the code.
+
+## Verification
+
+```bash
+cd jwis/frontend
+npm install
+npm run build          # production build
+npx playwright test    # 44 e2e tests, requires the API on :8001 and preview on :5175
+```
+
+```bash
+cd jwis/backend
+PYTHONPATH=. python -m unittest discover -s tests
+```

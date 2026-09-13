@@ -1,5 +1,11 @@
 # JWIS Frontend — Rencana Implementasi
 
+> **Catatan status:** rencana ini menggarisbawahi fase pertama dan sudah
+> dijalankan seluruhnya. Sebagian targetnya kemudian direvisi — aksen teal
+> diganti hijau DLH, dan layout workspace dirombak lebih jauh dari yang
+> direncanakan di sini. Lihat [DESIGN.md](../DESIGN.md) untuk sistem visual yang
+> berlaku.
+
 > **Design Read:** Command center B2B untuk operator internal DLH. Pengguna: dispatcher, supervisor, auditor, driver. Bukan marketing page — ini operational tool. Prioritas: keterbacaan data cepat, keandalan, dan kejujuran informasi.
 >
 > **Dials:** `DESIGN_VARIANCE: 5 / MOTION_INTENSITY: 3 / VISUAL_DENSITY: 7`

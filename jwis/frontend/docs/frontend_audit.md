@@ -1,5 +1,12 @@
 # JWIS Frontend — Audit Mendalam
 
+> **Catatan status:** dokumen ini adalah catatan audit fase pertama, terhadap
+> kode sebelum restrukturisasi. Temuannya akurat untuk kondisi saat itu, tetapi
+> beberapa rekomendasinya sudah dilampaui — khususnya aksen teal `#0f766e` di
+> M1, yang kemudian diganti hijau DLH `#176b54`, dan `StatusBadge`/`KpiCard` di
+> M4/C1, yang keduanya sudah dihapus. Untuk kondisi sistem yang berlaku sekarang,
+> lihat [DESIGN.md](../DESIGN.md) dan [walkthrough.md](./walkthrough.md).
+
 > **Design Read:** Command center dashboard untuk operator DLH, pengguna internal teknis. Bukan landing page publik. Prioritas: keandalan data, keterbacaan cepat, dan akurasi informasi. Tidak perlu scroll-hijack atau kinetic typography — ini tools, bukan marketing.
 >
 > **Dial yang sesuai:** `DESIGN_VARIANCE: 5 / MOTION_INTENSITY: 3 / VISUAL_DENSITY: 7`

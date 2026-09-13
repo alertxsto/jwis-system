@@ -1,39 +1,61 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Database,
   LogOut,
   Menu,
   MessageCircle,
   RefreshCcw,
   Route,
+  Scale,
   Search,
-  Shield,
   Truck,
+  Users,
   Workflow,
   X,
 } from "lucide-react";
-import { StatusBadge } from "../ui/StatusBadge.jsx";
 
+/* Grouped by who uses them. Operators do not think in competition-case
+   numbers, so the rail does not label anything "Case 1" or "Case 2". */
 const items = [
-  { id: "fleet", label: "Fleet Operations", icon: Truck, section: "Operations" },
-  { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
-  { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
-  { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
-  { id: "weighbridge", label: "Weighbridge Logs", icon: Workflow, section: "Logistics" },
-  { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
-  { id: "iot", label: "IoT Bin Sensors", icon: Activity, section: "Admin" },
-  { id: "audit", label: "Data & ML Audit", icon: Shield, section: "Admin" },
+  { id: "fleet", label: "Fleet Operations", icon: Truck, section: "operations", keywords: "truck map corridor deviation route" },
+  { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "operations", keywords: "prediction kecamatan rainfall event tonnage" },
+  { id: "planning", label: "Integrated Planning", icon: Workflow, section: "operations", keywords: "optimizer dispatch plan approval capacity" },
+  { id: "drivers", label: "Driver Analytics", icon: Users, section: "field", keywords: "score compliance safety" },
+  { id: "weighbridge", label: "Weighbridge Logs", icon: Scale, section: "field", keywords: "scale tonnage weighing transactions" },
+  { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "platform", keywords: "alert message contacts notification" },
+  { id: "iot", label: "Bin Sensors", icon: Activity, section: "platform", keywords: "ultrasonic volume fill level" },
+  { id: "audit", label: "Data & ML Audit", icon: Database, section: "platform", keywords: "provenance model registry evidence" },
 ];
+
+const sectionLabels = {
+  operations: "Operations",
+  field: "Field & Logistics",
+  platform: "Platform",
+};
+
+const sectionOrder = ["operations", "field", "platform"];
 
 export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, children }) {
   const current = items.find((item) => item.id === activeWorkspace) || items[0];
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [mobileNavMode, setMobileNavMode] = useState(() => window.matchMedia("(max-width: 860px)").matches);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const mobileNavTriggerRef = useRef(null);
   const sideRailRef = useRef(null);
-  const roleRaw = localStorage.getItem("jwis_role") || "operator";
-  const roleLabel = roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1);
+  const searchInputRef = useRef(null);
+
+  const role = localStorage.getItem("jwis_role") || "dispatcher";
+  const initials = role.slice(0, 2).toUpperCase();
+
+  const matches = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return [];
+    return items.filter((item) =>
+      `${item.label} ${item.keywords}`.toLowerCase().includes(needle));
+  }, [query]);
 
   const closeMobileNav = useCallback((restoreFocus = true) => {
     setMobileNavOpen(false);
@@ -88,30 +110,38 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
     };
   }, [closeMobileNav, mobileNavOpen]);
 
-  function selectWorkspace(id) {
-    onWorkspaceChange(id);
-    closeMobileNav();
-  }
-
-  const sections = ["Operations", "Logistics", "Admin"];
-  const sectionLabels = {
-    Operations: "Operations",
-    Logistics: "Logistics (Case 1)",
-    Admin: "Admin (Case 2)",
-  };
-
-  const searchInputRef = useRef(null);
-
   useEffect(() => {
-    const handleKeyDown = (event) => {
+    function onKeyDown(event) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         searchInputRef.current?.focus();
+        searchInputRef.current?.select();
       }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+      if (event.key === "Escape" && document.activeElement === searchInputRef.current) {
+        setQuery("");
+        setSearchOpen(false);
+        searchInputRef.current?.blur();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  function selectWorkspace(id) {
+    onWorkspaceChange(id);
+    setQuery("");
+    setSearchOpen(false);
+    closeMobileNav();
+  }
+
+  function onSearchKeyDown(event) {
+    if (event.key === "Enter" && matches.length > 0) {
+      event.preventDefault();
+      selectWorkspace(matches[0].id);
+    }
+  }
+
+  const resultsVisible = searchOpen && query.trim().length > 0;
 
   return (
     <div className="dashboard-frame professional-shell">
@@ -125,17 +155,22 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         role={mobileNavOpen ? "dialog" : undefined}
       >
         <div className="side-brand">
-          <span className="brand-mark"><Route size={19} /></span>
+          <span className="brand-mark" aria-hidden="true"><Route size={16} /></span>
           <div>
             <strong>JWIS</strong>
-            <small>DLH Command</small>
+            <small>DLH Jakarta</small>
           </div>
         </div>
 
-        {sections.map((section) => (
+        {sectionOrder.map((section) => (
           <React.Fragment key={section}>
             <p className="nav-section-label">{sectionLabels[section]}</p>
-            <nav className="side-nav" id={section === "Operations" ? "workspace-navigation" : undefined} data-testid={section === "Operations" ? "workspace-navigation" : undefined}>
+            <nav
+              className="side-nav"
+              id={section === "operations" ? "workspace-navigation" : undefined}
+              data-testid={section === "operations" ? "workspace-navigation" : undefined}
+              aria-label={section === "operations" ? undefined : sectionLabels[section]}
+            >
               {items.filter((item) => item.section === section).map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
@@ -144,7 +179,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
                   aria-current={activeWorkspace === id ? "page" : undefined}
                   onClick={() => selectWorkspace(id)}
                 >
-                  <Icon size={17} />{label}
+                  <Icon size={15} aria-hidden="true" />{label}
                 </button>
               ))}
             </nav>
@@ -152,11 +187,11 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
         ))}
 
         <div className="side-system-state">
-          <Activity size={15} />
-          <span>System status</span>
+          <span className="status-dot" data-tone={online ? "success" : "warning"} aria-hidden="true" />
+          <span>{online ? "Live API connected" : "Offline sample data"}</span>
         </div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}>
-          <LogOut size={17} />Logout
+          <LogOut size={15} aria-hidden="true" />Logout
         </button>
       </aside>
 
@@ -191,28 +226,57 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Home</span>
-            <span className="breadcrumb-separator">&gt;</span>
+            <span>{sectionLabels[current.section]}</span>
+            <span className="breadcrumb-separator" aria-hidden="true">/</span>
             <strong>{current.label}</strong>
           </div>
 
-          <div className="topbar-search">
-            <Search size={15} aria-hidden="true" />
-            <input ref={searchInputRef} type="text" placeholder="Search workspaces..." />
-            <span className="kbd">Ctrl K</span>
+          <div className="workspace-search">
+            <Search size={14} aria-hidden="true" />
+            <input
+              ref={searchInputRef}
+              type="search"
+              role="combobox"
+              aria-expanded={resultsVisible}
+              aria-controls="workspace-search-results"
+              aria-label="Search workspaces"
+              placeholder="Search workspaces"
+              value={query}
+              onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={onSearchKeyDown}
+            />
+            <kbd>Ctrl K</kbd>
+            {resultsVisible && (
+              <ul className="workspace-search-results" id="workspace-search-results" role="listbox">
+                {matches.length === 0 && <li className="workspace-search-empty">No workspace matches “{query}”.</li>}
+                {matches.map((item) => (
+                  <li key={item.id}>
+                    <button type="button" role="option" aria-selected={item.id === activeWorkspace} onClick={() => selectWorkspace(item.id)}>
+                      <item.icon size={14} aria-hidden="true" />
+                      <span>{item.label}</span>
+                      <em>{sectionLabels[item.section]}</em>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="top-actions">
-            <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
-            <a className="ghost-button" href="/field"><Truck size={16} />Field app</a>
+            <span className="connection-state" data-online={online ? "true" : "false"}>
+              <span className="status-dot" data-tone={online ? "success" : "warning"} aria-hidden="true" />
+              {online ? "Live" : "Offline"}
+            </span>
+            <a className="ghost-button" href="/field"><Truck size={15} aria-hidden="true" />Field app</a>
             <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">
-              <RefreshCcw size={16} />
+              <RefreshCcw size={15} />
             </button>
             <div className="profile-widget">
-              <span className="profile-avatar" aria-hidden="true">JW</span>
+              <span className="profile-avatar" aria-hidden="true">{initials}</span>
               <div className="profile-info">
-                <span className="profile-name">JWIS Team</span>
-                <span className="profile-role">{roleLabel}</span>
+                <span className="profile-name">Signed in</span>
+                <span className="profile-role">{role}</span>
               </div>
             </div>
           </div>
@@ -221,5 +285,4 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       </main>
     </div>
   );
-
 }

@@ -1,12 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Route, Send, ShieldCheck, Truck, X } from "lucide-react";
 import { readOutbox, enqueue, flushOutbox } from "./OfflineOutbox.js";
+import { StatusPill } from "../ui/StatusPill.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
-
-function StatusPill({ tone, children }) {
-  return <span className={`pill ${tone}`}>{children}</span>;
-}
 
 function isoTimestampMicros(value) {
   if (typeof value !== "string") return null;
@@ -118,7 +115,7 @@ export default function FieldApp() {
     <main className="field-shell" data-testid="field-app">
       <header className="field-app-header">
         <a className="field-brand" href="/" aria-label="Return to JWIS command center">
-          <span className="field-brand-mark"><Route size={19} /></span>
+          <span className="field-brand-mark" aria-hidden="true"><Route size={16} /></span>
           <span><strong>JWIS</strong><small>Field operations</small></span>
         </a>
         <StatusPill tone={online ? "live" : "warning"}>
@@ -131,7 +128,7 @@ export default function FieldApp() {
             <p className="field-kicker">Assigned vehicle</p>
             <h1 id="field-truck-title">{truckCode}</h1>
           </div>
-          <span className="field-duty-label"><Truck size={16} /> On duty</span>
+          <span className="field-duty-label"><Truck size={15} aria-hidden="true" /> On duty</span>
         </div>
         {queued > 0 && (
           <div className="field-status field-queue-status">
