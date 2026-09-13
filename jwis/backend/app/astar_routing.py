@@ -280,9 +280,20 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
     normal_edges |= {(v, u) for (u, v) in normal_edges}
 
     hits_route = any((u, v) in normal_edges for (u, v) in jam_edges)
+
+    # The anchor the route was built from. Echoing it makes the payload
+    # self-describing: a consumer can verify the route starts where it claims
+    # without having to re-read a truck position that has moved on since.
+    anchor = (
+        {"lat": origin_position["lat"], "lng": origin_position["lng"], "source": "GPS"}
+        if origin_position
+        else {"lat": NODES["ORIGIN"][0], "lng": NODES["ORIGIN"][1], "source": "FIXED_ORIGIN_NODE"}
+    )
+
     if not jam_active or not hits_route:
         return {
             "jam_active": jam_active,
+            "anchor": anchor,
             "active_route": normal,
             "abandoned_route": None,
             "congestion_points": [],
@@ -314,6 +325,7 @@ def reroute_payload(jam_active: bool, congested_edges=None, origin_position=None
     extra_km = round(diverted["distance_km"] - normal["distance_km"], 1)
     return {
         "jam_active": True,
+        "anchor": anchor,
         "active_route": diverted,
         "abandoned_route": normal,
         "congestion_points": jam_points,
