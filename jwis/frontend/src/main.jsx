@@ -3830,6 +3830,7 @@ function SpjCreateForm({ onCreated }) {
   const [stops, setStops] = useState([]);
   const [pick, setPick] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetch(`${API_URL}/fleet`).then((r) => r.json()).then(setFleet).catch(() => {});
@@ -3860,6 +3861,7 @@ function SpjCreateForm({ onCreated }) {
   const save = () => {
     if (!form.truck_code || !stops.length) return;
     setSaving(true);
+    setError("");
     const truck = trucks.find((t) => t.truck_code === form.truck_code) || {};
     fetch(`${API_URL}/spj`, {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -3870,7 +3872,13 @@ function SpjCreateForm({ onCreated }) {
         weigh_on_site: form.weigh_on_site,
         priority: form.priority, note: form.note,
       }),
-    }).then((r) => r.json())
+    }).then(async (r) => {
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok || !body.spj_id) {
+        throw new Error(body.detail || body.message || `Gagal membuat SPJ (HTTP ${r.status})`);
+      }
+      return body;
+    })
       .then((spj) => Promise.all(stops.map((s) =>
         fetch(`${API_URL}/spj/${spj.spj_id}/stops`, {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -3882,7 +3890,7 @@ function SpjCreateForm({ onCreated }) {
                   weigh_on_site: false, priority: "normal", note: "" });
         onCreated();
       })
-      .catch(() => {})
+      .catch((err) => setError(err.message || "Gagal menyimpan SPJ"))
       .finally(() => setSaving(false));
   };
 
@@ -3938,6 +3946,7 @@ function SpjCreateForm({ onCreated }) {
           ))}
         </ul>
       )}
+      {error && <p className="spj-form-error" role="alert">{error}</p>}
       <button type="button" className="compact-enforce-btn" disabled={saving}
         onClick={save}>
         {saving ? "Menyimpan…" : "Simpan Draft"}

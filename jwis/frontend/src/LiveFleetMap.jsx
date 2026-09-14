@@ -884,7 +884,7 @@ popup.on("open", () => {
     let cancelled = false;
 
     function removeSpjLayers() {
-      ["spj-active-stops", "spj-active-route"].forEach((id) => {
+      ["spj-active-stop-labels", "spj-active-stops", "spj-active-route"].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });
       ["spj-active-stops", "spj-active-route"].forEach((id) => {
@@ -954,6 +954,22 @@ popup.on("open", () => {
             "circle-color": "#ffffff",
             "circle-stroke-color": "#7c3aed",
             "circle-stroke-width": 3,
+          },
+        });
+        map.addLayer({
+          id: "spj-active-stop-labels",
+          type: "symbol",
+          source: "spj-active-stops",
+          layout: {
+            "text-field": ["get", "label"],
+            "text-size": 10,
+            "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+            "text-allow-overlap": true,
+          },
+          paint: {
+            "text-color": "#7c3aed",
+            "text-halo-color": "#ffffff",
+            "text-halo-width": 1.5,
           },
         });
       } catch {
