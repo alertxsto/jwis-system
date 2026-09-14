@@ -1779,6 +1779,48 @@ def service_records_due_soon(days: int = 30) -> dict[str, Any]:
     return {"due": due, "count": len(due)}
 
 
+# ── Driver compliance scoring (Fase 3) ───────────────────────────────────────
+
+from app.compliance import WINDOW_DAYS as COMPLIANCE_WINDOW_DAYS
+from app.compliance import compute_fleet_scores
+
+# Fleet-wide scoring walks every SPJ/pretrip/damage record per driver, so a
+# 60s TTL shares one computation across dashboard clients.
+_compliance_lock = threading.Lock()
+_compliance_cache: dict[str, Any] = {"ts": 0.0, "payload": None}
+
+
+def _compliance_payload() -> dict[str, Any]:
+    cached = _compliance_cache
+    now = time.time()
+    if cached["payload"] is None or now - cached["ts"] > 60.0:
+        with _compliance_lock:
+            now = time.time()
+            if cached["payload"] is None or now - cached["ts"] > 60.0:
+                drivers = compute_fleet_scores()
+                cached["payload"] = {
+                    "drivers": drivers,
+                    "count": len(drivers),
+                    "window_days": COMPLIANCE_WINDOW_DAYS,
+                }
+                cached["ts"] = time.time()
+    return cached["payload"]
+
+
+@app.get("/api/compliance/drivers")
+def compliance_drivers() -> dict[str, Any]:
+    return _compliance_payload()
+
+
+@app.get("/api/compliance/drivers/{driver_name}")
+def compliance_driver_detail(driver_name: str) -> dict[str, Any]:
+    for entry in _compliance_payload()["drivers"]:
+        if entry["driver_name"] == driver_name:
+            return entry
+    raise HTTPException(status_code=404,
+                        detail=f"driver {driver_name} not found in fleet")
+
+
 class OcrBody(BaseModel):
     photo_b64: str = Field(max_length=7_000_000)
 
