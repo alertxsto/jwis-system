@@ -161,7 +161,17 @@ def _generated_truck(code: str, anchor: dict[str, Any], vehicle_type: str, now: 
 
     speed = base_speed * (0.82 + 0.18 * math.sin(now / 9.0 + seed % 7))
     speed = max(0.0, min(60.0, round(speed, 1)))
-    damage = damage_status_for(code)
+    try:
+        from app.damage_reports import DAMAGE_STORE
+        override = DAMAGE_STORE.active_override_for(code)
+    except Exception:  # noqa: BLE001
+        override = None
+    if override is not None:
+        damage = {"state": "breakdown",
+                  "note": f"Driver report: {override.component} — {override.note}",
+                  "operational": False}
+    else:
+        damage = damage_status_for(code)
     damaged = not damage["operational"] or damage["state"] != "ok"
     activity = activity_for(speed, progress, damaged)
 

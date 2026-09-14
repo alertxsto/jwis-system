@@ -1529,6 +1529,33 @@ class SpjStopBody(BaseModel):
     location_type: str = "Pemukiman Kelas Menengah"
 
 
+class SpjCompleteBody(BaseModel):
+    evidence: dict | None = None
+
+
+class SpjReceiptBody(BaseModel):
+    photo_name: str
+    photo_b64: str = Field(default="", max_length=7_000_000)
+    total_weight_kg: float | None = None
+
+
+class PretripBody(BaseModel):
+    truck_code: str
+    driver_name: str
+    items: dict[str, bool]
+    note: str = ""
+
+
+class DamageReportBody(BaseModel):
+    truck_code: str
+    driver_name: str
+    component: str
+    severity: str
+    note: str
+    photo_name: str | None = None
+    photo_b64: str | None = Field(default=None, max_length=7_000_000)
+
+
 @app.get("/api/spj")
 def list_spj(status: str | None = None) -> dict[str, Any]:
     items = SPJ_STORE.list(status=status)
@@ -1580,8 +1607,10 @@ def activate_spj(spj_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/spj/{spj_id}/stops/{index}/complete")
-def complete_spj_stop(spj_id: str, index: int) -> dict[str, Any]:
-    result = _spj_or_409(SPJ_STORE.complete_stop, spj_id, index)
+def complete_spj_stop(spj_id: str, index: int,
+                      body: SpjCompleteBody | None = None) -> dict[str, Any]:
+    result = _spj_or_409(SPJ_STORE.complete_stop, spj_id, index,
+                         (body.evidence if body else None))
     _refresh_fleet_caches()
     return result
 
@@ -1598,3 +1627,101 @@ def cancel_spj(spj_id: str) -> dict[str, Any]:
     result = _spj_or_409(SPJ_STORE.cancel, spj_id)
     _refresh_fleet_caches()
     return result
+
+
+# ── SPJ evidence / receipt + Driver PWA (pretrip, damage reports) ────────────
+
+from app.pretrip import PRETRIP_STORE
+from app.damage_reports import DAMAGE_STORE
+
+
+@app.get("/api/spj/{spj_id}/evidence-summary")
+def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    stops = []
+    for i, stop in enumerate(spj.stops):
+        ev = stop.evidence or {}
+        weighing = ev.get("weighing") or []
+        total = round(sum(float(w.get("weight_kg") or 0) for w in weighing), 1)
+        fractions: dict[str, float] = {}
+        for w in weighing:
+            key = w.get("fraction") or "Lainnya"
+            fractions[key] = round(fractions.get(key, 0.0)
+                                   + float(w.get("weight_kg") or 0), 1)
+        stops.append({
+            "index": i, "name": stop.name, "status": stop.status,
+            "has_arrival": bool((ev.get("arrival") or {}).get("photo_name")),
+            "weighing_count": len(weighing),
+            "total_weight_kg": total,
+            "fractions": fractions,
+            "officer_name": (ev.get("officer") or {}).get("name"),
+        })
+    return {"spj_id": spj_id, "stops": stops,
+            "complete": all(s["has_arrival"] for s in stops) and len(stops) > 0}
+
+
+@app.post("/api/spj/{spj_id}/receipt", status_code=201)
+def submit_spj_receipt(spj_id: str, body: SpjReceiptBody) -> dict[str, Any]:
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    if spj.status != "selesai":
+        raise HTTPException(status_code=409,
+                            detail="receipt can only be submitted after the SPJ is selesai")
+    history_store.record_event("spj_receipt_submitted", {
+        "spj_id": spj_id, "spj_number": spj.spj_number,
+        "photo_name": body.photo_name,
+        "total_weight_kg": body.total_weight_kg,
+    })
+    return {"status": "recorded", "spj_id": spj_id}
+
+
+@app.post("/api/pretrip", status_code=201)
+def submit_pretrip(body: PretripBody) -> dict[str, Any]:
+    try:
+        rec = PRETRIP_STORE.submit(body.truck_code, body.driver_name,
+                                   body.items, body.note)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    return _asdict(rec)
+
+
+@app.get("/api/pretrip/today/{truck_code}")
+def pretrip_today(truck_code: str) -> dict[str, Any]:
+    rec = PRETRIP_STORE.today(truck_code)
+    return {"record": _asdict(rec) if rec else None, "done": rec is not None}
+
+
+@app.post("/api/damage-reports", status_code=201)
+def create_damage_report(body: DamageReportBody) -> dict[str, Any]:
+    try:
+        rep = DAMAGE_STORE.create(body.truck_code, body.driver_name,
+                                  body.component, body.severity, body.note,
+                                  body.photo_name, body.photo_b64)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    history_store.record_event("damage_reported", {
+        "report_id": rep.report_id, "truck_code": rep.truck_code,
+        "component": rep.component, "severity": rep.severity,
+        "source": rep.source,
+    })
+    _refresh_fleet_caches()
+    return _asdict(rep)
+
+
+@app.get("/api/damage-reports")
+def list_damage_reports(status: str | None = None) -> dict[str, Any]:
+    reports = DAMAGE_STORE.list(status=status)
+    return {"reports": [_asdict(r) for r in reports], "count": len(reports)}
+
+
+@app.post("/api/damage-reports/{report_id}/resolve")
+def resolve_damage_report(report_id: str) -> dict[str, Any]:
+    try:
+        rep = DAMAGE_STORE.resolve(report_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    _refresh_fleet_caches()
+    return _asdict(rep)

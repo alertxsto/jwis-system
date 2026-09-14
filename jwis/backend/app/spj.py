@@ -31,6 +31,7 @@ class SpjStop:
     location_type: str = "Pemukiman Kelas Menengah"
     status: str = "pending"  # pending | completed
     completed_at: str | None = None
+    evidence: dict | None = None
 
 
 @dataclass
@@ -171,16 +172,23 @@ class SpjStore:
             self._save()
             return spj
 
-    def complete_stop(self, spj_id: str, index: int) -> Spj:
+    def complete_stop(self, spj_id: str, index: int,
+                      evidence: dict | None = None) -> Spj:
         with self._lock:
             spj = self._require(spj_id)
             if spj.status != "aktif":
                 raise ValueError("stops can only be completed on an active SPJ")
             if not 0 <= index < len(spj.stops):
                 raise ValueError(f"stop index {index} out of range")
+            if evidence is not None:
+                arrival = evidence.get("arrival") or {}
+                if not arrival.get("photo_name"):
+                    raise ValueError("evidence.arrival.photo_name is required")
             stop = spj.stops[index]
             if stop.status == "completed":
                 return spj
+            if evidence is not None:
+                stop.evidence = evidence
             stop.status = "completed"
             stop.completed_at = _utc_now()
             if all(s.status == "completed" for s in spj.stops):
