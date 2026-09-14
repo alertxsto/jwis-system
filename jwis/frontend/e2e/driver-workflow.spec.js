@@ -56,12 +56,17 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   await expect(page.getByText(TEST_TRUCK, { exact: true }).first()).toBeVisible();
 
   // ── Pre-trip (form on fresh day, SELESAI state on re-run) ──
-  const markRest = page.getByRole("button", { name: "Tandai Sisanya Baik" });
-  if (await markRest.isVisible().catch(() => false)) {
-    await markRest.click();
+  // The form flips to SELESAI when /pretrip/today resolves — never hold a locator across that async boundary.
+  const doneBadge = page.getByTestId("pretrip-done");
+  const formVisible = await page
+    .getByRole("button", { name: /Simpan Inspeksi/i })
+    .isVisible()
+    .catch(() => false);
+  if (formVisible) {
+    await page.getByRole("button", { name: "Tandai Sisanya Baik" }).click();
     await page.getByRole("button", { name: /Simpan Inspeksi/i }).click();
   }
-  await expect(page.getByText("SELESAI").first()).toBeVisible({ timeout: 10000 });
+  await expect(doneBadge).toBeVisible({ timeout: 15000 });
 
   // ── Stop evidence: arrival photo → weighing photo + weight → officer photo + name ──
   await page.getByRole("button", { name: "Mulai Titik Ini" }).first().click();
