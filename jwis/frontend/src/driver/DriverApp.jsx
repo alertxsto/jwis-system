@@ -70,6 +70,14 @@ async function post(path, data) {
   return res.json();
 }
 
+function receiptDoneFor(spjId) {
+  try {
+    return localStorage.getItem(`jwis_receipt_${spjId}`) === "done";
+  } catch {
+    return false;
+  }
+}
+
 function Toast({ message }) {
   if (!message) return null;
   return (
@@ -104,6 +112,7 @@ function PreTripForm({ driver, done, onDone, say }) {
 
   const submit = async () => {
     setBusy(true);
+    let pretripSaved = false;
     try {
       await post("/pretrip", {
         truck_code: driver.truck_code,
@@ -111,6 +120,7 @@ function PreTripForm({ driver, done, onDone, say }) {
         items,
         note,
       });
+      pretripSaved = true;
       // A TIDAK item auto-creates a damage report (source: pretrip).
       for (const [key, label] of failures) {
         await post("/damage-reports", {
@@ -124,7 +134,12 @@ function PreTripForm({ driver, done, onDone, say }) {
       }
       onDone();
     } catch (err) {
-      say(err.message || "Gagal menyimpan inspeksi");
+      if (pretripSaved) {
+        onDone();
+        say("Inspeksi tersimpan, tetapi laporan kerusakan gagal terkirim — laporkan ke admin.");
+      } else {
+        say(err.message || "Gagal menyimpan inspeksi");
+      }
     } finally {
       setBusy(false);
     }
@@ -497,6 +512,7 @@ function DeliveryCard({ spj, say, onDone }) {
         photo_b64: receipt.b64,
         total_weight_kg: Number.isFinite(kg) ? kg : null,
       });
+      localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
       onDone();
     } catch (err) {
       say(err.message || "Gagal mengirim struk");
@@ -795,7 +811,7 @@ export default function DriverApp() {
             />
           )}
 
-          {!spjAktif && history[0] && (
+          {!spjAktif && history[0] && !receiptDoneFor(history[0].spj_id) && (
             <DeliveryCard
               spj={history[0]}
               say={say}
