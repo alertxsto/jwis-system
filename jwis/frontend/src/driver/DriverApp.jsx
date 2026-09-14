@@ -512,7 +512,9 @@ function DeliveryCard({ spj, say, onDone }) {
         photo_b64: receipt.b64,
         total_weight_kg: Number.isFinite(kg) ? kg : null,
       });
-      localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
+      try {
+        localStorage.setItem(`jwis_receipt_${spj.spj_id}`, "done");
+      } catch { /* flag is best-effort; receipt is already recorded server-side */ }
       onDone();
     } catch (err) {
       say(err.message || "Gagal mengirim struk");
