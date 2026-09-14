@@ -56,7 +56,7 @@ const translations = {
     tab_evidence: "Route Evidence",
     tab_impact: "Carbon Footprint",
     tab_spj: "Surat Perintah Jalan",
-
+    tab_damage: "Laporan Kerusakan",
     // Fleet KPIs
     kpi_active_trucks: "Active Trucks",
     kpi_active_trucks_sub: "live fleet in operation",
@@ -195,7 +195,7 @@ const translations = {
     tab_evidence: "Bukti Rute OSRM",
     tab_impact: "Jejak Karbon",
     tab_spj: "Surat Perintah Jalan",
-
+    tab_damage: "Laporan Kerusakan",
     // Fleet KPIs
     kpi_active_trucks: "Armada Aktif",
     kpi_active_trucks_sub: "truk beroperasi di lapangan",

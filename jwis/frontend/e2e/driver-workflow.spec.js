@@ -122,3 +122,56 @@ test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, co
   expect(mine.length).toBeGreaterThan(0);
   expect(mine[0].severity).toBe("berat");
 });
+
+test("admin sees damage report and resolves it", async ({ page }) => {
+  const create = await page.request.post(`${API}/damage-reports`, {
+    data: {
+      truck_code: "T-230", driver_name: "E2E Admin", component: "rem",
+      severity: "berat", note: "e2e admin panel note",
+    },
+  });
+  expect(create.status()).toBe(201);
+  const rep = await create.json();
+
+  await page.goto("/");
+  await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("tab", { name: "Laporan Kerusakan" }).click();
+  await expect(page.getByText("e2e admin panel note").first()).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("NON-OPERASIONAL").first()).toBeVisible();
+
+  await page.request.post(`${API}/damage-reports/${rep.report_id}/resolve`);
+});
+
+test("admin sees spj evidence summary after driver flow", async ({ page }) => {
+  // Self-contained: creates its own SPJ with evidence via API.
+  const create = await page.request.post(`${API}/spj`, {
+    data: {
+      driver_name: "E2E Evidence", truck_code: "T-231",
+      destination: "TPST Bantargebang", weigh_on_site: true,
+      priority: "normal", note: "e2e evidence",
+    },
+  });
+  const spj = await create.json();
+  await page.request.post(`${API}/spj/${spj.spj_id}/stops`, {
+    data: { name: "TPS Evidence", kecamatan: "Cilandak", address: "Jl. Bukti", lat: -6.29, lng: 106.79 },
+  });
+  await page.request.post(`${API}/spj/${spj.spj_id}/activate`);
+  await page.request.post(`${API}/spj/${spj.spj_id}/stops/0/complete`, {
+    data: {
+      evidence: {
+        arrival: { photo_name: "a.jpg", lat: -6.29, lng: 106.79, at: "2026-09-14T09:00:00" },
+        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg" }],
+        officer: { photo_name: "p.jpg", name: "Dicky" },
+      },
+    },
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByText("Surat Perintah Jalan").first().click();
+  await page.getByText(spj.spj_number).first().click();
+  await expect(page.getByText(/Petugas: Dicky/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/40(\.0)? kg/)).toBeVisible();
+});

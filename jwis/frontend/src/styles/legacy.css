@@ -2875,3 +2875,5 @@ input[type="range"]::-webkit-slider-thumb:hover {
 .spj-detail .compact-enforce-btn {
   margin-right: 8px;
 }
+  
+.spj-evidence { list-style: none; margin: 8px 0 0; padding: 8px 10px; font-size: 12px; line-height: 1.7; background: var(--ui-surface-muted, #f8fafc); border-radius: var(--ui-radius-control, 8px); border-left: 3px solid var(--ui-accent, #176b54); }  

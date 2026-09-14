@@ -3956,9 +3956,77 @@ function SpjCreateForm({ onCreated }) {
   );
 }
 
+function DamageReportsPanel() {
+  const [reports, setReports] = useState([]);
+
+  const load = useCallback(() => {
+    fetch(`${API_URL}/damage-reports`).then((r) => r.json())
+      .then((body) => setReports(body.reports || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    load();
+    const id = setInterval(load, 8000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  const resolve = (id) => fetch(`${API_URL}/damage-reports/${id}/resolve`,
+    { method: "POST" }).then(load).catch(() => {});
+
+  return (
+    <div className="panel-card damage-panel">
+      <div className="panel-head">
+        <h3>Laporan Kerusakan</h3>
+        <span className="pill">{reports.length} laporan</span>
+      </div>
+      {reports.length === 0 ? (
+        <div className="ai-feed-empty">Belum ada laporan kerusakan.</div>
+      ) : (
+        <table className="spj-table">
+          <thead>
+            <tr>
+              <th>Waktu</th><th>Truk</th><th>Driver</th><th>Komponen</th>
+              <th>Severity</th><th>Catatan</th><th>Status</th><th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {reports.map((r) => (
+              <tr key={r.report_id}>
+                <td>{new Date(r.created_at).toLocaleString("id-ID")}</td>
+                <td>{r.truck_code}</td>
+                <td>{r.driver_name}</td>
+                <td>{r.component}</td>
+                <td>
+                  <span className={`pill ${r.severity === "berat" ? "danger" : ""}`}>
+                    {r.severity}
+                  </span>
+                  {r.severity === "berat" && r.status !== "selesai" && (
+                    <span className="pill danger">NON-OPERASIONAL</span>
+                  )}
+                </td>
+                <td>{r.note}</td>
+                <td>{r.status}</td>
+                <td>
+                  {r.status !== "selesai" && (
+                    <button className="compact-enforce-btn"
+                      onClick={() => resolve(r.report_id)}>
+                      Selesaikan
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
 function SpjPanel() {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(null);
+  const [evidence, setEvidence] = useState(null);
 
   const load = useCallback(() => {
     fetch(`${API_URL}/spj`).then((r) => r.json())
@@ -3970,6 +4038,20 @@ function SpjPanel() {
     const id = setInterval(load, 8000);
     return () => clearInterval(id);
   }, [load]);
+
+  const toggleOpen = (spjId) => {
+    if (open === spjId) {
+      setOpen(null);
+      setEvidence(null);
+      return;
+    }
+    setOpen(spjId);
+    setEvidence(null);
+    fetch(`${API_URL}/spj/${spjId}/evidence-summary`)
+      .then((r) => r.json())
+      .then(setEvidence)
+      .catch(() => {});
+  };
 
   const act = (url) => fetch(url, { method: "POST" }).then(load).catch(() => {});
 
@@ -3999,7 +4081,7 @@ function SpjPanel() {
             const done = s.stops.filter((x) => x.status === "completed").length;
             return (
               <Fragment key={s.spj_id}>
-                <tr onClick={() => setOpen(open === s.spj_id ? null : s.spj_id)}
+                <tr onClick={() => toggleOpen(s.spj_id)}
                   className="spj-row">
                   <td>{s.spj_number}{s.priority === "vip" ? " ★VIP" : ""}</td>
                   <td>{s.driver_name}</td>
@@ -4028,6 +4110,21 @@ function SpjPanel() {
                           </li>
                         ))}
                       </ol>
+                      {evidence && evidence.stops.some((st) => st.has_arrival || st.weighing_count > 0) && (
+                        <ul className="spj-evidence">
+                          {evidence.stops.map((st) => (
+                            (st.has_arrival || st.weighing_count > 0 || st.officer_name) && (
+                              <li key={st.index}>
+                                <strong>{st.name}:</strong>{" "}
+                                {st.has_arrival && "✓ Kedatangan (geotag) "}
+                                {st.weighing_count > 0 &&
+                                  `· ✓ Timbang ${st.weighing_count} foto — ${st.total_weight_kg} kg (${Object.entries(st.fractions || {}).map(([f, kg]) => `${f} ${kg}kg`).join(", ")}) `}
+                                {st.officer_name && `· ✓ Petugas: ${st.officer_name}`}
+                              </li>
+                            )
+                          ))}
+                        </ul>
+                      )}
                       {s.status === "draft" && (
                         <button className="compact-enforce-btn"
                           onClick={() => act(`${API_URL}/spj/${s.spj_id}/activate`)}>
@@ -4260,6 +4357,7 @@ function CommandCenter({ onLogout }) {
           history={<FleetHistoryPanel filterTruck={filterTruck} setFilterTruck={setFilterTruck} />}
           carbon={<CarbonPanel />}
           spj={<SpjPanel />}
+          damage={<DamageReportsPanel />}
         />
       )}
 

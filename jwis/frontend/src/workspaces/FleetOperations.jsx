@@ -10,6 +10,7 @@ const detailTabs = [
   { id: "evidence", key: "tab_evidence", label: "Route Evidence", surface: "fleet-evidence-surface" },
   { id: "impact", key: "tab_impact", label: "Carbon Footprint", surface: "fleet-impact-surface" },
   { id: "spj", key: "tab_spj", label: "Surat Perintah Jalan", surface: "fleet-spj-surface" },
+  { id: "damage", key: "tab_damage", label: "Laporan Kerusakan", surface: "fleet-damage-surface" },
 ];
 
 export function FleetOperations({
@@ -27,6 +28,7 @@ export function FleetOperations({
   history,
   carbon,
   spj,
+  damage,
 }) {
   const { t } = useLanguage();
   const tabRefs = useRef([]);
@@ -39,6 +41,7 @@ export function FleetOperations({
     evidence: routeEvidence,
     impact: carbon,
     spj,
+    damage,
   };
 
   function selectTab(tabId) {
