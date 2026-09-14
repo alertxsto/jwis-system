@@ -1,12 +1,7 @@
 import React from "react";
 import { MetricStrip } from "../ui/MetricStrip.jsx";
 import { SegmentedControl } from "../ui/SegmentedControl.jsx";
-
-const horizonOptions = [
-  { value: "7d", label: "7 days" },
-  { value: "14d", label: "14 days" },
-  { value: "30d", label: "30 days" },
-];
+import { useLanguage } from "../i18n.jsx";
 
 export function WasteForecast({
   metrics,
@@ -18,25 +13,31 @@ export function WasteForecast({
   horizon,
   onHorizonChange,
 }) {
+  const { t, lang } = useLanguage();
+  const horizonOptions = [
+    { value: "7d", label: lang === "id" ? "7 hari" : "7 days" },
+    { value: "14d", label: lang === "id" ? "14 hari" : "14 days" },
+    { value: "30d", label: lang === "id" ? "30 hari" : "30 days" },
+  ];
+
   return (
     <section className="forecast-workspace" data-testid="forecast-workspace">
       <div className="forecast-heading">
         <div>
-          <h1>Waste Forecast</h1>
-          <p>Forecast demand and inspect the operating conditions behind the projected spike.</p>
+          <h1>{t("fc_title")}</h1>
+          <p>{t("fc_subtitle")}</p>
         </div>
-        <div className="forecast-horizon-control">
-          <SegmentedControl
-            label="Forecast horizon"
-            describedBy="forecast-horizon-source-limit"
-            value={horizon}
-            options={horizonOptions}
-            onChange={onHorizonChange}
-          />
-          <p id="forecast-horizon-source-limit" className="forecast-source-limit">
-            Live model series per day: weekday and national-holiday drivers vary by date;
-            rainfall and event scenario inputs are held constant across the horizon.
-          </p>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+          <div className="forecast-horizon-control">
+            <SegmentedControl
+              label={lang === "id" ? "Horizon prediksi" : "Forecast horizon"}
+              describedBy="forecast-horizon-source-limit"
+              value={horizon}
+              options={horizonOptions}
+              onChange={onHorizonChange}
+            />
+          </div>
+          {reportActions}
         </div>
       </div>
 
@@ -52,7 +53,6 @@ export function WasteForecast({
         {forecast}
         {weather}
         {events}
-        {reportActions}
       </div>
     </section>
   );

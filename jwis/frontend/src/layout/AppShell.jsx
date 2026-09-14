@@ -4,6 +4,7 @@ import {
   BarChart3,
   Bot,
   Cctv,
+  Globe,
   LogOut,
   Menu,
   MessageCircle,
@@ -15,20 +16,22 @@ import {
   X,
 } from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
+import { useLanguage } from "../i18n.jsx";
 
 const items = [
-  { id: "fleet", label: "Fleet Operations", icon: Truck, section: "Operations" },
-  { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
-  { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
-  { id: "surveillance", label: "Gate Surveillance", icon: Cctv, section: "Operations" },
-  { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
-  { id: "weighbridge", label: "Weighbridge Logs", icon: Workflow, section: "Logistics" },
-  { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
-  { id: "iot", label: "IoT Bin Sensors", icon: Activity, section: "Admin" },
-  { id: "audit", label: "Data & ML Audit", icon: Shield, section: "Admin" },
+  { id: "fleet", key: "nav_fleet", icon: Truck, section: "Operations" },
+  { id: "forecast", key: "nav_forecast", icon: BarChart3, section: "Operations" },
+  { id: "planning", key: "nav_planning", icon: Workflow, section: "Operations" },
+  { id: "surveillance", key: "nav_surveillance", icon: Cctv, section: "Operations" },
+  { id: "drivers", key: "nav_drivers", icon: Truck, section: "Logistics" },
+  { id: "weighbridge", key: "nav_weighbridge", icon: Workflow, section: "Logistics" },
+  { id: "wa", key: "nav_wa", icon: MessageCircle, section: "Admin" },
+  { id: "iot", key: "nav_iot", icon: Activity, section: "Admin" },
+  { id: "audit", key: "nav_audit", icon: Shield, section: "Admin" },
 ];
 
 export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, assistant, children }) {
+  const { lang, setLang, t } = useLanguage();
   const current = items.find((item) => item.id === activeWorkspace) || items[0];
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -105,9 +108,9 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
 
   const sections = ["Operations", "Logistics", "Admin"];
   const sectionLabels = {
-    Operations: "Operations",
-    Logistics: "Field Logistics",
-    Admin: "Command Systems",
+    Operations: t("sec_operations"),
+    Logistics: t("sec_logistics"),
+    Admin: t("sec_admin"),
   };
 
   return (
@@ -133,7 +136,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
           <React.Fragment key={section}>
             <p className="nav-section-label">{sectionLabels[section]}</p>
             <nav className="side-nav" id={section === "Operations" ? "workspace-navigation" : undefined} data-testid={section === "Operations" ? "workspace-navigation" : undefined}>
-              {items.filter((item) => item.section === section).map(({ id, label, icon: Icon }) => (
+              {items.filter((item) => item.section === section).map(({ id, key, icon: Icon }) => (
                 <button
                   key={id}
                   type="button"
@@ -141,7 +144,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
                   aria-current={activeWorkspace === id ? "page" : undefined}
                   onClick={() => selectWorkspace(id)}
                 >
-                  <Icon size={17} />{label}
+                  <Icon size={17} />{t(key)}
                 </button>
               ))}
             </nav>
@@ -150,11 +153,11 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
 
         <div className="side-system-state">
           <Activity size={15} />
-          <span>System status</span>
-          <StatusBadge tone={online ? "success" : "warning"}>{online ? "Connected" : "Demo fallback"}</StatusBadge>
+          <span>{t("top_status")}</span>
+          <StatusBadge tone={online ? "success" : "warning"}>{online ? (lang === "id" ? "Terhubung" : "Connected") : "Demo fallback"}</StatusBadge>
         </div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}>
-          <LogOut size={17} />Logout
+          <LogOut size={17} />{t("top_logout")}
         </button>
       </aside>
 
@@ -189,27 +192,63 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Home</span>
+            <span>JWIS</span>
             <span className="breadcrumb-separator">&gt;</span>
-            <strong>{current.label}</strong>
-          </div>
-
-          <div className="topbar-search">
-            <Search size={15} aria-hidden="true" />
-            <input type="text" placeholder="Search here" readOnly />
-            <span className="kbd">Ctrl K</span>
+            <strong>{t(current.key)}</strong>
           </div>
 
           <div className="top-actions">
-            <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
+            <div className="language-toggle-widget" style={{ display: "inline-flex", alignItems: "center", background: "var(--ui-surface-muted)", borderRadius: "8px", padding: "2px", border: "1px solid var(--ui-border)" }}>
+              <button
+                type="button"
+                data-testid="lang-switch-id"
+                className={`lang-btn ${lang === "id" ? "active" : ""}`}
+                onClick={() => setLang("id")}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: lang === "id" ? 700 : 500,
+                  borderRadius: "6px",
+                  border: 0,
+                  cursor: "pointer",
+                  background: lang === "id" ? "var(--ui-surface)" : "transparent",
+                  color: lang === "id" ? "var(--ui-accent)" : "var(--ui-muted)",
+                  boxShadow: lang === "id" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                ID
+              </button>
+              <button
+                type="button"
+                data-testid="lang-switch-en"
+                className={`lang-btn ${lang === "en" ? "active" : ""}`}
+                onClick={() => setLang("en")}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: lang === "en" ? 700 : 500,
+                  borderRadius: "6px",
+                  border: 0,
+                  cursor: "pointer",
+                  background: lang === "en" ? "var(--ui-surface)" : "transparent",
+                  color: lang === "en" ? "var(--ui-accent)" : "var(--ui-muted)",
+                  boxShadow: lang === "en" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                EN
+              </button>
+            </div>
+
             <button className="ghost-button assistant-topbar-button" type="button" onClick={() => setAssistantOpen(true)}>
-              <Bot size={16} />AI Assistant
+              <Bot size={16} />{t("top_ai_assistant")}
             </button>
             <div className="profile-widget">
               <span className="profile-avatar" aria-hidden="true">JW</span>
               <div className="profile-info">
                 <span className="profile-name">JWIS Team</span>
-                <span className="profile-role">DLH Operator</span>
+                <span className="profile-role">{t("top_operator_role")}</span>
               </div>
             </div>
           </div>

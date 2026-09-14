@@ -231,6 +231,7 @@
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
   background: var(--ui-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 table {
@@ -241,22 +242,29 @@ table {
 
 th,
 td {
-  padding: 12px 14px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--ui-border);
+  vertical-align: middle;
 }
 
 th {
   color: var(--ui-muted);
   background: var(--ui-surface-muted);
-  font-size: 12px;
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 td {
   background: var(--ui-surface);
-  font-size: 14px;
+  font-size: 13.5px;
+  color: var(--ui-ink);
+}
+
+tbody tr {
+  transition: background-color 120ms ease;
 }
 
 tbody tr:hover td {
@@ -267,16 +275,136 @@ tr:last-child td {
   border-bottom: 0;
 }
 
-td b,
-td span {
+td .cell-subtext {
   display: block;
-}
-
-td span {
   margin-top: 2px;
   color: var(--ui-muted);
   font-size: 12px;
 }
+
+.plate-badge,
+.unlicensed-plate-badge,
+.truck-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono, monospace);
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #1e293b;
+  color: #f8fafc;
+  border: 1px solid #0f172a;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  white-space: nowrap;
+}
+
+.plate-badge-light {
+  background: var(--ui-surface-muted);
+  color: var(--ui-ink);
+  border-color: var(--ui-border-strong);
+}
+
+.coord-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  color: var(--ui-muted);
+  background: var(--ui-canvas);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-border);
+}
+
+.zone-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #e2e8f0;
+}
+
+.speed-badge {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink);
+  background: var(--ui-surface-muted);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--ui-border);
+}
+
+.pill,
+.status-pill {
+  min-height: 24px;
+  padding: 2px 9px;
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pill.success,
+.status-pill.success {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.pill.warning,
+.status-pill.warning {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.pill.danger,
+.status-pill.danger {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.pill.info,
+.status-pill.info {
+  color: #0369a1;
+  background: #f0f9ff;
+  border-color: #bae6fd;
+}
+
+.pill.live,
+.status-pill.live {
+  color: var(--ui-accent);
+  background: var(--ui-accent-soft);
+  border-color: rgba(217, 119, 87, 0.3);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.success { background: #16a34a; }
+.status-dot.warning { background: #d97706; }
+.status-dot.danger { background: #dc2626; }
+.status-dot.live { background: var(--ui-accent); }
 
 .field-label {
   display: block;

@@ -93,9 +93,16 @@
   border-bottom-color: var(--ui-primary);
 }
 
+.fleet-queue-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: 100%;
+}
+
 .fleet-detail-surface {
   margin-top: 0;
-  min-height: 480px;
+  min-height: auto;
   height: auto;
   flex-shrink: 0;
   overflow: visible;
@@ -104,9 +111,9 @@
 .fleet-detail-surface .panel {
   width: 100%;
   height: auto;
-  min-height: 480px;
+  min-height: auto;
   overflow: visible;
-  box-shadow: var(--ui-shadow-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   border-radius: var(--ui-radius-card);
   border: 1px solid var(--ui-border);
   background: var(--ui-surface);
@@ -341,9 +348,9 @@
 }
 
 .forecast-decision-stack .events-list {
-  max-height: 420px;
-  overflow: auto;
-  padding-right: 2px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
 }
 
 .forecast-districts {
@@ -357,10 +364,7 @@
 .forecast-tools {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-areas:
-    "predictive weather"
-    "events report";
-  gap: var(--space-4);
+  gap: var(--space-5);
   margin-top: var(--space-5);
   align-items: stretch;
   overflow-x: hidden;
@@ -369,25 +373,21 @@
 .forecast-tools .panel {
   min-width: 0;
   margin: 0;
-  padding: var(--space-4);
-  box-shadow: none;
+  padding: var(--space-5);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   overflow: hidden;
 }
 
-.forecast-tools > .panel:nth-child(1) {
-  grid-area: predictive;
+.forecast-tools > .prediction-panel {
+  grid-column: 1 / -1;
 }
 
-.forecast-tools > .panel:nth-child(2) {
-  grid-area: weather;
+.forecast-tools > .weather-panel {
+  grid-column: 1 / 2;
 }
 
-.forecast-tools > .panel:nth-child(3) {
-  grid-area: events;
-}
-
-.forecast-tools > .panel:nth-child(4) {
-  grid-area: report;
+.forecast-tools > .events-panel {
+  grid-column: 2 / 3;
 }
 
 .forecast-tools .panel-title {
@@ -396,9 +396,12 @@
 }
 
 .forecast-tools .events-list {
-  max-height: 390px;
-  overflow: auto;
-  padding-right: 2px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .forecast-tools .report-panel .primary-button {
@@ -411,24 +414,26 @@
 
 .planning-workspace {
   grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: minmax(280px, 0.82fr) minmax(560px, 1.55fr) minmax(320px, 0.82fr);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
   min-width: 0;
-  overflow: hidden;
-  border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-elevated);
-  background: var(--ui-surface);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .decision-stage {
   min-width: 0;
-  padding: var(--space-5);
-  border-left: 1px solid var(--ui-border);
+  padding: 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius-card);
   background: var(--ui-surface);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .decision-stage:first-child {
-  border-left: 0;
+  border-left: 1px solid var(--ui-border);
 }
 
 .decision-stage-header {
@@ -1115,7 +1120,7 @@
 
 .map-footer-inspector-row {
   display: grid;
-  grid-template-columns: minmax(360px, 1.15fr) minmax(380px, 1.2fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
   align-items: stretch;
   gap: var(--space-5);
   margin-top: var(--space-5);
@@ -1129,8 +1134,8 @@
 
 .inspector-col > .panel {
   width: 100%;
-  min-height: 520px;
-  max-height: 640px;
+  min-height: 420px;
+  max-height: 520px;
   padding: 22px 24px;
   overflow: hidden;
   display: flex;
@@ -1138,32 +1143,71 @@
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-card);
-  box-shadow: var(--ui-shadow-sm);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.inspector-col > .panel:hover {
+  border-color: var(--ui-border-strong);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
 }
 
 .inspector-col > .panel .panel-title {
   margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.panel-header-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--ui-surface-muted);
+  color: var(--ui-accent);
+  border: 1px solid var(--ui-border);
+}
+
+.panel-header-icon-wrap.danger {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.panel-header-icon-wrap.warning {
+  background: #fffbeb;
+  color: #d97706;
+  border-color: #fde68a;
 }
 
 .inspector-col > .panel .panel-title h2 {
-  font-size: 17px;
+  font-size: 16.5px;
   font-weight: 700;
   color: var(--ui-ink);
   letter-spacing: -0.01em;
+  margin: 0;
 }
 
 .inspector-col > .panel .panel-title p {
   font-size: 12.5px;
-  line-height: 1.4;
+  line-height: 1.45;
   color: var(--ui-muted);
-  margin-top: 2px;
+  margin-top: 4px;
+  margin-bottom: 0;
 }
 
 .unlicensed-table-wrap {
   flex: 1 1 auto;
   min-height: 0;
   border: 1px solid var(--ui-border);
-  border-radius: var(--ui-radius-card);
+  border-radius: 10px;
   background: var(--ui-surface);
   overflow-y: auto;
   overflow-x: hidden;
@@ -1186,7 +1230,7 @@
   border-bottom: 1px solid var(--ui-border-strong);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
 }
 
 .unlicensed-collector-table tbody td {
@@ -1197,7 +1241,7 @@
 }
 
 .unlicensed-collector-table tbody tr:hover td {
-  background: var(--ui-canvas);
+  background: #fbfbfa;
 }
 
 .unlicensed-collector-table tbody tr:last-child td {
@@ -1207,36 +1251,57 @@
 .unlicensed-plate-cell {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+.unlicensed-location-desc {
+  font-size: 11px;
+  color: var(--ui-muted);
+  display: flex;
+  align-items: center;
   gap: 3px;
 }
 
-.unlicensed-plate-badge {
-  font-family: var(--font-mono, monospace);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--ui-ink);
-}
-
-.unlicensed-coord-tag {
-  font-size: 11px;
-  color: var(--ui-muted);
-  font-family: var(--font-mono, monospace);
-}
-
 .compact-enforce-btn {
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
   border-radius: 6px;
   white-space: nowrap;
   min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--ui-accent);
+  color: #ffffff;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.compact-enforce-btn:hover:not(:disabled) {
+  background: #c96647;
+  transform: translateY(-1px);
 }
 
 .compact-enforce-btn.enforced {
-  background: var(--ui-surface-muted);
-  color: var(--ui-muted);
-  border: 1px solid var(--ui-border);
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
   cursor: default;
+  transform: none;
+}
+
+.unlicensed-footer-meta {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ui-border);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--ui-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .stagger-schedule-note {
