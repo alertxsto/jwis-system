@@ -69,7 +69,10 @@ from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
     spj_summary_payload
+from app.service_history import SERVICE_STORE, due_date_for
 from dataclasses import asdict as _asdict
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
 history_store = HistoryStore()
@@ -1730,5 +1733,47 @@ def resolve_damage_report(report_id: str) -> dict[str, Any]:
         rep = DAMAGE_STORE.resolve(report_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    try:  # hook must never break resolve
+        SERVICE_STORE.create(
+            rep.truck_code, service_date=date.today().isoformat(),
+            component=rep.component,
+            description=f"Resolve laporan: {rep.note}",
+            source="damage_resolve",
+            next_due_date=due_date_for(rep.component, date.today()))
+    except Exception:  # noqa: BLE001
+        logger.exception("service-record hook failed for report %s", report_id)
     _refresh_fleet_caches()
     return _asdict(rep)
+
+
+class ServiceRecordBody(BaseModel):
+    truck_code: str
+    service_date: str
+    component: str
+    description: str
+    cost_idr: int | None = None
+    odometer_km: float | None = None
+    technician: str = ""
+    next_due_date: str | None = None
+
+
+@app.post("/api/service-records", status_code=201)
+def create_service_record(body: ServiceRecordBody) -> dict[str, Any]:
+    rec = SERVICE_STORE.create(
+        body.truck_code, body.service_date, body.component,
+        body.description, cost_idr=body.cost_idr,
+        odometer_km=body.odometer_km, technician=body.technician,
+        next_due_date=body.next_due_date)
+    return _asdict(rec)
+
+
+@app.get("/api/service-records")
+def list_service_records(truck_code: str | None = None) -> dict[str, Any]:
+    records = SERVICE_STORE.list(truck_code)
+    return {"records": [_asdict(r) for r in records], "count": len(records)}
+
+
+@app.get("/api/service-records/due-soon")
+def service_records_due_soon(days: int = 30) -> dict[str, Any]:
+    due = SERVICE_STORE.due_soon(days=days)
+    return {"due": due, "count": len(due)}
