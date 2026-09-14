@@ -24,9 +24,10 @@ import logging
 import re
 import threading
 import time
+from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -74,12 +75,19 @@ from dataclasses import asdict as _asdict
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    _warm_route_cache()
+    _start_ai_engine()
+    yield
+
+
+app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0", lifespan=_lifespan)
 history_store = HistoryStore()
 dispatch_center = DispatchCenter()
 
 
-@app.on_event("startup")
 def _warm_route_cache() -> None:
     """Warm OSRM caches (A* edges + per-truck map-truth routes) in a background
     thread so the first live demo request is fast, never blocking on cold OSRM."""
@@ -1446,7 +1454,6 @@ _ai_carbon = CarbonCalculator()
 _ai_forecast = EventImpactForecaster(feed=EVENT_FEED)
 
 
-@app.on_event("startup")
 def _start_ai_engine() -> None:
     engine = maybe_start_engine()
     if engine is None:
