@@ -55,6 +55,7 @@ const translations = {
     tab_queue: "TPA Queue & Optimization",
     tab_evidence: "Route Evidence",
     tab_impact: "Carbon Footprint",
+    tab_spj: "Surat Perintah Jalan",
 
     // Fleet KPIs
     kpi_active_trucks: "Active Trucks",
@@ -193,6 +194,7 @@ const translations = {
     tab_queue: "Antrean TPA & Optimasi",
     tab_evidence: "Bukti Rute OSRM",
     tab_impact: "Jejak Karbon",
+    tab_spj: "Surat Perintah Jalan",
 
     // Fleet KPIs
     kpi_active_trucks: "Armada Aktif",

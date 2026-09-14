@@ -9,6 +9,7 @@ const detailTabs = [
   { id: "queue", key: "tab_queue", label: "TPA Queue & Optimization", surface: "fleet-queue-surface" },
   { id: "evidence", key: "tab_evidence", label: "Route Evidence", surface: "fleet-evidence-surface" },
   { id: "impact", key: "tab_impact", label: "Carbon Footprint", surface: "fleet-impact-surface" },
+  { id: "spj", key: "tab_spj", label: "Surat Perintah Jalan", surface: "fleet-spj-surface" },
 ];
 
 export function FleetOperations({
@@ -25,6 +26,7 @@ export function FleetOperations({
   unlicensedTable,
   history,
   carbon,
+  spj,
 }) {
   const { t } = useLanguage();
   const tabRefs = useRef([]);
@@ -36,6 +38,7 @@ export function FleetOperations({
     queue,
     evidence: routeEvidence,
     impact: carbon,
+    spj,
   };
 
   function selectTab(tabId) {

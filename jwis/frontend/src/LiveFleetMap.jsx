@@ -879,6 +879,98 @@ popup.on("open", () => {
   }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs, mapTruth, styleTick, showAllFleet]);
 
   useEffect(() => {
+    const map = mapInstance;
+    if (!map) return;
+    let cancelled = false;
+
+    function removeSpjLayers() {
+      ["spj-active-stops", "spj-active-route"].forEach((id) => {
+        if (map.getLayer(id)) map.removeLayer(id);
+      });
+      ["spj-active-stops", "spj-active-route"].forEach((id) => {
+        if (map.getSource(id)) map.removeSource(id);
+      });
+    }
+
+    async function loadSpj() {
+      try {
+        const res = await fetch(`${API_URL}/spj?status=aktif`);
+        if (!res.ok) return;
+        const body = await res.json();
+        const routes = await Promise.all((body.spj || []).map(async (s) => {
+          try {
+            const pr = await fetch(`${API_URL}/spj/active-path/${s.truck_code}`);
+            if (!pr.ok) return { spj: s, path: [] };
+            const p = await pr.json();
+            return { spj: s, path: p.path || [] };
+          } catch {
+            return { spj: s, path: [] };
+          }
+        }));
+        if (cancelled || !mapRef.current) return;
+
+        const lineFeatures = [];
+        const stopFeatures = [];
+        routes.forEach(({ spj, path }) => {
+          if (path.length < 2) return;
+          lineFeatures.push({
+            type: "Feature",
+            properties: { spjNumber: spj.spj_number, driver: spj.driver_name },
+            geometry: { type: "LineString", coordinates: path.map((p) => [p.lng, p.lat]) },
+          });
+          path.slice(0, -1).forEach((p, i) => {
+            stopFeatures.push({
+              type: "Feature",
+              properties: {
+                label: String(i + 1),
+                stopName: spj.stops?.[i]?.name || "",
+                spjNumber: spj.spj_number,
+              },
+              geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+            });
+          });
+        });
+
+        removeSpjLayers();
+        map.addSource("spj-active-route", { type: "geojson", data: featureCollection(lineFeatures) });
+        map.addLayer({
+          id: "spj-active-route",
+          type: "line",
+          source: "spj-active-route",
+          paint: {
+            "line-color": "#7c3aed",
+            "line-width": 4,
+            "line-dasharray": [1, 1.5],
+            "line-opacity": 0.9,
+          },
+        });
+        map.addSource("spj-active-stops", { type: "geojson", data: featureCollection(stopFeatures) });
+        map.addLayer({
+          id: "spj-active-stops",
+          type: "circle",
+          source: "spj-active-stops",
+          paint: {
+            "circle-radius": 8,
+            "circle-color": "#ffffff",
+            "circle-stroke-color": "#7c3aed",
+            "circle-stroke-width": 3,
+          },
+        });
+      } catch {
+        // SPJ layer is non-critical
+      }
+    }
+
+    loadSpj();
+    const id = setInterval(loadSpj, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      removeSpjLayers();
+    };
+  }, [mapInstance, styleTick]);
+
+  useEffect(() => {
     let cancelled = false;
     async function renderHeatmap() {
       const map = mapInstance;
