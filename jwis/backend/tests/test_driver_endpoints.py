@@ -135,6 +135,39 @@ class DamageEndpointTests(unittest.TestCase):
         self.assertEqual(stop["total_weight_kg"], 40.0)
         self.assertEqual(stop["officer_name"], "Dicky")
 
+    def test_spj_list_has_no_photo_b64(self):
+        create = self.client.post("/api/spj", json={
+            "driver_name": "E2E", "truck_code": "T-240",
+            "destination": "TPST Bantargebang", "weigh_on_site": True,
+            "priority": "normal", "note": ""})
+        spj_id = create.json()["spj_id"]
+        self.client.post(f"/api/spj/{spj_id}/stops", json={
+            "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
+        self.client.post(f"/api/spj/{spj_id}/activate")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
+            "arrival": {"photo_name": "a.jpg", "photo_b64": "data:image/jpeg;base64,AAA"},
+            "weighing": [{"fraction": "Residu", "weight_kg": 40.0,
+                          "photo_name": "t.jpg", "photo_b64": "data:image/jpeg;base64,BBB"}],
+            "officer": {"photo_name": "p.jpg", "name": "Dicky"}}})
+        listing = self.client.get("/api/spj")
+        self.assertNotIn("base64", listing.text)
+        detail = self.client.get(f"/api/spj/{spj_id}")
+        self.assertIn("base64", detail.text)  # detail keeps full evidence
+
+    def test_receipt_requires_photo(self):
+        create = self.client.post("/api/spj", json={
+            "driver_name": "E2E", "truck_code": "T-241",
+            "destination": "TPST Bantargebang", "weigh_on_site": False,
+            "priority": "normal", "note": ""})
+        spj_id = create.json()["spj_id"]
+        self.client.post(f"/api/spj/{spj_id}/stops", json={
+            "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
+        self.client.post(f"/api/spj/{spj_id}/activate")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
+        r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+            "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0})
+        self.assertEqual(r.status_code, 409)
+
 
 if __name__ == "__main__":
     unittest.main()

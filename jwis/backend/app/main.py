@@ -67,7 +67,8 @@ from app.ai.engine_loop import maybe_start_engine
 from app.ai.forecasters.event_impact import EventImpactForecaster
 from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
-from app.spj import SPJ_STORE, active_path_for as spj_active_path
+from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
+    spj_summary_payload
 from dataclasses import asdict as _asdict
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
@@ -1560,7 +1561,7 @@ class DamageReportBody(BaseModel):
 @app.get("/api/spj")
 def list_spj(status: str | None = None) -> dict[str, Any]:
     items = SPJ_STORE.list(status=status)
-    return {"spj": [_spj_payload(s) for s in items], "count": len(items)}
+    return {"spj": [spj_summary_payload(s) for s in items], "count": len(items)}
 
 
 @app.get("/api/spj/active-path/{truck_code}")
@@ -1673,6 +1674,9 @@ def submit_spj_receipt(spj_id: str, body: SpjReceiptBody) -> dict[str, Any]:
     if spj.status != "selesai":
         raise HTTPException(status_code=409,
                             detail="receipt can only be submitted after the SPJ is selesai")
+    if not body.photo_name.strip() or not body.photo_b64.strip():
+        raise HTTPException(status_code=409,
+                            detail="receipt photo_name and photo_b64 are required")
     history_store.record_event("spj_receipt_submitted", {
         "spj_id": spj_id, "spj_number": spj.spj_number,
         "photo_name": body.photo_name,

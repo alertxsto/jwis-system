@@ -20,6 +20,36 @@ logger = logging.getLogger(__name__)
 
 DESTINATIONS = ("TPST Bantargebang", "JRC Pesanggrahan", "RDF Plant Jakarta")
 
+MAX_EVIDENCE_PHOTO_CHARS = 7_000_000
+
+
+def _validate_evidence(evidence: dict) -> None:
+    arrival = evidence.get("arrival") or {}
+    if not arrival.get("photo_name"):
+        raise ValueError("evidence.arrival.photo_name is required")
+    photos = [arrival.get("photo_b64"), (evidence.get("officer") or {}).get("photo_b64")]
+    photos += [w.get("photo_b64") for w in (evidence.get("weighing") or [])]
+    for photo in photos:
+        if photo and len(photo) > MAX_EVIDENCE_PHOTO_CHARS:
+            raise ValueError("evidence photo_b64 exceeds 7,000,000 chars")
+
+
+def spj_summary_payload(spj: Spj) -> dict:
+    payload = asdict(spj)
+    for stop in payload["stops"]:
+        ev = stop.pop("evidence", None)
+        if ev is None:
+            stop["evidence_summary"] = None
+            continue
+        weighing = ev.get("weighing") or []
+        stop["evidence_summary"] = {
+            "has_evidence": True,
+            "weighing_count": len(weighing),
+            "total_weight_kg": round(
+                sum(float(w.get("weight_kg") or 0) for w in weighing), 1),
+        }
+    return payload
+
 
 @dataclass
 class SpjStop:
@@ -181,9 +211,7 @@ class SpjStore:
             if not 0 <= index < len(spj.stops):
                 raise ValueError(f"stop index {index} out of range")
             if evidence is not None:
-                arrival = evidence.get("arrival") or {}
-                if not arrival.get("photo_name"):
-                    raise ValueError("evidence.arrival.photo_name is required")
+                _validate_evidence(evidence)
             stop = spj.stops[index]
             if stop.status == "completed":
                 return spj

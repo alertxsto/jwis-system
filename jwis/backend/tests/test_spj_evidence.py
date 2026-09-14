@@ -63,6 +63,26 @@ class SpjEvidenceTests(unittest.TestCase):
         self.assertEqual(loaded.stops[0].evidence["weighing"][0]["weight_kg"],
                          37.2)
 
+    def test_evidence_photo_cap_enforced(self):
+        store = _store()
+        spj = self._active_spj(store)
+        big = {"arrival": {"photo_name": "a.jpg", "photo_b64": "x" * 7_000_001},
+               "weighing": [], "officer": {"photo_name": "p.jpg"}}
+        with self.assertRaises(ValueError):
+            store.complete_stop(spj.spj_id, 0, evidence=big)
+
+    def test_summary_payload_strips_evidence(self):
+        from app.spj import spj_summary_payload
+        store = _store()
+        spj = self._active_spj(store)
+        store.complete_stop(spj.spj_id, 0, evidence=EVIDENCE)
+        summary = spj_summary_payload(store.get(spj.spj_id))
+        self.assertNotIn("photo_b64", str(summary))
+        ev_sum = summary["stops"][0]["evidence_summary"]
+        self.assertTrue(ev_sum["has_evidence"])
+        self.assertEqual(ev_sum["weighing_count"], 1)
+        self.assertEqual(ev_sum["total_weight_kg"], 37.2)
+
 
 if __name__ == "__main__":
     unittest.main()
