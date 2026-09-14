@@ -290,9 +290,20 @@ def _truck(truck_code: str, plate: str, driver: str, zone: str, status: str,
     st = _SIM_STATE.get(truck_code, {})
     total_km = max(_path_km(ACTUAL_PATHS[truck_code]), 1e-9)
     progress = min(1.0, (st.get("dist_km", 0.0) % total_km) / total_km)
-    damage = damage_status_for(truck_code)
-    if damaged and damage["state"] == "ok":
-        damage = {"state": "breakdown", "note": "Compactor fault reported by driver", "operational": False}
+    try:
+        from app.damage_reports import DAMAGE_STORE
+        override = DAMAGE_STORE.active_override_for(truck_code)
+    except Exception:
+        override = None
+    if override is not None:
+        damage = {"state": "breakdown",
+                  "note": f"Driver report: {override.component} — {override.note}",
+                  "operational": False}
+        damaged = True
+    else:
+        damage = damage_status_for(truck_code)
+        if damaged and damage["state"] == "ok":
+            damage = {"state": "breakdown", "note": "Compactor fault reported by driver", "operational": False}
     activity = activity_for(speed, progress, damaged)
     violation_types = detect_violation_types(speed, activity["state"], deviation["violated"], deviation["distance_meters"])
     if violation_types:
