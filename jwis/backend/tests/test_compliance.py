@@ -79,7 +79,7 @@ class ComplianceScoreTests(unittest.TestCase):
         _make_spj(spj, "Budi", "T-001", complete_with_evidence=False)
         with _Swap(spj, pre, dmg, trucks):
             result = compute_driver_score("Budi", ["T-001"], today="2026-09-14")
-        self.assertEqual(result["score"], 90.0)
+        self.assertEqual(result["score"], 85.0)
         self.assertEqual(result["breakdown"]["stops_without_evidence"], 1)
 
     def test_unresolved_heavy_report_deducts_10(self):
@@ -114,7 +114,7 @@ class ComplianceScoreTests(unittest.TestCase):
         spj, pre, dmg = _fresh_stores()
         trucks = [{"truck_code": "T-001", "driver_name": "Budi",
                    "deviation": {"violated": True}}]
-        for _ in range(8):
+        for _ in range(9):
             dmg.create("T-001", "Budi", "rem", "berat", "x")
         with _Swap(spj, pre, dmg, trucks):
             result = compute_driver_score("Budi", ["T-001"], today="2026-09-14")

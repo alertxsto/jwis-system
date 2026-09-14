@@ -57,14 +57,11 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
 
     stops_without_evidence = 0
     late_completions = 0
-    no_evidence_dates: set[str] = set()
     spj_dates: set[str] = set()
     for spj in SPJ_STORE.list():
         if spj.truck_code not in codes:
             continue
-        day = spj.created_at[:10]
-        if _in_window(day, start):
-            spj_dates.add(day)
+        spj_dates.add(spj.created_at[:10])
         if (spj.status == "selesai"
                 and _in_window(spj.completed_at, start)
                 and (spj.completed_at or "")[:10] > spj.date):
@@ -74,24 +71,18 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
                     and _in_window(stop.completed_at, start)
                     and stop.evidence is None):
                 stops_without_evidence += 1
-                if _in_window(stop.completed_at, start):
-                    no_evidence_dates.add((stop.completed_at or "")[:10])
 
-    heavy_reports = [r for r in DAMAGE_STORE.list()
-                     if r.driver_name == driver_name
-                     and r.severity == "berat" and r.status != "selesai"]
-    unresolved_heavy = len(heavy_reports)
-    repeat_heavy_dates = {r.created_at[:10] for r in heavy_reports[1:]
-                          if _in_window(r.created_at, start)}
+    unresolved_heavy = sum(
+        1 for r in DAMAGE_STORE.list()
+        if r.driver_name == driver_name and r.severity == "berat"
+        and r.status != "selesai")
 
-    # Deductions never stack twice on the same date (no double jeopardy).
     pretrip_dates: set[str] = set()
     for code in codes:
         for rec in PRETRIP_STORE.list_recent(code, days=WINDOW_DAYS * 4):
             pretrip_dates.add(rec.date)
-    no_pretrip_dates = ((spj_dates | repeat_heavy_dates)
-                        - pretrip_dates - no_evidence_dates)
-    days_without_pretrip = len(no_pretrip_dates)
+    days_without_pretrip = len(
+        {d for d in spj_dates if _in_window(d, start)} - pretrip_dates)
     deductions = (W_DEVIATION * deviation_violations
                   + W_NO_EVIDENCE * stops_without_evidence
                   + W_LATE * late_completions
@@ -108,10 +99,6 @@ def compute_driver_score(driver_name: str, truck_codes: list[str],
             "late_completions": late_completions,
             "unresolved_heavy_reports": unresolved_heavy,
             "days_without_pretrip": days_without_pretrip,
-        },
-        "dates": {
-            "days_without_pretrip": sorted(no_pretrip_dates),
-            "stops_without_evidence": sorted(no_evidence_dates),
         },
         "weights": {"deviation": W_DEVIATION, "no_evidence": W_NO_EVIDENCE,
                     "late": W_LATE, "heavy_report": W_HEAVY_REPORT,
