@@ -81,6 +81,9 @@ def read_weight_from_photo(photo_b64: str,
         logger.exception("timbangan OCR call failed")
         return {"weight_kg": None, "raw_text": f"OCR call failed: {exc}",
                 "confidence": "failed", "source": source}
+    if not isinstance(content, str):
+        return {"weight_kg": None, "raw_text": "OCR returned empty content",
+                "confidence": "failed", "source": source}
     weight = _extract_weight(content)
     if weight is None:
         return {"weight_kg": None, "raw_text": content[:200],
