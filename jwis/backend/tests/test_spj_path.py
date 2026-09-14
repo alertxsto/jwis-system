@@ -21,8 +21,10 @@ class SpjPolylineTests(unittest.TestCase):
 
     def test_polyline_appends_destination(self):
         import tempfile
-        store = SpjStore(persist_path=os.path.join(
-            tempfile.gettempdir(), "test_spj_poly.json"))
+        path = os.path.join(tempfile.gettempdir(), "test_spj_poly.json")
+        if os.path.exists(path):
+            os.remove(path)
+        store = SpjStore(persist_path=path)
         spj = self._active_spj(store)
         line = spj_polyline(spj)
         self.assertEqual(len(line), 3)
@@ -44,6 +46,21 @@ class SpjPolylineTests(unittest.TestCase):
             self.assertIsNotNone(path_result)
             self.assertEqual(path_result[0], (-6.20, 106.80))
             self.assertIsNone(active_path_for("T-000"))
+        finally:
+            spj_module.SPJ_STORE = old
+
+    def test_active_path_none_when_polyline_degenerate(self):
+        import tempfile
+        path = os.path.join(tempfile.gettempdir(), "test_spj_degenerate.json")
+        if os.path.exists(path):
+            os.remove(path)
+        store = SpjStore(persist_path=path)
+        spj = self._active_spj(store, truck="T-998")
+        spj.stops.clear()  # zero-stop edge: polyline is destination-only
+        old = spj_module.SPJ_STORE
+        try:
+            spj_module.SPJ_STORE = store
+            self.assertIsNone(active_path_for("T-998"))
         finally:
             spj_module.SPJ_STORE = old
 

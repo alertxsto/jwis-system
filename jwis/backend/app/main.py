@@ -67,6 +67,8 @@ from app.ai.engine_loop import maybe_start_engine
 from app.ai.forecasters.event_impact import EventImpactForecaster
 from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
+from app.spj import SPJ_STORE, active_path_for as spj_active_path
+from dataclasses import asdict as _asdict
 
 app = FastAPI(title="JWIS FastAPI Backend", version="2.5.0")
 history_store = HistoryStore()
@@ -1494,3 +1496,105 @@ def ai_carbon_live() -> dict[str, Any]:
 def ai_event_forecast() -> dict[str, Any]:
     outlook = _ai_forecast.latest()
     return {"outlook": outlook, "count": len(outlook)}
+
+
+# ── SPJ (Surat Perintah Jalan) ───────────────────────────────────────────────
+
+def _spj_payload(spj) -> dict[str, Any]:
+    return _asdict(spj)
+
+
+def _spj_or_409(fn, *args, **kwargs):
+    try:
+        return _spj_payload(fn(*args, **kwargs))
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+class SpjCreateBody(BaseModel):
+    driver_name: str
+    truck_code: str
+    destination: str
+    weigh_on_site: bool = False
+    priority: str = "normal"
+    note: str = ""
+
+
+class SpjStopBody(BaseModel):
+    name: str
+    kecamatan: str
+    address: str
+    lat: float
+    lng: float
+    location_type: str = "Pemukiman Kelas Menengah"
+
+
+@app.get("/api/spj")
+def list_spj(status: str | None = None) -> dict[str, Any]:
+    items = SPJ_STORE.list(status=status)
+    return {"spj": [_spj_payload(s) for s in items], "count": len(items)}
+
+
+@app.get("/api/spj/active-path/{truck_code}")
+def spj_active_path_endpoint(truck_code: str) -> dict[str, Any]:
+    path = spj_active_path(truck_code)
+    return {
+        "truck_code": truck_code,
+        "has_active_spj": path is not None,
+        "path": [{"lat": lat, "lng": lng} for lat, lng in (path or [])],
+    }
+
+
+@app.get("/api/spj/{spj_id}")
+def get_spj(spj_id: str) -> dict[str, Any]:
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    return _spj_payload(spj)
+
+
+@app.post("/api/spj", status_code=201)
+def create_spj(body: SpjCreateBody) -> dict[str, Any]:
+    return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
+                       body.destination, body.weigh_on_site, body.priority,
+                       body.note)
+
+
+@app.post("/api/spj/{spj_id}/stops")
+def add_spj_stop(spj_id: str, body: SpjStopBody) -> dict[str, Any]:
+    return _spj_or_409(SPJ_STORE.add_stop, spj_id, body.name, body.kecamatan,
+                       body.address, body.lat, body.lng, body.location_type)
+
+
+def _refresh_fleet_caches() -> None:
+    from app.data import _fleet_cache
+    _fleet_cache["ts"] = 0.0
+    _map_truth_cache["ts"] = 0.0
+
+
+@app.post("/api/spj/{spj_id}/activate")
+def activate_spj(spj_id: str) -> dict[str, Any]:
+    result = _spj_or_409(SPJ_STORE.activate, spj_id)
+    _refresh_fleet_caches()
+    return result
+
+
+@app.post("/api/spj/{spj_id}/stops/{index}/complete")
+def complete_spj_stop(spj_id: str, index: int) -> dict[str, Any]:
+    result = _spj_or_409(SPJ_STORE.complete_stop, spj_id, index)
+    _refresh_fleet_caches()
+    return result
+
+
+@app.post("/api/spj/{spj_id}/complete")
+def complete_spj(spj_id: str) -> dict[str, Any]:
+    result = _spj_or_409(SPJ_STORE.complete, spj_id)
+    _refresh_fleet_caches()
+    return result
+
+
+@app.post("/api/spj/{spj_id}/cancel")
+def cancel_spj(spj_id: str) -> dict[str, Any]:
+    result = _spj_or_409(SPJ_STORE.cancel, spj_id)
+    _refresh_fleet_caches()
+    return result

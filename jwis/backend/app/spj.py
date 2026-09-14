@@ -254,7 +254,10 @@ def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
         spj = SPJ_STORE.active_for_truck(truck_code)
         if spj is None:
             return None
-        return spj_polyline(spj)
+        line = spj_polyline(spj)
+        if len(line) < 2:
+            return None
+        return line
     except Exception:  # noqa: BLE001
         logger.exception("active_path_for(%s) failed; using corridor fallback",
                          truck_code)
