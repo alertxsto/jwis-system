@@ -246,6 +246,10 @@ def _assigned_reference_path(truck_code: str) -> list[tuple[float, float]]:
     perfectly on-route). The cached OSRM corridor geometry is the true
     reference; the polyline is only a fallback when the cache is absent.
     """
+    from app.spj import active_path_for
+    spj_path = active_path_for(truck_code)
+    if spj_path:
+        return spj_path
     try:
         import json
         from functools import lru_cache

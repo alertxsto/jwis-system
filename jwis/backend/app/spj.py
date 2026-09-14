@@ -219,6 +219,48 @@ class SpjStore:
         return spj
 
 
+from app.astar_routing import NODES as _ASTAR_NODES
+
+_TPA = _ASTAR_NODES["TPA_BANTARGEBANG"]
+# JRC/RDF coordinates are approximate, non-official placeholders.
+DESTINATION_COORDS: dict[str, tuple[float, float]] = {
+    "TPST Bantargebang": (_TPA[0], _TPA[1]),
+    "JRC Pesanggrahan": (-6.2594, 106.7640),
+    "RDF Plant Jakarta": (-6.1340, 106.8850),
+}
+
+
+def spj_polyline(spj: Spj) -> list[tuple[float, float]]:
+    """Stops in order + destination as a straight-segment polyline.
+
+    Straight segments are sufficient for the 500 m deviation detector —
+    SPJ stops in Jakarta are typically >1 km apart and deviation is measured
+    to the nearest segment. Upgrading each leg to road-following OSRM
+    geometry is the Fase 4 live-integration path.
+    """
+    points: list[tuple[float, float]] = []
+    for stop in spj.stops:
+        pt = (stop.lat, stop.lng)
+        if not points or points[-1] != pt:
+            points.append(pt)
+    dest = DESTINATION_COORDS[spj.destination]
+    if not points or points[-1] != dest:
+        points.append(dest)
+    return points
+
+
+def active_path_for(truck_code: str) -> list[tuple[float, float]] | None:
+    try:
+        spj = SPJ_STORE.active_for_truck(truck_code)
+        if spj is None:
+            return None
+        return spj_polyline(spj)
+    except Exception:  # noqa: BLE001
+        logger.exception("active_path_for(%s) failed; using corridor fallback",
+                         truck_code)
+        return None
+
+
 def _maybe_seed(store: SpjStore) -> None:
     if os.path.exists(store._path) or os.getenv("JWIS_SPJ_SEED", "on") == "off":
         return
