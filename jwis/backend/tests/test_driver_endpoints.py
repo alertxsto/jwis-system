@@ -1,3 +1,4 @@
+import os
 import unittest
 
 from fastapi.testclient import TestClient
@@ -167,6 +168,24 @@ class DamageEndpointTests(unittest.TestCase):
         r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0})
         self.assertEqual(r.status_code, 409)
+
+
+class OcrTimbanganEndpointTests(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app, raise_server_exceptions=False)
+
+    def test_ocr_without_api_key_is_failed(self):
+        old = os.environ.pop("OPENAI_API_KEY", None)
+        try:
+            r = self.client.post("/api/ocr/timbangan", json={
+                "photo_b64": "data:image/jpeg;base64,AA"})
+        finally:
+            if old is not None:
+                os.environ["OPENAI_API_KEY"] = old
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertIsNone(body["weight_kg"])
+        self.assertEqual(body["confidence"], "failed")
 
 
 if __name__ == "__main__":

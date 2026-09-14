@@ -1777,3 +1777,13 @@ def list_service_records(truck_code: str | None = None) -> dict[str, Any]:
 def service_records_due_soon(days: int = 30) -> dict[str, Any]:
     due = SERVICE_STORE.due_soon(days=days)
     return {"due": due, "count": len(due)}
+
+
+class OcrBody(BaseModel):
+    photo_b64: str = Field(max_length=7_000_000)
+
+
+@app.post("/api/ocr/timbangan")
+def ocr_timbangan(body: OcrBody) -> dict[str, Any]:
+    from app.timbangan_ocr import read_weight_from_photo
+    return read_weight_from_photo(body.photo_b64)
