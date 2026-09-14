@@ -68,6 +68,24 @@ class DamageEndpointTests(unittest.TestCase):
         self.assertFalse(t212["damage_status"]["operational"])
         self.client.post(f"/api/damage-reports/{rep_id}/resolve")
 
+    def test_gen_cache_invalidated_on_report_create(self):
+        from app.fleet_generator import _gen_cache
+        self.client.get("/api/fleet")  # warm generated cache with undamaged T-215
+        self.assertIsNotNone(_gen_cache["payload"])
+        r = self.client.post("/api/damage-reports", json={
+            "truck_code": "T-215", "driver_name": "E2E", "component": "rem",
+            "severity": "berat", "note": "Rem blong"})
+        self.assertEqual(r.status_code, 201)
+        rep_id = r.json()["report_id"]
+        self.assertEqual(_gen_cache["ts"], 0.0)  # create must invalidate, not rely on TTL
+        fleet = self.client.get("/api/fleet").json()
+        trucks = fleet if isinstance(fleet, list) else fleet.get("trucks", [])
+        t215 = next((t for t in trucks if t["truck_code"] == "T-215"), None)
+        self.assertIsNotNone(t215)
+        self.assertTrue(t215["is_damaged"])
+        self.assertFalse(t215["damage_status"]["operational"])
+        self.client.post(f"/api/damage-reports/{rep_id}/resolve")
+
     def test_receipt_flow(self):
         create = self.client.post("/api/spj", json={
             "driver_name": "E2E", "truck_code": "T-213",

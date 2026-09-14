@@ -1595,7 +1595,9 @@ def add_spj_stop(spj_id: str, body: SpjStopBody) -> dict[str, Any]:
 
 def _refresh_fleet_caches() -> None:
     from app.data import _fleet_cache
+    from app.fleet_generator import _gen_cache
     _fleet_cache["ts"] = 0.0
+    _gen_cache["ts"] = 0.0
     _map_truth_cache["ts"] = 0.0
 
 
