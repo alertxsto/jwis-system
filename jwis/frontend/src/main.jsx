@@ -4,6 +4,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { readOutbox, enqueue, flushOutbox } from "./field/OfflineOutbox.js";
 import FieldApp from "./field/FieldApp.jsx";
+import DriverApp from "./driver/DriverApp.jsx";
 import { AppShell } from "./layout/AppShell.jsx";
 import { FleetOperations } from "./workspaces/FleetOperations.jsx";
 import { IntegratedPlanning } from "./workspaces/IntegratedPlanning.jsx";
@@ -4352,11 +4353,13 @@ function CommandCenter({ onLogout }) {
 function App() {
   const [authenticated, setAuthenticated] = useState(() => localStorage.getItem("jwis_auth") === "true");
   const isField = useMemo(() => window.location.pathname.startsWith("/field"), []);
+  const isDriver = useMemo(() => window.location.pathname.startsWith("/driver"), []);
   function logout() {
     localStorage.removeItem("jwis_auth");
     setAuthenticated(false);
   }
   if (isField) return <FieldApp />;
+  if (isDriver) return <DriverApp />;
   if (!authenticated) return <LoginPage onLogin={() => setAuthenticated(true)} />;
   return <CommandCenter onLogout={logout} />;
 }

@@ -1554,6 +1554,7 @@ class DamageReportBody(BaseModel):
     note: str
     photo_name: str | None = None
     photo_b64: str | None = Field(default=None, max_length=7_000_000)
+    source: str = "driver_pwa"
 
 
 @app.get("/api/spj")
@@ -1701,7 +1702,7 @@ def create_damage_report(body: DamageReportBody) -> dict[str, Any]:
     try:
         rep = DAMAGE_STORE.create(body.truck_code, body.driver_name,
                                   body.component, body.severity, body.note,
-                                  body.photo_name, body.photo_b64)
+                                  body.photo_name, body.photo_b64, body.source)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     history_store.record_event("damage_reported", {
