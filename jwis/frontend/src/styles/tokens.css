@@ -10,7 +10,11 @@
   --ui-border: #e7e6e1;
   --ui-border-strong: #b7b7b5;
   --ui-ink: #121212;
-  --ui-muted: #7b7974;
+  --ui-muted: #4a4845;
+  --fs-body: 16px;
+  --fs-caption: 14px;
+  --fs-kpi: 32px;
+  --tap-min: 44px;
   --ui-success: #177a57;
   --ui-warning: #f59e0b;
   --ui-danger: #ef4444;

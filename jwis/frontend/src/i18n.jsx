@@ -2,6 +2,17 @@ import React, { createContext, useContext, useState } from "react";
 
 const translations = {
   en: {
+    // Login
+    login_kicker: "DLH Command Access",
+    login_title: "JWIS Control Center",
+    login_copy: "Secure operator entry for fleet monitoring, predictive waste planning, and dispatch supervision.",
+    login_username: "Username",
+    login_password: "Password",
+    login_password_placeholder: "Enter password",
+    login_show_password: "Show password",
+    login_hide_password: "Hide password",
+    login_submit: "Sign in",
+    login_error: "Invalid username or password.",
     // Navigation
     nav_fleet: "Fleet Operations",
     nav_forecast: "Waste Forecast",
@@ -12,7 +23,29 @@ const translations = {
     nav_wa: "WhatsApp Gateway",
     nav_iot: "IoT Bin Sensors",
     nav_audit: "Data & ML Audit",
-    
+    nav_armada: "Fleet",
+    nav_prediksi: "Forecast",
+    nav_rencana: "Planning",
+    nav_sopir: "Drivers",
+
+    // Action card
+    ac_no_alerts: "No active alerts",
+    ac_send_route: "Send route to driver",
+    ac_handle_alert: "Handle alert",
+    ac_wa_offline: "WhatsApp gateway not connected — instruction is still recorded, message not sent",
+    ac_sent_waiting: "Sent to {driver} ({truck}). Waiting for driver confirmation.",
+    ac_confirmed: "Confirmed",
+    ac_send_failed: "Failed to send instruction. Try again.",
+    ac_instruction_route: "Use route",
+    ac_instruction_confirm: "Confirm when accepted.",
+    ac_instruction_handle: "Handle alert",
+    ac_minutes: "min",
+    ac_unknown_driver: "Unknown driver",
+    ac_all_alerts: "All alerts ({n})",
+    sv_open_map: "Open map",
+    nav_pengawas: "Supervisor",
+    sv_loading: "Loading operational data...",
+
     // Sections
     sec_operations: "Operations",
     sec_logistics: "Field Logistics",
@@ -141,6 +174,17 @@ const translations = {
     plan_awaiting_desc: "Click above to solve optimal vehicle allocations across all 42 districts using Google OR-Tools CP-SAT.",
   },
   id: {
+    // Login
+    login_kicker: "Akses Masuk Komando DLH",
+    login_title: "Pusat Kendali JWIS",
+    login_copy: "Akses resmi operator untuk pemantauan armada, prediksi timbulan sampah, dan pengawasan logistik.",
+    login_username: "Nama pengguna",
+    login_password: "Kata sandi",
+    login_password_placeholder: "Masukkan kata sandi",
+    login_show_password: "Tampilkan kata sandi",
+    login_hide_password: "Sembunyikan kata sandi",
+    login_submit: "Masuk",
+    login_error: "Nama pengguna atau kata sandi tidak valid.",
     // Navigation
     nav_fleet: "Operasional Armada",
     nav_forecast: "Prediksi Timbulan Sampah",
@@ -151,6 +195,28 @@ const translations = {
     nav_wa: "Gateway WhatsApp",
     nav_iot: "Sensor TPS IoT",
     nav_audit: "Audit Data & Model ML",
+    nav_armada: "Armada",
+    nav_prediksi: "Prediksi",
+    nav_rencana: "Rencana",
+    nav_sopir: "Sopir",
+
+    // Kartu aksi
+    ac_no_alerts: "Tidak ada peringatan aktif",
+    ac_send_route: "Kirim rute ke sopir",
+    ac_handle_alert: "Tangani peringatan",
+    ac_wa_offline: "Gateway WhatsApp belum tersambung — instruksi tetap dicatat, pesan tidak terkirim",
+    ac_sent_waiting: "Dikirim ke {driver} ({truck}). Menunggu konfirmasi sopir.",
+    ac_confirmed: "Dikonfirmasi",
+    ac_send_failed: "Gagal mengirim instruksi. Coba lagi.",
+    ac_instruction_route: "Gunakan rute",
+    ac_instruction_confirm: "Konfirmasi setelah diterima.",
+    ac_instruction_handle: "Tangani peringatan",
+    ac_minutes: "menit",
+    ac_unknown_driver: "Sopir tidak dikenal",
+    ac_all_alerts: "Semua peringatan ({n})",
+    sv_open_map: "Buka peta",
+    nav_pengawas: "Pengawas",
+    sv_loading: "Memuat data operasional...",
 
     // Sections
     sec_operations: "Operasional",
