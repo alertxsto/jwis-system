@@ -77,6 +77,7 @@ Access the app at: **http://localhost:5175**
 Run the full end-to-end Playwright tests to verify zero regressions:
 ```powershell
 cd "jwis/frontend"
+npm run build   # required: the preview server serves dist/ — a stale dist causes false e2e failures
 npx playwright test --workers 1
 ```
 *(All 42 tests will pass successfully in headless mode).*

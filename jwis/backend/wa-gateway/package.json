@@ -12,8 +12,9 @@
   "type": "commonjs",
   "dependencies": {
     "@open-wa/wa-automate": "^4.76.0",
-    "@whiskeysockets/baileys": "^7.0.0-rc13",
+    "@whiskeysockets/baileys": "^6.7.19",
     "express": "^4.22.2",
+    "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0"
   }
 }

@@ -176,5 +176,41 @@ class AstarGpsAnchorTests(unittest.TestCase):
             self.assertEqual(result["active_route"]["sequence"], normal)
 
 
+class AstarAlternativeRouteTests(unittest.TestCase):
+    def test_two_computed_alternatives_differ(self):
+        from app.astar_routing import find_alternative_routes
+        routes = find_alternative_routes(k=2)
+        self.assertGreaterEqual(len(routes), 2, "expanded corridor graph must yield >=2 alternatives")
+        self.assertNotEqual(tuple(routes[0]["sequence"]), tuple(routes[1]["sequence"]),
+                            "alternative must be a genuinely different computed path")
+        self.assertGreaterEqual(routes[1]["eta_minutes"], routes[0]["eta_minutes"] - 1,
+                                "alternatives ranked by ETA")
+
+    def test_alternatives_have_real_eta_and_geometry(self):
+        from app.astar_routing import find_alternative_routes
+        for r in find_alternative_routes(k=2):
+            self.assertIn("physical_distance_km", r)
+            self.assertIn("eta_minutes", r)
+            self.assertGreater(len(r["path"]), 10)
+
+    def test_permit_hour_window_blocks_inner_toll(self):
+        from app.astar_routing import find_astar_route
+        open_route = find_astar_route(permit_hour=2)   # 02:00 — window closed
+        shut_route = find_astar_route(permit_hour=12)  # 12:00 — window active
+        open_pairs = set(zip(open_route["sequence"], open_route["sequence"][1:]))
+        shut_pairs = set(zip(shut_route["sequence"], shut_route["sequence"][1:]))
+        restricted = {("TOMANG", "SEMANGGI"), ("SEMANGGI", "TOMANG"),
+                      ("SEMANGGI", "CAWANG"), ("CAWANG", "SEMANGGI")}
+        self.assertFalse(shut_pairs & restricted,
+                         "during the truck-hour window the inner toll must not be selected")
+        self.assertTrue(open_route["success"] and shut_route["success"])
+
+    def test_expanded_graph_offers_jorr_corridor(self):
+        from app.astar_routing import NODES, EDGES
+        self.assertIn("KAMPUNG_RAMBUTAN", NODES)
+        self.assertIn("JATIWARNA", NODES)
+        self.assertGreaterEqual(len(EDGES), 25)
+
+
 if __name__ == "__main__":
     unittest.main()

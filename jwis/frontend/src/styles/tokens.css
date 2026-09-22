@@ -1,46 +1,41 @@
 :root {
-  /* ── Accent: Teal — contextual for DLH environmental operations ── */
-  --ui-primary: #0f766e;
-  --ui-primary-hover: #0d6b64;
-  --ui-accent: #0f766e;
-  --ui-accent-foreground: #0d6b64;
-  --ui-accent-soft: #ccfbf1;
-
-  /* ── Canvas & surfaces ── */
-  --ui-canvas: #f8fafc;
+  --ui-primary: #121212;
+  --ui-primary-hover: #373734;
+  --ui-accent: #d97757;
+  --ui-accent-foreground: #121212;
+  --ui-accent-soft: #f4e4dc;
+  --ui-canvas: #f8f8f6;
   --ui-surface: #ffffff;
-  --ui-surface-muted: #f1f5f9;
-
-  /* ── Borders ── */
-  --ui-border: #e2e8f0;
-  --ui-border-strong: #cbd5e1;
-
-  /* ── Text ── */
-  --ui-ink: #0f172a;
-  --ui-muted: #64748b;
-
-  /* ── Semantic tones ── */
+  --ui-surface-muted: #efeeeb;
+  --ui-border: #e7e6e1;
+  --ui-border-strong: #b7b7b5;
+  --ui-ink: #121212;
+  --ui-muted: #4a4845;
+  --fs-body: 16px;
+  --fs-caption: 14px;
+  --fs-kpi: 32px;
+  --tap-min: 44px;
   --ui-success: #177a57;
   --ui-warning: #f59e0b;
   --ui-danger: #ef4444;
   --ui-info: #06b6d4;
-
-  /* ── Shape & spacing ── */
   --ui-radius: 8px;
+  --ui-radius-card: 16px;
+  --ui-radius-elevated: 24px;
   --ui-radius-control: 8px;
-
-  /* ── Elevation ── */
-  --ui-shadow: none;
-  --ui-shadow-hover: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-
-  /* ── Layout ── */
+  --ui-shadow: 0 1px 2px rgba(18, 18, 18, 0.05), 0 1px 3px rgba(18, 18, 18, 0.04);
+  --ui-shadow-hover: 0 4px 16px rgba(18, 18, 18, 0.08), 0 1px 3px rgba(18, 18, 18, 0.05);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 64px;
   --ui-sidebar-width: 248px;
   --ui-topbar-height: 72px;
-
-  /* ── Focus ring (teal-derived) ── */
-  --ui-focus: 0 0 0 3px rgba(15, 118, 110, 0.28);
-
-  /* ── Z-index scale ── */
+  --ui-focus: 0 0 0 3px rgba(217, 119, 87, 0.26);
   --z-dropdown: 20;
   --z-sticky: 30;
   --z-modal-backdrop: 40;
@@ -48,28 +43,26 @@
   --z-toast: 60;
   --z-tooltip: 70;
 
-  /* ── Legacy aliases — retained while decomposing old modules ── */
+  /* Feature-level aliases retained while legacy modules are decomposed. */
   --green: var(--ui-success);
-  --green-light: #ecfdf5;
+  --green-light: #edf7f3;
   --green-dark: #047857;
   --red: var(--ui-danger);
   --red-light: #fef2f2;
   --amber: var(--ui-warning);
   --amber-light: #fffbeb;
-  /* --purple alias kept for backward compatibility during migration */
   --purple: var(--ui-accent);
   --purple-light: var(--ui-accent-soft);
   --bg: var(--ui-canvas);
   --surface: var(--ui-surface);
   --surface-soft: var(--ui-surface-muted);
   --ink: var(--ui-ink);
-  --text: #334155;
+  --text: #373734;
   --text-muted: var(--ui-muted);
   --border: var(--ui-border);
   --border-strong: var(--ui-border-strong);
   --radius: var(--ui-radius);
   --mono: "Geist Mono", ui-monospace, "SF Mono", "Cascadia Code", Menlo, monospace;
-  --shadow: none;
-  --shadow-hover: var(--ui-shadow-hover);
+  --shadow: 0 1px 2px rgba(18, 18, 18, 0.05), 0 1px 3px rgba(18, 18, 18, 0.04);
+  --shadow-hover: 0 6px 24px rgba(18, 18, 18, 0.09), 0 2px 6px rgba(18, 18, 18, 0.05);
 }
-

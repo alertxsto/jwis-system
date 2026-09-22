@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import tempfile
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,7 +12,12 @@ from uuid import uuid4
 
 
 class HistoryStore:
-    def __init__(self, db_path: Path | str = Path("data/processed/jwis_history.db")):
+    # Necessary: the DB file must live OUTSIDE the backend cwd — uvicorn --reload
+    # watches every file there, so each dispatch write to data/processed/*.db
+    # triggered a worker restart (ECONNRESET mid-request + all caches dropped).
+    def __init__(self, db_path: Path | str | None = None):
+        if db_path is None:
+            db_path = os.environ.get("JWIS_DB_PATH") or os.path.join(tempfile.gettempdir(), "jwis_history.db")
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()

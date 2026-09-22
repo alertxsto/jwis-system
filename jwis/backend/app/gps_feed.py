@@ -56,14 +56,18 @@ def latest_breadcrumbs(truck_code: str, points: int = 6,
     import time
     now_t = time.time()
     now_dt = datetime.now(timezone.utc)
-    
+
+    # Advance sim state exactly once by wall clock; the trail below is a pure
+    # read of the past so polling map-truth never accelerates the truck.
+    get_dynamic_position_at_time(truck_code, now_t)
+
     trail: list[GpsBreadcrumb] = []
     for i in range(points):
         offset_sec = (points - 1 - i) * 6.0
         t_past = now_t - offset_sec
         ts = now_dt - timedelta(seconds=offset_sec)
-        
-        lat, lng, speed = get_dynamic_position_at_time(truck_code, t_past)
+
+        lat, lng, speed = get_dynamic_position_at_time(truck_code, t_past, update_state=False)
         trail.append(GpsBreadcrumb(
             truck_code=truck_code,
             lat=round(lat, 6),

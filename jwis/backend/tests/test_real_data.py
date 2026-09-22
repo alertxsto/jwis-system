@@ -7,6 +7,7 @@ from pathlib import Path
 from app.real_data import (
     REAL_DIR,
     build_provenance_records,
+    kelurahan_allocation_weights,
     load_kelurahan_heatmap,
 )
 
@@ -74,6 +75,34 @@ class TestKelurahanHeatmap(unittest.TestCase):
         # as features so the map renders them as explicit "no data", not dropped.
         self.assertEqual(len(fc["features"]), 267)
         self.assertGreater(len(nulls), 0)
+
+    def test_allocation_weights_sum_to_one_per_kecamatan(self):
+        weights, method = kelurahan_allocation_weights("MATRAMAN", ["PALMERIAM", "KEBONMANGGIS", "UTANKAYUSELATAN"])
+        self.assertEqual(method, "weighted_population_tps")
+        self.assertAlmostEqual(sum(weights.values()), 1.0, places=6)
+
+    def test_allocation_weights_fall_back_to_even_split_without_data(self):
+        weights, method = kelurahan_allocation_weights("KECAMATAN_TIDAK_ADA", ["A", "B"])
+        self.assertEqual(method, "even_split_no_real_driver_data")
+        self.assertEqual(weights, {"A": 0.5, "B": 0.5})
+
+    def test_heatmap_allocation_varies_within_kecamatan(self):
+        fc = load_kelurahan_heatmap({"MATRAMAN": 100.0})
+        feats = [f for f in fc["features"]
+                 if str(f["properties"].get("kecamatan", "")).strip().upper() == "MATRAMAN"]
+        tons = [f["properties"]["predicted_tons"] for f in feats
+                if f["properties"].get("predicted_tons") is not None]
+        self.assertGreater(len(tons), 3, "Matraman must have several kelurahan features")
+        self.assertGreater(len(set(tons)), 1,
+                           "weighted allocation must not be a flat even split")
+        self.assertAlmostEqual(sum(tons), 100.0, delta=1.0,
+                               msg="allocated kelurahan tons must sum back to the kecamatan total")
+
+    def test_heatmap_allocation_is_honestly_labeled(self):
+        fc = load_kelurahan_heatmap()
+        labels = {f["properties"].get("classification", "") for f in fc["features"]}
+        self.assertTrue(any("weighted_population_tps" in c or "even_split" in c for c in labels),
+                        f"allocation method must be disclosed in classification, got {labels}")
 
 
 if __name__ == "__main__":
