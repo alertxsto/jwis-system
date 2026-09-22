@@ -16,6 +16,7 @@ const detailTabs = [
 export function FleetOperations({
   detailTab,
   onDetailTabChange,
+  actionCard,
   metrics,
   map,
   mapFooter,
@@ -63,6 +64,7 @@ export function FleetOperations({
 
   return (
     <section className="fleet-workspace" data-testid="fleet-workspace">
+      {actionCard}
       <MetricStrip metrics={metrics} />
 
       <div className="fleet-stage">
