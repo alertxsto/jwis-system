@@ -14,6 +14,7 @@ JWIS (Jakarta Waste Intelligence System) is an end-to-end AI command center prot
 - [The Two Cases](#the-two-cases)
 - [Solution Overview](#solution-overview)
 - [Key Features](#key-features)
+- [Screenshots](#screenshots)
 - [Architecture](#architecture)
 - [Repository Structure](#repository-structure)
 - [Getting Started](#getting-started)
@@ -84,6 +85,18 @@ Every workflow is an auditable loop — `detect → dispatch → acknowledge →
 - **WAPE / MAE accuracy** — model metrics, training limits, and data provenance reviewable straight from the dashboard.
 
 ---
+
+## Screenshots
+
+| Login (operator gate) | Armada — ActionCard + 5-item nav |
+|---|---|
+| ![Login](jwis/docs/audit/screenshots/01-login.png) | ![Armada](jwis/docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
+
+| Prediksi Timbulan Sampah | Field App (driver, Indonesian) | Pengawas (mobile) |
+|---|---|---|
+| ![Prediksi](jwis/docs/audit/screenshots/03-forecast.png) | ![Field](jwis/docs/audit/screenshots/04-field-indonesian.png) | ![Pengawas](jwis/docs/audit/screenshots/05-pengawas-mobile.png) |
+
+Older-operator readability pass: body ≥ 14 px captions, ≥ 44 px tap targets, 9.4:1 muted-text contrast, one decision (ActionCard) above the fold, full-Indonesian field app, and a single-screen `/pengawas` mobile view. See `jwis/docs/audit/2026-09-22-runtime-ux-audit.md` for the measured baseline and `jwis/docs/audit/2026-09-22-fix-plan.md` for the file-by-file plan.
 
 ## Architecture
 

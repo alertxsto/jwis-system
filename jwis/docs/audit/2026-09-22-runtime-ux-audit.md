@@ -5,6 +5,15 @@ Case 1 fleet loop end-to-end, and assess usability for older/non-technical
 DLH operators. Companion to `2026-07-13-project-readiness-audit.md`; items
 from that audit that are still open are referenced, not repeated.
 
+> **Status 2026-09-22 (later): every finding below is FIXED on branch
+> `fix/audit-2026-09-22` → merged toward `main`.** 372/372 backend tests pass.
+> Fix mapping: pyarrow+map-crash (Slice 0) · #4 SW, #11.4 error boundary, #9
+> assistant fallback, #6 exec-summary+queue, #5 RBAC (all POSTs protected,
+> 12 h tokens, auth-matrix tests) · #10 e2e determinism · #11 UX (tokens,
+> login, ActionCard, nav 9→5, Indonesian FieldApp, `/pengawas`, main.jsx
+> split 4469→502 lines) · #12 run-dev.sh, env template, dead-file cleanup.
+> Screenshots of the new UX: `screenshots/`.
+
 ## Runtime evidence
 
 | Component | Result |
