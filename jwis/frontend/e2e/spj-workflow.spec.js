@@ -3,24 +3,34 @@ import { expect, test } from "@playwright/test";
 const API = "http://127.0.0.1:8001/api";
 const TEST_TRUCK = "T-210";
 
-test.beforeEach(async ({ page }) => {
+async function signIn(page) {
   await page.goto("/");
-  await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
-  await page.evaluate(() => localStorage.setItem("jwis_lang", "en"));
+  const response = await page.request.post(`${API}/auth/login`, {
+    data: { username: "dispatcher", password: "dispatcher-demo-pass" },
+  });
+  expect(response.ok()).toBeTruthy();
+  const principal = await response.json();
+  await page.evaluate(({ token, role }) => {
+    localStorage.setItem("jwis_auth", "true");
+    localStorage.setItem("jwis_lang", "id");
+    localStorage.setItem("jwis_token", token);
+    localStorage.setItem("jwis_role", role);
+  }, principal);
   await page.reload({ waitUntil: "domcontentloaded" });
-});
+  return { Authorization: `Bearer ${principal.token}` };
+}
 
-test("admin sees SPJ in panel, expands it, activates it", async ({ page }) => {
-  // Cleanup leftovers from prior runs so activation is not blocked (one active SPJ per truck).
+test("admin sees SPJ in panel, expands it, and activates it", async ({ page }) => {
+  const headers = await signIn(page);
   const existing = await page.request.get(`${API}/spj`);
-  for (const s of (await existing.json()).spj || []) {
-    if (s.truck_code === TEST_TRUCK && ["draft", "aktif"].includes(s.status)) {
-      await page.request.post(`${API}/spj/${s.spj_id}/cancel`);
+  for (const spj of (await existing.json()).spj || []) {
+    if (spj.truck_code === TEST_TRUCK && ["draft", "aktif"].includes(spj.status)) {
+      await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
     }
   }
 
-  // Setup via API: create draft SPJ + one stop (activation requires >= 1 stop).
   const create = await page.request.post(`${API}/spj`, {
+    headers,
     data: {
       driver_name: "E2E Driver",
       truck_code: TEST_TRUCK,
@@ -34,25 +44,18 @@ test("admin sees SPJ in panel, expands it, activates it", async ({ page }) => {
   const spj = await create.json();
 
   const stop = await page.request.post(`${API}/spj/${spj.spj_id}/stops`, {
-    data: {
-      name: "TPS E2E",
-      kecamatan: "Cilandak",
-      address: "Jl. E2E 1",
-      lat: -6.29,
-      lng: 106.79,
-    },
+    headers,
+    data: { name: "TPS E2E", kecamatan: "Cilandak", address: "Jl. E2E 1", lat: -6.29, lng: 106.79 },
   });
   expect(stop.ok()).toBeTruthy();
 
   try {
-    // UI flow: open SPJ tab, find the SPJ, expand, activate via button.
-    await page.getByText("Surat Perintah Jalan").first().click();
+    await page.getByRole("tab", { name: "Surat Perintah Jalan" }).click();
     await expect(page.getByText(spj.spj_number).first()).toBeVisible({ timeout: 15000 });
-
     await page.getByText(spj.spj_number).first().click();
     await page.getByRole("button", { name: "Rubah ke Aktif" }).click();
     await expect(page.getByText("aktif").first()).toBeVisible({ timeout: 10000 });
   } finally {
-    await page.request.post(`${API}/spj/${spj.spj_id}/cancel`);
+    await page.request.post(`${API}/spj/${spj.spj_id}/cancel`, { headers });
   }
 });

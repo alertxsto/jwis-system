@@ -240,7 +240,7 @@ const translations = {
     btn_export_pdf: "Unduh Ringkasan Eksekutif PDF",
     btn_rerun_optimizer: "Hitung Ulang Optimasi",
     btn_run_scenario: "Jalankan Simulasi Skenario",
-    btn_generate_plan: "Buat Rencana Penugasan (CP-SAT)",
+    btn_generate_plan: "Susun Alokasi Armada",
     btn_dispatch_patrol: "Kirim Patroli",
     btn_patrol_sent: "Patroli Terkirim",
     btn_simulate_jam: "Simulasikan Macet Koridor",
@@ -334,16 +334,16 @@ const translations = {
     fc_th_backup: "Rekomendasi Tambahan",
 
     // Planning
-    plan_sim_title: "Simulator Skenario Event & Cuaca",
-    plan_sim_sub: "Simulasi skenario keramaian dan cuaca melalui model spasial 42 kecamatan secara real-time.",
-    plan_att: "Kehadiran Penonton Event",
-    plan_rain: "Intensitas Curah Hujan",
-    plan_opt_title: "Optimizer Operasional (CP-SAT Solver)",
+    plan_sim_title: "Skenario permintaan & cuaca",
+    plan_sim_sub: "Sesuaikan perkiraan keramaian dan cuaca untuk melihat dampaknya pada 42 kecamatan.",
+    plan_att: "Perkiraan pengunjung acara",
+    plan_rain: "Intensitas curah hujan",
+    plan_opt_title: "Rekomendasi alokasi armada",
     plan_demand: "Kebutuhan timbulan",
     plan_fleet_need: "Kebutuhan armada",
     plan_tpa_queue: "Antrean TPA",
-    plan_awaiting_title: "Menunggu Komputasi Optimizer",
-    plan_awaiting_desc: "Klik tombol di atas untuk mencari alokasi armada optimal di 42 distrik menggunakan Google OR-Tools CP-SAT.",
+    plan_awaiting_title: "Rencana belum disusun",
+    plan_awaiting_desc: "Susun alokasi untuk membagi armada dan kru ke 42 kecamatan berdasarkan kebutuhan skenario.",
   },
 };
 

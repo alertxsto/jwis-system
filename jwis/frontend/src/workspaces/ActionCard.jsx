@@ -17,6 +17,24 @@ function pickAlert(alerts) {
   return alerts.find((a) => (a.recommended_routes?.length || 0) > 0) || alerts[0];
 }
 
+function localizeIssue(text, lang) {
+  if (lang !== "id") return text;
+  const corridor = String(text).match(/Truck is ([\d.]+) meters from the assigned corridor\.?/i);
+  if (!corridor) return text;
+  const meters = Number(corridor[1]);
+  const distance = meters >= 1000
+    ? `${(meters / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`
+    : `${Math.round(meters)} m`;
+  return `Kendaraan berada ${distance} di luar koridor tugas.`;
+}
+
+function localizeRoute(name, lang) {
+  if (lang !== "id") return name;
+  return String(name)
+    .replace(/^Route /i, "Rute ")
+    .replace("Recovery", "Pemulihan");
+}
+
 export function ActionCard({ snapshot }) {
   const { t, lang } = useLanguage();
   const [phase, setPhase] = useState("idle"); // idle | sending | sent | confirmed | error
@@ -29,7 +47,7 @@ export function ActionCard({ snapshot }) {
   const truck = (snapshot?.trucks || []).find((item) => item.truck_code === truckCode);
   const driverName = truck?.driver_name || t("ac_unknown_driver");
   const route = alert?.recommended_routes?.[0] || null;
-  const issueText = alert?.description || alert?.title || "";
+  const issueText = localizeIssue(alert?.description || alert?.title || "", lang);
 
   useEffect(() => {
     return () => {
@@ -140,7 +158,7 @@ export function ActionCard({ snapshot }) {
         <div className="action-card-route">
           <Route size={18} />
           <div>
-            <strong>{route.name}</strong>
+            <strong>{localizeRoute(route.name, lang)}</strong>
             <span className="action-card-route-meta">
               <Clock size={14} /> ETA {route.eta_minutes} {t("ac_minutes")}
             </span>

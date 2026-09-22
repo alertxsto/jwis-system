@@ -14,6 +14,32 @@ from that audit that are still open are referenced, not repeated.
 > split 4469→502 lines) · #12 run-dev.sh, env template, dead-file cleanup.
 > Screenshots of the new UX: `screenshots/`.
 
+## Total UX redesign — 2026-09-23
+
+The earlier pass improved font size and touch targets but retained the same
+card-heavy information architecture. Operator feedback correctly rejected it
+as enlargement rather than redesign. The command center has now been rebuilt
+around task priority:
+
+- New dark command rail and compact context bar replace the generic white
+  dashboard shell.
+- Armada uses a map/decision split: operational map on the left, exactly one
+  priority action on the right, evidence below.
+- Prediksi uses a demand-intelligence layout: district demand is primary;
+  weather and events are supporting context.
+- Rencana is a visible three-step flow: scenario, allocation, approval.
+- Sopir combines a scan-first table with one coaching-priority inspector.
+- Audit combines a provenance registry with model and fleet evidence rails.
+- Login, `/field`, `/driver`, and `/pengawas` now share the same product
+  identity and mobile interaction language.
+- Desktop, tablet, and mobile layouts were visually checked. Mobile command
+  navigation is a purpose-built bottom bar rather than a compressed sidebar.
+
+Current visual evidence:
+`01-login.png`, `02-fleet-actioncard-nav5.png`, `03-forecast.png`,
+`04-field-indonesian.png`, `05-pengawas-mobile.png`, `06-planning.png`,
+`07-drivers.png`, and `08-audit.png` in `screenshots/`.
+
 ## Runtime evidence
 
 | Component | Result |

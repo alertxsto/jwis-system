@@ -151,21 +151,19 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
 }
 
 function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded, jamActive }) {
+  const { lang } = useLanguage();
   return (
     <section className="panel map-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Live Fleet Supervision</h2>
-          <p>MapLibre tracking of assigned corridors, actual movement, and field status. Positions are simulated, not live GPS.</p>
-        </div>
-        <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
+      <div className="map-data-notice">
+        <StatusPill tone="warning"><Radio size={14} /> {lang === "id" ? "Data simulasi" : "Simulated data"}</StatusPill>
+        <span>{lang === "id" ? "Posisi bukan GPS langsung" : "Positions are not live GPS"}</span>
       </div>
-      <Suspense fallback={<div className="map-loading-fallback">Loading map…</div>}>
-        <LiveFleetMap 
-          trucks={trucks} 
-          attendance={attendance} 
-          rainfall={rainfall} 
-          onSelectTruck={onSelectTruck} 
+      <Suspense fallback={<div className="map-loading-fallback">{lang === "id" ? "Memuat peta…" : "Loading map…"}</div>}>
+        <LiveFleetMap
+          trucks={trucks}
+          attendance={attendance}
+          rainfall={rainfall}
+          onSelectTruck={onSelectTruck}
           layers={layers}
           playbackTruck={playbackTruck}
           onBreadcrumbsLoaded={onBreadcrumbsLoaded}

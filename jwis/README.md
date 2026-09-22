@@ -5,13 +5,28 @@ AI command center prototype for the AI Open Innovation Challenge 2026 DLH waste 
 ## What This Replaces
 
 This version replaces the legacy Streamlit code with a high-performance React/Vite command center, a Python FastAPI backend, and a lightweight Node.js WhatsApp Gateway (Baileys).
-The interface is designed with a premium, professional SaaSAble layout, following the `impeccable` visual hierarchy and `taste-skill` typography standards.
+The interface is a task-first operations product: a persistent command rail,
+single-action decision surfaces, and dedicated desktop/mobile workflows built
+with the repository's `taste-redesign` and `taste-default` constraints.
 
 ## Project Architecture
 
-- **Frontend:** React + Vite, MapLibre GL, and CSS variables for a clean SaaSAble dashboard (Inter & Plus Jakarta Sans).
+- **Frontend:** React + Vite, MapLibre GL, and a responsive command-center design system based on Geist Sans/Mono.
 - **Backend:** FastAPI, OR-Tools CP-SAT (Integrated Planning optimizer), Prophet + XGBoost (Waste Forecast models), and an OpenAI Assistant route configured to stream via 9Router.
 - **WhatsApp Gateway:** A standalone Express + `@whiskeysockets/baileys` gateway running on port 2785 for direct WhatsApp alert dispatching (no Puppeteer/headless browser overhead).
+
+## Interface
+
+| Entry | Preview |
+|---|---|
+| Operator login | ![JWIS operator login](docs/audit/screenshots/01-login.png) |
+| Fleet command | ![Fleet map and priority action](docs/audit/screenshots/02-fleet-actioncard-nav5.png) |
+| Waste forecast | ![District demand intelligence](docs/audit/screenshots/03-forecast.png) |
+| Integrated planning | ![Three-stage operations plan](docs/audit/screenshots/06-planning.png) |
+| Driver performance | ![Driver coaching workspace](docs/audit/screenshots/07-drivers.png) |
+| Data and model audit | ![Data provenance registry](docs/audit/screenshots/08-audit.png) |
+| Field operator | ![Field mobile application](docs/audit/screenshots/04-field-indonesian.png) |
+| Supervisor | ![Supervisor mobile priority view](docs/audit/screenshots/05-pengawas-mobile.png) |
 
 ## Complete Demo Flow
 

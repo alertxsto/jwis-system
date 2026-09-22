@@ -27,11 +27,15 @@ export async function flushOutbox(apiUrl) {
   if (items.length === 0) return { flushed: 0, remaining: 0 };
   const remaining = [];
   let flushed = 0;
+  const token = localStorage.getItem("jwis_token");
   for (const item of items) {
     try {
       const res = await fetch(`${apiUrl}/dispatch/${item.dispatchId}/confirm`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ status: item.status, note: item.note }),
       });
       if (!res.ok) throw new Error("send failed");

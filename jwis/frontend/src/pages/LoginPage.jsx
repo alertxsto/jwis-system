@@ -1,13 +1,7 @@
 import React, { useState } from "react";
+import { ArrowRight, Building2, CheckCircle2, Eye, EyeOff, LockKeyhole, Radio, Route, UserRound } from "lucide-react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
-import {
-  AlertTriangle,
-  Route,
-  ShieldCheck,
-  Lock,
-  User,
-} from "lucide-react";
 
 export function LoginPage({ onLogin }) {
   const { lang, setLang, t } = useLanguage();
@@ -15,10 +9,12 @@ export function LoginPage({ onLogin }) {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function submit(event) {
     event.preventDefault();
     setError("");
+    setSubmitting(true);
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
@@ -33,110 +29,54 @@ export function LoginPage({ onLogin }) {
       onLogin();
     } catch {
       setError(t("login_error"));
+    } finally {
+      setSubmitting(false);
     }
   }
 
   return (
     <main className="login-shell">
       <section className="login-surface" aria-labelledby="login-title">
-        <div className="login-card">
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-            <div className="language-toggle-widget" style={{ display: "inline-flex", background: "var(--ui-surface-muted)", borderRadius: "8px", padding: "2px", border: "1px solid var(--ui-border)" }}>
-              <button type="button" onClick={() => setLang("id")} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: lang === "id" ? 700 : 500, borderRadius: "5px", border: 0, cursor: "pointer", background: lang === "id" ? "var(--ui-surface)" : "transparent", color: lang === "id" ? "var(--ui-accent)" : "var(--ui-muted)" }}>ID</button>
-              <button type="button" onClick={() => setLang("en")} style={{ padding: "3px 8px", fontSize: "11px", fontWeight: lang === "en" ? 700 : 500, borderRadius: "5px", border: 0, cursor: "pointer", background: lang === "en" ? "var(--ui-surface)" : "transparent", color: lang === "en" ? "var(--ui-accent)" : "var(--ui-muted)" }}>EN</button>
-            </div>
+        <aside className="login-story">
+          <div className="login-story-brand"><span>J</span><div><strong>JWIS</strong><small>Jakarta Waste Intelligence System</small></div></div>
+          <div className="login-story-copy">
+            <span className="login-story-kicker"><Radio size={14} /> Pusat kendali operasional</span>
+            <h1>Satu keputusan.<br />Seluruh operasi bergerak.</h1>
+            <p>Prediksi beban, susun armada, dan tindak gangguan lapangan dalam satu alur kerja yang dapat diaudit.</p>
           </div>
-          <div className="login-brand">
-            <span><ShieldCheck size={22} /></span>
-            <div>
-              <p className="login-kicker">{t("login_kicker")}</p>
-              <h1 id="login-title">{t("login_title")}</h1>
-            </div>
+          <div className="login-proof-list">
+            <div><CheckCircle2 size={17} /><span><strong>Operasi langsung</strong><small>Armada, pengemudi, dan antrean TPA</small></span></div>
+            <div><CheckCircle2 size={17} /><span><strong>Prediksi terukur</strong><small>Bukti data selalu menyertai rekomendasi</small></span></div>
+            <div><CheckCircle2 size={17} /><span><strong>Akses terlindungi</strong><small>Hak tindakan mengikuti peran pengguna</small></span></div>
           </div>
-          <p className="login-copy">
-            {t("login_copy")}
-          </p>
-          <form className="login-form" onSubmit={submit}>
-            <label htmlFor="username">{t("login_username")}</label>
-            <div className="input-shell">
-              <User size={18} />
-              <input
-                id="username"
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                autoComplete="username"
-                placeholder="dispatcher"
-              />
-            </div>
-            <label htmlFor="password">{t("login_password")}</label>
-            <div className="login-password-row">
-              <div className="input-shell">
-                <Lock size={18} />
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  autoComplete="current-password"
-                  placeholder={t("login_password_placeholder")}
-                />
-              </div>
-              <button
-                type="button"
-                className="login-show-password"
-                aria-pressed={showPassword}
-                onClick={() => setShowPassword((value) => !value)}
-              >
-                {showPassword ? t("login_hide_password") : t("login_show_password")}
-              </button>
-            </div>
-            {error && (
-              <p className="form-error" role="alert">
-                <AlertTriangle size={18} aria-hidden="true" />
-                {error}
-              </p>
-            )}
-            <button className="primary-button login-submit" type="submit">
-              {t("login_submit")}
-            </button>
-          </form>
-        </div>
-        <aside className="login-proof" aria-label="JWIS operating scope">
-          <div className="login-proof-intro">
-            <span className="brand-mark"><Route size={19} /></span>
-            <div>
-              <strong>Jakarta Waste Intelligence System</strong>
-              <p>Operational access for DLH command personnel, dispatch supervisors, and audit reviewers.</p>
-            </div>
-          </div>
-          <div className="login-status-strip" aria-label="Command status">
-            <div>
-              <span>Command mode</span>
-              <strong>Protected</strong>
-            </div>
-            <div>
-              <span>Decision loop</span>
-              <strong>Live demo</strong>
-            </div>
-          </div>
-          <div className="login-proof-metrics">
-            <div>
-              <span className="metric-label">Queue model</span>
-              <strong>Discrete event</strong>
-              <p>Simulated landfill waiting-time operations.</p>
-            </div>
-            <div>
-              <span className="metric-label">Coverage</span>
-              <strong>Fleet + Forecast</strong>
-              <p>Fleet supervision and resource planning.</p>
-            </div>
-            <div>
-              <span className="metric-label">Assistant</span>
-              <strong>Ana AI</strong>
-              <p>Operational guidance for route, weather, and dispatch decisions.</p>
-            </div>
-          </div>
+          <div className="login-story-footer"><Building2 size={16} /> Dinas Lingkungan Hidup Provinsi DKI Jakarta</div>
         </aside>
+
+        <div className="login-card">
+          <div className="login-language">
+            <button type="button" className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
+            <button type="button" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button>
+          </div>
+          <div className="login-mobile-brand"><span><Route size={20} /></span><strong>JWIS</strong></div>
+          <header>
+            <span className="login-eyebrow">Akses operator</span>
+            <h2 id="login-title">{lang === "id" ? "Masuk ke pusat kendali" : "Sign in to command center"}</h2>
+            <p>{lang === "id" ? "Gunakan akun dinas yang telah terdaftar." : "Use your registered agency account."}</p>
+          </header>
+          <form className="login-form" onSubmit={submit}>
+            <label>
+              <span>Nama pengguna</span>
+              <div className="login-input"><UserRound size={18} /><input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="contoh: dispatcher" required /></div>
+            </label>
+            <label>
+              <span>Kata sandi</span>
+              <div className="login-input"><LockKeyhole size={18} /><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Masukkan kata sandi" required /><button type="button" aria-label={showPassword ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"} onClick={() => setShowPassword((value) => !value)}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
+            </label>
+            {error && <p className="login-error" role="alert">{error}</p>}
+            <button className="primary-button login-submit" type="submit" disabled={submitting}>{submitting ? "Memeriksa…" : "Masuk"}<ArrowRight size={18} /></button>
+          </form>
+          <p className="login-help">Masalah akses? Hubungi administrator JWIS.</p>
+        </div>
       </section>
     </main>
   );

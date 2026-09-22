@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
+import { IntegratedPlanning } from "./IntegratedPlanning.jsx";
+import { ExecutiveSummary } from "./ExecutiveSummary.jsx";
+import { PlanningApproval, ScenarioPanel } from "./PlanningApproval.jsx";
 import {
   Truck,
   Users,
@@ -74,6 +77,7 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
       if (eventLng !== undefined && eventLng !== null) params.append("event_lng", String(eventLng));
       const response = await fetch(`${API_URL}/operations/plan?${params.toString()}`, {
         method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!response.ok) throw new Error("Failed to generate plan");
       const planData = await response.json();
@@ -139,13 +143,13 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
         </div>
       </div>
       <div className="ai-outlook">
-        <h4>AI 7-Day Outlook</h4>
+        <h4>{lang === "id" ? "Prediksi AI 7 hari" : "AI 7-day outlook"}</h4>
         {outlook.length === 0 ? (
           <div className="ai-feed-empty">Outlook belum tersedia.</div>
         ) : (
           <table className="ai-outlook-table">
             <thead>
-              <tr><th>Tanggal</th><th>Hujan</th><th>Event</th><th>Δ Volume</th></tr>
+              <tr><th>{lang === "id" ? "Tanggal" : "Date"}</th><th>{lang === "id" ? "Hujan" : "Rain"}</th><th>{lang === "id" ? "Acara" : "Event"}</th><th>Δ Volume</th></tr>
             </thead>
             <tbody>
               {outlook.map((d) => (
@@ -169,7 +173,7 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
         )}
       </div>
       <details open className="manual-whatif">
-        <summary>Manual What-if</summary>
+        <summary>{lang === "id" ? "Penyesuaian manual" : "Manual adjustment"}</summary>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "16px" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--ui-muted)" }}>{t("plan_att")}</span>
@@ -251,7 +255,7 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
         {plan && (
           <div className="optimizer-plan-card">
             <div className="plan-header">
-              <strong>Plan ID: {plan.plan_id}</strong>
+              <strong>{lang === "id" ? "ID rencana" : "Plan ID"}: {plan.plan_id}</strong>
               <span className={`plan-status-badge ${plan.status}`}>
                 {plan.status.toUpperCase()}
               </span>
@@ -259,24 +263,24 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
             
             <div className="plan-stats-grid">
               <div className="plan-stat-item">
-                <span>Total Demand</span>
-                <strong>{plan.total_demand_tons} tons</strong>
+                <span>{lang === "id" ? "Total kebutuhan" : "Total demand"}</span>
+                <strong>{plan.total_demand_tons} {lang === "id" ? "ton" : "tons"}</strong>
               </div>
               <div className="plan-stat-item">
-                <span>Assigned</span>
-                <strong>{plan.total_assigned_tons} tons</strong>
+                <span>{lang === "id" ? "Dialokasikan" : "Assigned"}</span>
+                <strong>{plan.total_assigned_tons} {lang === "id" ? "ton" : "tons"}</strong>
               </div>
               <div className="plan-stat-item">
                 <span>Status</span>
                 <strong className={plan.unmet_reasons?.length ? "text-danger" : "text-success"}>
-                  {plan.unmet_reasons?.length ? "Unmet Demand" : "Feasible"}
+                  {plan.unmet_reasons?.length ? (lang === "id" ? "Kebutuhan belum terpenuhi" : "Unmet demand") : (lang === "id" ? "Layak dijalankan" : "Feasible")}
                 </strong>
               </div>
             </div>
 
             {plan.unmet_reasons?.length > 0 && (
               <div className="unmet-reasons-box">
-                <strong>Constraint Warnings:</strong>
+                <strong>{lang === "id" ? "Peringatan kendala:" : "Constraint warnings:"}</strong>
                 <ul>
                   {plan.unmet_reasons.map((r, i) => (
                     <li key={i}>{r.replace(/_/g, ' ')}</li>
@@ -285,26 +289,26 @@ export function PlanningDecisionFlow({ attendance, setAttendance, rainfall, setR
               </div>
             )}
 
-            <div className="assign-title">Optimizer Assignments:</div>
+            <div className="assign-title">{lang === "id" ? "Penugasan hasil optimasi:" : "Optimizer assignments:"}</div>
             <div className="assignments-container">
               {plan.assignments.map((a, i) => (
                 <div key={i} className="assign-card">
                   <div className="assign-info">
-                    <strong>Truck {a.truck_code}</strong>
+                    <strong>{lang === "id" ? "Truk" : "Truck"} {a.truck_code}</strong>
                     <span>&rarr; {a.area.replace(/_/g, ' ').toUpperCase()}</span>
                   </div>
                   <div className="assign-evidence">
-                    <span>Assigned: <b>{a.assigned_tons}t</b></span>
+                    <span>{lang === "id" ? "Muatan" : "Assigned"}: <b>{a.assigned_tons} t</b></span>
                     {a.evidence.permit_compliant ? (
-                      <span className="ok">Permit Compliant</span>
+                      <span className="ok">{lang === "id" ? "Izin sesuai" : "Permit compliant"}</span>
                     ) : (
-                      <span className="warn">No Permit</span>
+                      <span className="warn">{lang === "id" ? "Tanpa izin" : "No permit"}</span>
                     )}
                   </div>
                 </div>
               ))}
               {plan.assignments.length === 0 && (
-                <p className="kec-note optimizer-empty">No truck assignments generated.</p>
+                <p className="kec-note optimizer-empty">{lang === "id" ? "Belum ada penugasan truk." : "No truck assignments generated."}</p>
               )}
             </div>
 

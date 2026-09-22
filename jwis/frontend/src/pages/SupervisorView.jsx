@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Map } from "lucide-react";
+import { ArrowRight, Map, Radio, Route, ShieldCheck } from "lucide-react";
 import { ActionCard } from "../workspaces/ActionCard.jsx";
 import { useLanguage } from "../i18n.jsx";
 
@@ -22,10 +22,7 @@ export function SupervisorView() {
     }
     load();
     const id = setInterval(load, 15000);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   const alerts = snapshot?.alerts || [];
@@ -33,28 +30,28 @@ export function SupervisorView() {
   return (
     <main className="supervisor-view" data-testid="supervisor-view">
       <header className="supervisor-header">
-        <strong>JWIS</strong>
-        <span>{t("nav_pengawas")}</span>
+        <span className="supervisor-brand-mark"><Route size={19} /></span>
+        <span className="supervisor-brand-copy"><strong>JWIS</strong><small>Pengawas lapangan</small></span>
+        <span className="supervisor-live"><Radio size={13} /> Daring</span>
       </header>
+
+      <section className="supervisor-intro">
+        <span>Keputusan berikutnya</span>
+        <h1>Prioritas operasi</h1>
+        <p>Tangani gangguan terbesar, lalu tinjau antrean lainnya.</p>
+      </section>
 
       {snapshot ? <ActionCard snapshot={snapshot} /> : <p className="supervisor-loading">{t("sv_loading")}</p>}
 
       <details className="supervisor-alerts">
-        <summary>{t("ac_all_alerts").replace("{n}", alerts.length)}</summary>
+        <summary><span><ShieldCheck size={18} /> Semua peringatan</span><b>{alerts.length}</b></summary>
         <ul className="supervisor-alert-list">
-          {alerts.map((alert) => (
-            <li key={alert.id} className="supervisor-alert-item">
-              <strong>{alert.truck_code}</strong> — {alert.title}
-              <p>{alert.description}</p>
-            </li>
-          ))}
+          {alerts.map((alert) => <li key={alert.id} className="supervisor-alert-item"><strong>{alert.truck_code} — {alert.title}</strong><p>{alert.description}</p></li>)}
           {alerts.length === 0 && <li className="supervisor-alert-item">{t("ac_no_alerts")}</li>}
         </ul>
       </details>
 
-      <a className="supervisor-map-link" href="/">
-        <Map size={18} /> {t("sv_open_map")}
-      </a>
+      <a className="supervisor-map-link" href="/"><Map size={18} /><span>{t("sv_open_map")}</span><ArrowRight size={17} /></a>
     </main>
   );
 }
