@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import time
 
 # Permission sets per role. Least privilege: drivers only act on their tasks.
 ROLES: dict[str, set[str]] = {
@@ -47,13 +48,22 @@ def token_for(principal: dict[str, str]) -> str:
     """Opaque demo token binding username+role (not a signed JWT; pilot-grade)."""
     raw = f"{principal['username']}:{principal['role']}".encode()
     tok = hashlib.sha256(raw).hexdigest()
-    _TOKEN_REGISTRY[tok] = principal["role"]
+    _TOKEN_REGISTRY[tok] = (principal["role"], time.monotonic())
     return tok
 
 
-# Issued-token -> role. In-process registry; a real deployment uses signed JWTs.
-_TOKEN_REGISTRY: dict[str, str] = {}
+# Issued-token -> (role, issued-at). In-process registry with a 12 h expiry;
+# a real deployment uses signed JWTs.
+_TOKEN_REGISTRY: dict[str, tuple[str, float]] = {}
+_TOKEN_TTL_SECONDS = 12 * 60 * 60
 
 
 def role_for_token(token: str) -> str | None:
-    return _TOKEN_REGISTRY.get(token)
+    entry = _TOKEN_REGISTRY.get(token)
+    if entry is None:
+        return None
+    role, issued_at = entry
+    if time.monotonic() - issued_at > _TOKEN_TTL_SECONDS:
+        del _TOKEN_REGISTRY[token]
+        return None
+    return role

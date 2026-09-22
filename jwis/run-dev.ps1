@@ -29,6 +29,7 @@ Write-Host "`n[STARTING] Backend (FastAPI) on port 8001..." -ForegroundColor Yel
 Start-Process powershell -WorkingDirectory "$root\backend" -ArgumentList "-NoExit", "-Command", @"
 `$env:PYTHONIOENCODING='utf-8'
 `$env:PYTHONPATH='$root\backend'
+`$env:JWIS_AI_ENGINE='on'
 Write-Host 'Backend starting...' -ForegroundColor Green
 & '$python' -m uvicorn app.main:app --reload --port 8001
 "@

@@ -1,17 +1,22 @@
 import React, { useRef } from "react";
 import { MetricStrip } from "../ui/MetricStrip.jsx";
+import { useLanguage } from "../i18n.jsx";
 
 const detailTabs = [
-  { id: "fleet", label: "Fleet", surface: "fleet-table-surface" },
-  { id: "history", label: "Trip history", surface: "fleet-history-surface" },
-  { id: "queue", label: "TPA queue", surface: "fleet-queue-surface" },
-  { id: "evidence", label: "Route evidence", surface: "fleet-evidence-surface" },
-  { id: "impact", label: "Carbon impact", surface: "fleet-impact-surface" },
+  { id: "fleet", key: "tab_fleet", label: "Fleet State", surface: "fleet-table-surface" },
+  { id: "unlicensed", key: "tab_unlicensed", label: "Unlicensed Collectors", surface: "fleet-unlicensed-surface" },
+  { id: "history", key: "tab_history", label: "Trip History", surface: "fleet-history-surface" },
+  { id: "queue", key: "tab_queue", label: "TPA Queue & Optimization", surface: "fleet-queue-surface" },
+  { id: "evidence", key: "tab_evidence", label: "Route Evidence", surface: "fleet-evidence-surface" },
+  { id: "impact", key: "tab_impact", label: "Carbon Footprint", surface: "fleet-impact-surface" },
+  { id: "spj", key: "tab_spj", label: "Surat Perintah Jalan", surface: "fleet-spj-surface" },
+  { id: "damage", key: "tab_damage", label: "Laporan Kerusakan", surface: "fleet-damage-surface" },
 ];
 
 export function FleetOperations({
   detailTab,
   onDetailTabChange,
+  actionCard,
   metrics,
   map,
   mapFooter,
@@ -20,17 +25,24 @@ export function FleetOperations({
   rerouting,
   queue,
   fleetTable,
+  unlicensedTable,
   history,
   carbon,
+  spj,
+  damage,
 }) {
+  const { t } = useLanguage();
   const tabRefs = useRef([]);
   const activeTab = detailTabs.find((tab) => tab.id === detailTab) || detailTabs[0];
   const surfaces = {
     fleet: fleetTable,
+    unlicensed: unlicensedTable,
     history,
     queue,
     evidence: routeEvidence,
     impact: carbon,
+    spj,
+    damage,
   };
 
   function selectTab(tabId) {
@@ -52,6 +64,7 @@ export function FleetOperations({
 
   return (
     <section className="fleet-workspace" data-testid="fleet-workspace">
+      {actionCard}
       <MetricStrip metrics={metrics} />
 
       <div className="fleet-stage">
@@ -77,7 +90,7 @@ export function FleetOperations({
             onClick={() => selectTab(tab.id)}
             onKeyDown={(event) => handleTabKeyDown(event, index)}
           >
-            {tab.label}
+            {t(tab.key) || tab.label}
           </button>
         ))}
       </div>

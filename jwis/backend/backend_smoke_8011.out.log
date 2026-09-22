@@ -1,5 +1,0 @@
-INFO:     127.0.0.1:55519 - "GET /api/health HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55519 - "GET /api/fleet/summary HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55519 - "GET /api/ml/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55519 - "GET /api/tpa/queue-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55519 - "GET /api/events/permits HTTP/1.1" 200 OK

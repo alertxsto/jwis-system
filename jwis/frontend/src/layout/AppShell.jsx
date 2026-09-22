@@ -2,38 +2,44 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Bot,
   LogOut,
   Menu,
-  MessageCircle,
-  RefreshCcw,
   Route,
-  Search,
   Shield,
   Truck,
+  Users,
   Workflow,
   X,
 } from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
+import { useLanguage } from "../i18n.jsx";
 
 const items = [
-  { id: "fleet", label: "Fleet Operations", icon: Truck, section: "Operations" },
-  { id: "forecast", label: "Waste Forecast", icon: BarChart3, section: "Operations" },
-  { id: "planning", label: "Integrated Planning", icon: Workflow, section: "Operations" },
-  { id: "drivers", label: "Driver Analytics", icon: Truck, section: "Logistics" },
-  { id: "weighbridge", label: "Weighbridge Logs", icon: Workflow, section: "Logistics" },
-  { id: "wa", label: "WhatsApp Gateway", icon: MessageCircle, section: "Admin" },
-  { id: "iot", label: "IoT Bin Sensors", icon: Activity, section: "Admin" },
-  { id: "audit", label: "Data & ML Audit", icon: Shield, section: "Admin" },
+  { id: "fleet", key: "nav_armada", icon: Truck },
+  { id: "forecast", key: "nav_prediksi", icon: BarChart3 },
+  { id: "planning", key: "nav_rencana", icon: Workflow },
+  { id: "drivers", key: "nav_sopir", icon: Users },
+  { id: "audit", key: "nav_audit", icon: Shield },
 ];
 
-export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, children }) {
-  const current = items.find((item) => item.id === activeWorkspace) || items[0];
+// Legacy workspace ids still reachable from deep links / old state.
+const ALIASES = {
+  surveillance: "fleet",
+  weighbridge: "fleet",
+  wa: "drivers",
+  iot: "audit",
+};
+
+export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh, onLogout, assistant, children }) {
+  const { lang, setLang, t } = useLanguage();
+  const resolvedWorkspace = ALIASES[activeWorkspace] || activeWorkspace;
+  const current = items.find((item) => item.id === resolvedWorkspace) || items[0];
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [mobileNavMode, setMobileNavMode] = useState(() => window.matchMedia("(max-width: 860px)").matches);
   const mobileNavTriggerRef = useRef(null);
   const sideRailRef = useRef(null);
-  const roleRaw = localStorage.getItem("jwis_role") || "operator";
-  const roleLabel = roleRaw.charAt(0).toUpperCase() + roleRaw.slice(1);
 
   const closeMobileNav = useCallback((restoreFocus = true) => {
     setMobileNavOpen(false);
@@ -89,29 +95,18 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
   }, [closeMobileNav, mobileNavOpen]);
 
   function selectWorkspace(id) {
-    onWorkspaceChange(id);
+    onWorkspaceChange(ALIASES[id] || id);
     closeMobileNav();
   }
 
-  const sections = ["Operations", "Logistics", "Admin"];
-  const sectionLabels = {
-    Operations: "Operations",
-    Logistics: "Logistics (Case 1)",
-    Admin: "Admin (Case 2)",
-  };
-
-  const searchInputRef = useRef(null);
-
   useEffect(() => {
-    const handleKeyDown = (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        searchInputRef.current?.focus();
-      }
+    if (!assistantOpen) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setAssistantOpen(false);
     };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [assistantOpen]);
 
   return (
     <div className="dashboard-frame professional-shell">
@@ -132,31 +127,27 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
           </div>
         </div>
 
-        {sections.map((section) => (
-          <React.Fragment key={section}>
-            <p className="nav-section-label">{sectionLabels[section]}</p>
-            <nav className="side-nav" id={section === "Operations" ? "workspace-navigation" : undefined} data-testid={section === "Operations" ? "workspace-navigation" : undefined}>
-              {items.filter((item) => item.section === section).map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`nav-tab-btn ${activeWorkspace === id ? "active" : ""}`}
-                  aria-current={activeWorkspace === id ? "page" : undefined}
-                  onClick={() => selectWorkspace(id)}
-                >
-                  <Icon size={17} />{label}
-                </button>
-              ))}
-            </nav>
-          </React.Fragment>
-        ))}
+        <nav className="side-nav" id="workspace-navigation" data-testid="workspace-navigation">
+          {items.map(({ id, key, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={`nav-tab-btn ${resolvedWorkspace === id ? "active" : ""}`}
+              aria-current={resolvedWorkspace === id ? "page" : undefined}
+              onClick={() => selectWorkspace(id)}
+            >
+              <Icon size={17} />{t(key)}
+            </button>
+          ))}
+        </nav>
 
         <div className="side-system-state">
           <Activity size={15} />
-          <span>System status</span>
+          <span>{t("top_status")}</span>
+          <StatusBadge tone={online ? "success" : "warning"}>{online ? (lang === "id" ? "Terhubung" : "Connected") : "Demo fallback"}</StatusBadge>
         </div>
         <button className="side-logout" type="button" onClick={() => { setMobileNavOpen(false); onLogout(); }}>
-          <LogOut size={17} />Logout
+          <LogOut size={17} />{t("top_logout")}
         </button>
       </aside>
 
@@ -191,35 +182,85 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onRefresh
       <main className="app-shell" id="overview" inert={mobileNavOpen ? "true" : undefined}>
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Home</span>
+            <span>JWIS</span>
             <span className="breadcrumb-separator">&gt;</span>
-            <strong>{current.label}</strong>
-          </div>
-
-          <div className="topbar-search">
-            <Search size={15} aria-hidden="true" />
-            <input ref={searchInputRef} type="text" placeholder="Search workspaces..." />
-            <span className="kbd">Ctrl K</span>
+            <strong>{t(current.key)}</strong>
           </div>
 
           <div className="top-actions">
-            <StatusBadge tone={online ? "success" : "warning"}>{online ? "API connected" : "Offline demo"}</StatusBadge>
-            <a className="ghost-button" href="/field"><Truck size={16} />Field app</a>
-            <button className="icon-button" type="button" onClick={onRefresh} aria-label="Refresh command center">
-              <RefreshCcw size={16} />
+            <div className="language-toggle-widget" style={{ display: "inline-flex", alignItems: "center", background: "var(--ui-surface-muted)", borderRadius: "8px", padding: "2px", border: "1px solid var(--ui-border)" }}>
+              <button
+                type="button"
+                data-testid="lang-switch-id"
+                className={`lang-btn ${lang === "id" ? "active" : ""}`}
+                onClick={() => setLang("id")}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: lang === "id" ? 700 : 500,
+                  borderRadius: "6px",
+                  border: 0,
+                  cursor: "pointer",
+                  background: lang === "id" ? "var(--ui-surface)" : "transparent",
+                  color: lang === "id" ? "var(--ui-accent)" : "var(--ui-muted)",
+                  boxShadow: lang === "id" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                ID
+              </button>
+              <button
+                type="button"
+                data-testid="lang-switch-en"
+                className={`lang-btn ${lang === "en" ? "active" : ""}`}
+                onClick={() => setLang("en")}
+                style={{
+                  padding: "4px 10px",
+                  fontSize: "12px",
+                  fontWeight: lang === "en" ? 700 : 500,
+                  borderRadius: "6px",
+                  border: 0,
+                  cursor: "pointer",
+                  background: lang === "en" ? "var(--ui-surface)" : "transparent",
+                  color: lang === "en" ? "var(--ui-accent)" : "var(--ui-muted)",
+                  boxShadow: lang === "en" ? "0 1px 2px rgba(0,0,0,0.06)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                EN
+              </button>
+            </div>
+
+            <button className="ghost-button assistant-topbar-button" type="button" onClick={() => setAssistantOpen(true)}>
+              <Bot size={16} />{t("top_ai_assistant")}
             </button>
             <div className="profile-widget">
               <span className="profile-avatar" aria-hidden="true">JW</span>
               <div className="profile-info">
                 <span className="profile-name">JWIS Team</span>
-                <span className="profile-role">{roleLabel}</span>
+                <span className="profile-role">{t("top_operator_role")}</span>
               </div>
             </div>
           </div>
         </header>
         <div className="workspace-canvas">{children}</div>
+        {assistantOpen && (
+          <div className="assistant-modal-backdrop" role="presentation" onMouseDown={() => setAssistantOpen(false)}>
+            <section
+              className="assistant-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Operational AI Assistant"
+              onMouseDown={(event) => event.stopPropagation()}
+            >
+              <button className="icon-button assistant-modal-close" type="button" aria-label="Close AI assistant" onClick={() => setAssistantOpen(false)}>
+                <X size={17} />
+              </button>
+              {assistant}
+            </section>
+          </div>
+        )}
       </main>
     </div>
   );
-
 }

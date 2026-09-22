@@ -27,6 +27,25 @@ desktop.ini
 jwis_history.db
 *.db-journal
 
+# --- Secrets & runtime artifacts (MUST NOT be committed) ---
+
+# Environment files with real credentials
+.env
+.env.*
+!.env.example
+
+# Backend boot / smoke logs
+*.log
+
+# WhatsApp (Baileys) session credentials — regenerated at runtime via QR scan
+jwis/backend/wa-gateway/baileys_auth_info/
+
+# --- Internal working documents (not part of the shipped product) ---
+**/.superpowers/
+**/docs/superpowers/
+COMPETITION_CHECKLIST_STATUS.md
+jakarta_waste_ai_prd_v2.md
+
 # Playwright artifacts
 test-results/
 playwright-report/

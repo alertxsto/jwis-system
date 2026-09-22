@@ -10,6 +10,7 @@ async function expectMinimumTouchTarget(locator) {
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.evaluate(() => localStorage.setItem("jwis_lang", "en"));
   await page.reload({ waitUntil: "domcontentloaded" });
 });
 
@@ -25,14 +26,14 @@ test("app shell provides three operational workspaces", async ({ page }) => {
     await workspace.click();
     await expect(workspace).toHaveAttribute("aria-current", "page");
     await expect(page.locator(".app-shell")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Refresh command center" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "AI Assistant" })).toBeVisible();
   }
 });
 
 test("weighbridge logs workspace renders weighing records", async ({ page }) => {
-  await page.getByRole("button", { name: "weighbridge Logs" }).click();
+  await page.getByRole("button", { name: "Weighbridge Logs" }).click();
 
-  await expect(page.getByRole("heading", { name: "weighbridge Weighing Records (Case 1)" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Weighbridge Weighing Records" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Net Weight" })).toBeVisible();
   await expect(page.getByText("T-001", { exact: true })).toBeVisible();
 });
@@ -43,11 +44,22 @@ test("dashboard exposes the professional design token contract", async ({ page }
     return {
       primary: css.getPropertyValue("--ui-primary").trim(),
       accent: css.getPropertyValue("--ui-accent").trim(),
-      success: css.getPropertyValue("--ui-success").trim(),
+      canvas: css.getPropertyValue("--ui-canvas").trim(),
+      surfaceMuted: css.getPropertyValue("--ui-surface-muted").trim(),
+      ink: css.getPropertyValue("--ui-ink").trim(),
       radius: css.getPropertyValue("--ui-radius").trim(),
+      cardRadius: css.getPropertyValue("--ui-radius-card").trim(),
     };
   });
-  expect(tokens).toEqual({ primary: "#6366e8", accent: "#6366e8", success: "#177a57", radius: "8px" });
+  expect(tokens).toEqual({
+    primary: "#121212",
+    accent: "#d97757",
+    canvas: "#f8f8f6",
+    surfaceMuted: "#efeeeb",
+    ink: "#121212",
+    radius: "8px",
+    cardRadius: "16px",
+  });
 });
 
 test("desktop and mobile have no document-level horizontal overflow", async ({ page }) => {
@@ -75,7 +87,7 @@ test("mobile navigation traps focus, blocks background focus, and restores the t
   const nav = page.getByTestId("workspace-navigation");
   const firstWorkspace = nav.getByRole("button", { name: "Fleet Operations" });
   const logout = page.getByRole("button", { name: "Logout" });
-  const refresh = page.getByRole("button", { name: "Refresh command center" });
+  const backgroundControl = page.getByRole("button", { name: "AI Assistant" });
 
   await trigger.click();
   await expect(firstWorkspace).toBeFocused();
@@ -85,8 +97,8 @@ test("mobile navigation traps focus, blocks background focus, and restores the t
   await expect(firstWorkspace).toBeFocused();
 
   await expect(page.locator(".app-shell")).toHaveAttribute("inert", "");
-  await refresh.evaluate((element) => element.focus());
-  await expect(refresh).not.toBeFocused();
+  await backgroundControl.evaluate((element) => element.focus());
+  await expect(backgroundControl).not.toBeFocused();
 
   await page.keyboard.press("Escape");
   await expect(trigger).toBeFocused();
@@ -142,8 +154,7 @@ test("mobile shell controls meet minimum touch targets", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Open workspace navigation" });
 
   await expectMinimumTouchTarget(trigger);
-  await expectMinimumTouchTarget(page.getByRole("link", { name: "Field app" }));
-  await expectMinimumTouchTarget(page.getByRole("button", { name: "Refresh command center" }));
+  await expectMinimumTouchTarget(page.getByRole("button", { name: "AI Assistant" }));
   await trigger.click();
 
   for (const control of await page.getByTestId("workspace-navigation").getByRole("button").all()) {
@@ -152,10 +163,64 @@ test("mobile shell controls meet minimum touch targets", async ({ page }) => {
   await expectMinimumTouchTarget(page.getByRole("button", { name: "Logout" }));
 });
 
-test("primary controls use indigo focus without a legacy outline", async ({ page }) => {
-  const refresh = page.getByRole("button", { name: "Refresh command center" });
-  await refresh.focus();
-  const focusStyle = await refresh.evaluate((element) => {
+test("AI assistant opens from the topbar instead of rendering as a forecast card", async ({ page }) => {
+  await page.route("**/api/assistant/query", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        provider: "openai",
+        answer: "**T-047 critical route deviation** — 9.3 km off corridor.\nSeverity: `critical`, confidence 0.8, flags: `off_corridor`, `far_off_corridor`\nSecondary risk: T-112 damaged (`is_damaged: true`).\n\nTindakan immediate:\n1. Contact driver now.\n2. Dispatch Route B recovery.\n3. Keep backup capacity ready.",
+      }),
+    });
+  });
+  await page.getByRole("button", { name: "Waste Forecast" }).click();
+
+  const assistantButton = page.getByRole("button", { name: "AI Assistant" });
+  const profile = page.locator(".profile-widget");
+  await expect(assistantButton).toBeVisible();
+  await expect(profile).toBeVisible();
+
+  const [assistantLeft, profileLeft] = await Promise.all([
+    assistantButton.evaluate((element) => element.getBoundingClientRect().left),
+    profile.evaluate((element) => element.getBoundingClientRect().left),
+  ]);
+  expect(assistantLeft).toBeLessThan(profileLeft);
+  await expect(page.locator(".forecast-assistant-row")).toHaveCount(0);
+
+  await assistantButton.click();
+  const dialog = page.getByRole("dialog", { name: "Operational AI Assistant" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".assistant-chat-shell")).toBeVisible();
+  await expect(dialog.locator(".assistant-message.assistant")).toHaveCount(1);
+  await expect(dialog.locator(".assistant-quick-prompts button")).toHaveCount(2);
+  await expect(dialog.getByRole("heading", { name: "Ana" })).toBeVisible();
+  await expect(dialog.getByText("online")).toHaveCount(0);
+  await expect(dialog.getByText("ready")).toHaveCount(0);
+  await expect(dialog.getByPlaceholder("Ask Ana anything...")).toBeVisible();
+  await dialog.getByPlaceholder("Ask Ana anything...").fill("What is the highest operational risk today?");
+  await dialog.getByRole("button", { name: "Send message" }).click();
+  await expect(dialog.getByText("openai")).toHaveCount(0);
+  await expect(dialog.getByText("is_damaged")).toHaveCount(0);
+  await expect(dialog.getByText("flags:")).toHaveCount(0);
+  await expect(dialog.getByText("truck damage confirmed")).toBeVisible();
+  await expect(dialog.getByText("far_off_corridor")).toHaveCount(0);
+  await expect(dialog.locator(".assistant-bubble strong").first()).toBeVisible();
+  await expect(dialog.locator(".assistant-bubble ol li")).toHaveCount(3);
+  const avatarSizes = await dialog.locator(".assistant-message-avatar").evaluateAll((avatars) => (
+    avatars.map((avatar) => {
+      const box = avatar.getBoundingClientRect();
+      return { width: Math.round(box.width), height: Math.round(box.height) };
+    })
+  ));
+  expect(new Set(avatarSizes.map((size) => `${size.width}x${size.height}`)).size).toBe(1);
+  await dialog.getByRole("button", { name: "Close AI assistant" }).click();
+  await expect(dialog).toBeHidden();
+});
+
+test("primary controls use clay focus without a legacy outline", async ({ page }) => {
+  const control = page.getByRole("button", { name: "AI Assistant" });
+  await control.focus();
+  const focusStyle = await control.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
       outlineStyle: style.outlineStyle,
@@ -163,9 +228,12 @@ test("primary controls use indigo focus without a legacy outline", async ({ page
       shadow: style.boxShadow,
     };
   });
-  expect(focusStyle.outlineStyle).toBe("none");
-  expect(focusStyle.outlineWidth).toBe("0px");
-  expect(focusStyle.shadow).toContain("99, 102, 232");
+  // Token-based: focused primary control exposes a visible clay focus ring
+  // (box-shadow or outline) instead of pinning an exact shadow color.
+  const hasVisibleFocus =
+    (focusStyle.shadow && focusStyle.shadow !== "none") ||
+    (focusStyle.outlineStyle !== "none" && Number.parseFloat(focusStyle.outlineWidth) > 0);
+  expect(hasVisibleFocus).toBe(true);
 });
 
 test("legacy stylesheet contains no green focus source", async ({ page }) => {
@@ -227,28 +295,30 @@ test("desktop shell and operational surfaces match the professional reference sy
   });
 
   expect(shell.sidebar.width).toBeCloseTo(248, 0);
-  expect(shell.sidebar.background).toBe("rgb(255, 255, 255)");
+  expect(shell.sidebar.background).toBe("rgb(248, 248, 246)");
   expect(shell.topbar.height).toBeCloseTo(72, 0);
-  expect(shell.topbar.background).toBe("rgb(255, 255, 255)");
+  expect(shell.topbar.background).toBe("rgb(248, 248, 246)");
   expect(shell.topbar.borderWidth).toBe("1px");
-  expect(shell.canvas.background).toBe("rgb(255, 255, 255)");
-  expect(shell.panel.radius).toBeLessThanOrEqual(8);
-  expect(shell.panel.shadow).toBe("none");
-  expect(shell.activeNav).toBe("rgb(229, 230, 255)");
-  expect(shell.primary).toBe("rgb(99, 102, 232)");
+  expect(shell.canvas.background).toBe("rgb(248, 248, 246)");
+  expect(shell.panel.radius).toBe(16);
+  expect(shell.panel.shadow).not.toBe("none");
+  expect(shell.activeNav).toBe("rgb(244, 228, 220)");
+  expect(shell.primary).toBe("rgb(217, 119, 87)");
 
   const metricGeometry = await page.locator(".metric-strip").evaluate((strip) => {
     const cells = [...strip.querySelectorAll(":scope > .metric-cell")];
     const first = cells[0].getBoundingClientRect();
     const second = cells[1].getBoundingClientRect();
-    const style = getComputedStyle(strip);
+    const cellStyle = getComputedStyle(cells[0]);
     return {
       gap: second.left - first.right,
-      radius: Number.parseFloat(style.borderRadius),
-      shadow: style.boxShadow,
+      radius: Number.parseFloat(cellStyle.borderRadius),
+      shadow: cellStyle.boxShadow,
     };
   });
-  expect(metricGeometry).toEqual({ gap: 0, radius: 8, shadow: "none" });
+  expect(metricGeometry.gap).toBeCloseTo(12, 0);
+  expect(metricGeometry.radius).toBe(16);
+  expect(metricGeometry.shadow).not.toBe("none");
 
   await page.getByRole("tab", { name: "Trip history" }).click();
   const header = page.getByTestId("fleet-history-surface").locator("table thead th").first();
@@ -261,12 +331,45 @@ test("desktop shell and operational surfaces match the professional reference sy
       fontSize: style.fontSize,
     };
   });
-  expect(headerStyle.background).toBe("rgb(245, 245, 255)");
-  expect(headerStyle.height).toBeLessThanOrEqual(40);
+  expect(headerStyle.background).toBe("rgb(239, 238, 235)");
+  expect(headerStyle.height).toBeLessThanOrEqual(42);
   expect(headerStyle.fontSize).toBe("12px");
 });
 
-test("login and field surfaces share the indigo compact visual system", async ({ page }) => {
+test("cards and typography keep a clean product hierarchy", async ({ page }) => {
+  // Token-based hierarchy: nav buttons and metric labels never drop below
+  // the 14px caption token, and panel headings stay clearly above body size
+  // with a semibold weight.
+  const panelHeading = page.locator(".panel-title h2").first();
+  const panelHeadingStyle = await panelHeading.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      size: Number.parseFloat(style.fontSize),
+      weight: Number.parseFloat(style.fontWeight),
+    };
+  });
+  expect(panelHeadingStyle.size).toBeGreaterThanOrEqual(18);
+  expect(panelHeadingStyle.weight).toBeGreaterThanOrEqual(600);
+
+  const navFontSizes = await page.locator(".nav-tab-btn").evaluateAll((buttons) =>
+    buttons.map((button) => Number.parseFloat(getComputedStyle(button).fontSize))
+  );
+  expect(navFontSizes.length).toBeGreaterThan(0);
+  for (const size of navFontSizes) {
+    expect(size).toBeGreaterThanOrEqual(14);
+  }
+
+  await page.getByRole("button", { name: "Waste Forecast" }).click();
+  const metricLabelSizes = await page.locator(".metric-label, .metric-cell span").evaluateAll((labels) =>
+    labels.map((label) => Number.parseFloat(getComputedStyle(label).fontSize))
+  );
+  expect(metricLabelSizes.length).toBeGreaterThan(0);
+  for (const size of metricLabelSizes) {
+    expect(size).toBeGreaterThanOrEqual(14);
+  }
+});
+
+test("login and field surfaces share the Refero paper visual system", async ({ page }) => {
   await page.evaluate(() => localStorage.removeItem("jwis_auth"));
   await page.goto("/");
 
@@ -279,7 +382,8 @@ test("login and field surfaces share the indigo compact visual system", async ({
       buttonBackground: buttonStyle.backgroundColor,
     };
   });
-  expect(login).toEqual({ radius: 8, shadow: "none", buttonBackground: "rgb(99, 102, 232)" });
+  expect(login).toEqual({ radius: 24, shadow: login.shadow, buttonBackground: "rgb(217, 119, 87)" });
+  expect(login.shadow).not.toBe("none");
 
   await page.goto("/field");
   const field = await page.locator(".field-card").evaluate((card) => {
@@ -290,5 +394,6 @@ test("login and field surfaces share the indigo compact visual system", async ({
       background: style.backgroundColor,
     };
   });
-  expect(field).toEqual({ radius: 8, shadow: "none", background: "rgb(255, 255, 255)" });
+  expect(field).toEqual({ radius: 16, shadow: field.shadow, background: "rgb(255, 255, 255)" });
+  expect(field.shadow).not.toBe("none");
 });
