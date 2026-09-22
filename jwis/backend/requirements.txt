@@ -3,6 +3,7 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 numpy==2.4.4
 pandas==3.0.2
+pyarrow>=17  # required to unpickle Prophet models saved with pandas 3
 joblib==1.5.3
 scikit-learn==1.8.0
 xgboost==3.2.0

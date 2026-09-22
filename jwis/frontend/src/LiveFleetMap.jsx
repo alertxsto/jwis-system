@@ -884,6 +884,9 @@ popup.on("open", () => {
     let cancelled = false;
 
     function removeSpjLayers() {
+      // The mount effect's cleanup runs first and calls map.remove(); a removed
+      // map has no style, so touching getLayer would throw during unmount.
+      if (!map.style) return;
       ["spj-active-stop-labels", "spj-active-stops", "spj-active-route"].forEach((id) => {
         if (map.getLayer(id)) map.removeLayer(id);
       });

@@ -38,6 +38,7 @@ from app.engine import (
     predict_waste_hybrid,
     predict_waste_hybrid_series,
     list_hybrid_models,
+    hybrid_models_loadable,
     estimate_tpa_queue_wait,
     simulate_staggered_dispatch,
     forecast_waste_risk,
@@ -262,6 +263,7 @@ def health_detailed() -> dict[str, Any]:
     xgb_n = len(list(models_dir.glob("xgboost_*.joblib"))) if models_dir.exists() else 0
     real_dir = _Path(__file__).resolve().parents[2] / "data" / "real"
     source_files = len(list(real_dir.glob("*.csv"))) + len(list(real_dir.glob("*.geojson"))) if real_dir.exists() else 0
+    models_loadable = hybrid_models_loadable()
     db_ok = True
     try:
         history_store.list_events(limit=1)
@@ -269,12 +271,17 @@ def health_detailed() -> dict[str, Any]:
         db_ok = False
     components = {
         "database": {"status": "up" if db_ok else "degraded"},
-        "models": {"available": prophet_n == 42 and xgb_n == 42, "prophet": prophet_n, "xgboost": xgb_n},
+        "models": {
+            "available": prophet_n == 42 and xgb_n == 42 and models_loadable,
+            "loadable": models_loadable,
+            "prophet": prophet_n,
+            "xgboost": xgb_n,
+        },
         "source_files": {"count": source_files, "status": "up" if source_files >= 8 else "degraded"},
         "weather": {"status": "external", "note": "Open-Meteo fetched on demand with fallback"},
         "osrm": {"status": "external", "note": "public OSRM with fallback route"},
     }
-    degraded = (not db_ok) or prophet_n != 42 or xgb_n != 42 or source_files < 8
+    degraded = (not db_ok) or prophet_n != 42 or xgb_n != 42 or not models_loadable or source_files < 8
     return {"status": "degraded" if degraded else "healthy", "components": components}
 
 class LoginRequest(BaseModel):

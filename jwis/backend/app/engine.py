@@ -9,6 +9,7 @@ Includes:
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone, timedelta
@@ -37,14 +38,23 @@ _KELURAHAN_SLUGS = [
 
 @lru_cache(maxsize=128)
 def _load_hybrid(kelurahan_slug: str) -> tuple[Any, Any] | None:
+    p_path = MODELS_DIR / f"prophet_{kelurahan_slug}.joblib"
+    x_path = MODELS_DIR / f"xgboost_{kelurahan_slug}.joblib"
+    if not (p_path.exists() and x_path.exists()):
+        return None
     try:
-        p_path = MODELS_DIR / f"prophet_{kelurahan_slug}.joblib"
-        x_path = MODELS_DIR / f"xgboost_{kelurahan_slug}.joblib"
-        if p_path.exists() and x_path.exists():
-            return joblib.load(p_path), joblib.load(x_path)
+        return joblib.load(p_path), joblib.load(x_path)
     except Exception:
-        pass
-    return None
+        # A silent fallback here made every district predict the flat 150 t
+        # heuristic; log so a missing dependency (e.g. pyarrow) is visible.
+        logging.getLogger(__name__).exception(
+            "hybrid model for %s exists but failed to load; using fallback heuristic", kelurahan_slug)
+        return None
+
+
+def hybrid_models_loadable() -> bool:
+    """Health probe: True when at least one on-disk hybrid pair unpickles."""
+    return _load_hybrid(_KELURAHAN_SLUGS[0]) is not None
 
 try:
     _ISOLATION_MODEL = joblib.load(MODELS_DIR / "isolation_forest_fleet.joblib")
