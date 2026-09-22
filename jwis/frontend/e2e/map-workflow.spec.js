@@ -15,6 +15,7 @@ test.beforeEach(async ({ page }) => {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=false`);
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.evaluate(() => localStorage.setItem("jwis_lang", "en"));
 });
 
 test("map canvas renders (not blank)", async ({ page }) => {
@@ -157,8 +158,18 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
   expect(reroute.diversion_applied).toBe(true);
   expect(reroute.abandoned_route.path.length).toBeGreaterThan(20);
 
-  const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
-  const t = mt.trucks.find((x) => x.truck_code === "T-047");
+  // map-truth lags the reroute endpoint: poll until the abandoned route is
+  // populated instead of dereferencing a potentially-null payload.
+  let t;
+  await expect.poll(async () => {
+    const mt = await (await page.request.get(`${API_BASE}/api/fleet/map-truth`)).json();
+    const truck = mt.trucks.find((x) => x.truck_code === "T-047");
+    if (truck && truck.abandoned_route && truck.abandoned_route.geometry.length > 20) {
+      t = truck;
+      return true;
+    }
+    return false;
+  }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
   expect(t.traffic.jam_active).toBe(true);
   expect(t.abandoned_route.geometry.length).toBeGreaterThan(20);
   expect(t.deviation_segments).not.toContain("violation");

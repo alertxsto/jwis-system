@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.evaluate(() => localStorage.setItem("jwis_lang", "en"));
   await page.reload({ waitUntil: "domcontentloaded" });
 });
 

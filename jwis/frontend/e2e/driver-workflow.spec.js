@@ -135,6 +135,7 @@ test("admin sees damage report and resolves it", async ({ page }) => {
 
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.evaluate(() => localStorage.setItem("jwis_lang", "en"));
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByRole("tab", { name: "Laporan Kerusakan" }).click();
   await expect(page.getByText("e2e admin panel note").first()).toBeVisible({ timeout: 15000 });
@@ -169,6 +170,7 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
 
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("jwis_auth", "true"));
+  await page.evaluate(() => localStorage.setItem("jwis_lang", "en"));
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.getByText("Surat Perintah Jalan").first().click();
   await page.getByText(spj.spj_number).first().click();
