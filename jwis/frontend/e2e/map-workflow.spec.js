@@ -49,9 +49,12 @@ test("actual routes colored by violation state", async ({ page }) => {
 
 test("map legend shows provenance tags", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await expect(page.locator(".map-legend")).toContainText("LIVE");
-  await expect(page.locator(".map-legend")).toContainText("MODEL");
-  await expect(page.locator(".map-legend")).toContainText("SIM");
+  await page.getByTestId("deck-tools-toggle").click();
+  await page.locator(".deck-legend > summary").click();
+  const legend = page.locator(".deck-legend-body");
+  await expect(legend).toContainText("LIVE");
+  await expect(legend).toContainText("MODEL");
+  await expect(legend).toContainText("SIM");
 });
 
 test("fleet panel labels positions as simulated data", async ({ page }) => {
@@ -144,7 +147,8 @@ test("map-truth payload has road-following geometry and synced snapped GPS", asy
 
 test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
-  await page.locator(".fleet-tools-drawer > summary").click();
+  await page.getByTestId("deck-tools-toggle").click();
+  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
   await page.waitForFunction(
     () => (window.__jwisMapFeatures?.actualKinds || []).length > 0,
     null,
@@ -155,7 +159,7 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
   expect(before).toContain("actual-violation");
 
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
-  await expect(page.locator(".traffic-status-badge")).toContainText(/JAM TERDETEKSI AI|Jam Active|Macet Aktif/, { timeout: 45000 });
+  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/JAM TERDETEKSI AI|Jam Active|Macet Aktif/, { timeout: 45000 });
 
   // The AI engine loop may independently clear/re-set the global jam flag, and
   // the demo jam is position-relative (truck cruising): wait until the server
@@ -196,6 +200,8 @@ test("jam toggle diverts T-047 end-to-end (UI, reroute API, map-truth agree)", a
 test("restore traffic returns T-047 to compliant and clears abandoned line", async ({ page }) => {
   await page.request.post(`${API_BASE}/api/fleet/astar-simulate-jam?active=true`, { headers: authHeaders });
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  await expect(page.getByTestId("deck-tools-panel")).toBeVisible();
   await page.waitForFunction(
     () => (window.__jwisMapFeatures?.assignedKinds || []).includes("astar-abandoned"),
     null,
@@ -214,7 +220,7 @@ test("restore traffic returns T-047 to compliant and clears abandoned line", asy
     }
     return true;
   }, { timeout: 45000, intervals: [1000, 2000, 3000] }).toBe(true);
-  await expect(page.locator(".traffic-status-badge")).toContainText(/KORIDOR NORMAL|Corridor Clear|Koridor Lancar/, { timeout: 20000 });
+  await expect(page.getByTestId("deck-tools-panel").locator(".traffic-status-badge")).toContainText(/KORIDOR NORMAL|Corridor Clear|Koridor Lancar/, { timeout: 20000 });
 
   const reroute = await (await page.request.get(`${API_BASE}/api/fleet/astar-reroute?truck_code=T-047`)).json();
   expect(reroute.diversion_applied).toBe(false);

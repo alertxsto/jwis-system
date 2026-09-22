@@ -20,31 +20,6 @@
   background: var(--ui-surface);
 }
 
-.fleet-map-stage {
-  position: relative;
-  min-width: 0;
-  height: 100%;
-  border-right: none;
-}
-
-.fleet-map-stage .map-anchor,
-.fleet-map-stage .map-panel {
-  height: 100%;
-}
-
-.fleet-map-stage .map-panel {
-  grid-column: auto;
-  border: 0;
-  border-radius: var(--ui-radius-card);
-  box-shadow: var(--ui-shadow);
-}
-
-.fleet-map-stage .maplibre-shell,
-.fleet-map-stage .maplibre-container {
-  height: 100%;
-  border-radius: var(--ui-radius-card);
-}
-
 .fleet-inspector {
   min-width: 0;
   overflow: auto;

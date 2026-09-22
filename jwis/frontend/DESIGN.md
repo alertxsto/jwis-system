@@ -94,7 +94,8 @@ Rules:
 
 Dashboard rows:
 - Metrics: one joined 4-cell strip desktop, 2×2 mobile.
-- Fleet: map/decision split at roughly 70/30.
+- Fleet: a full-bleed command deck with a floating decision overlay, not a
+  map/decision column split.
 - Forecast: demand/context split at roughly 70/30.
 - Planning: scenario/allocation split, approval full-width below.
 - Audit: registry/evidence split.
@@ -137,15 +138,28 @@ Control rules:
 
 ### Fleet Operations
 
-Order:
-1. Workspace purpose and automatic-refresh state.
-2. Joined operational metrics.
-3. Live map / priority decision split.
-4. Collapsible map controls and operational context.
-5. Evidence tabs and records below.
+The Armada workspace is a command deck: the map is the desk, and every
+decision instrument is layered on it rather than split into competing columns.
 
-The map anchors the screen; the dark decision rail contains exactly one urgent
-problem and one primary action.
+Order:
+1. Compact head band: workspace purpose, auto-refresh state, joined metric
+   strip, and a problem strip of triage chips (deviasi, kerusakan, antrean
+   TPA) derived from the live snapshot.
+2. Full-bleed deck: the operational map fills the remaining viewport height.
+   Map controls (layers, route replay, legend, alert queue, A* traffic
+   monitor) live in a pinned overlay panel inside the deck, never a detached
+   drawer.
+3. Decision overlay: one instrument floating over the map's right edge. It
+   retargets when the operator clicks a truck marker, a table row, or the
+   problem strip; a truck with no active alert shows an informational state,
+   and the send flow resets on every retarget.
+4. Evidence below: four operational tabs (Kondisi Armada, Riwayat, Antrean
+   TPA, Bukti Rute) plus document links (SPJ, Kerusakan, Kolektor Liar, Jejak
+   Karbon) in the records heading.
+
+The deck must fit one viewport: the head band stays compact so the map's
+bottom edge never drops below the fold. On mobile the decision overlay
+collapses into a bottom sheet and the deck becomes a working map window.
 
 ### Waste Forecast
 

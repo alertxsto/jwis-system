@@ -21,7 +21,7 @@ async function signIn(page) {
 test.beforeEach(async ({ page }) => signIn(page));
 
 test("operations context exposes the AI traffic monitor without a simulate button", async ({ page }) => {
-  await page.getByText("Kontrol peta & konteks operasi").click();
+  await page.getByTestId("deck-tools-toggle").click();
   await expect(page.getByText("AI Traffic Monitor")).toBeVisible({ timeout: 15000 });
   await expect(page.locator(".astar-toggle-btn")).toHaveCount(0);
 });
@@ -38,12 +38,12 @@ test("planning flow exposes the seven-day outlook", async ({ page }) => {
 });
 
 test("carbon evidence shows data or an honest placeholder", async ({ page }) => {
-  await page.getByRole("tab", { name: "Jejak karbon" }).click();
+  await page.locator(".records-doc-link", { hasText: "Jejak Karbon" }).click();
   await expect(page.getByText(/Reference factors|Menunggu engine AI/)).toBeVisible({ timeout: 15000 });
 });
 
 test("unlicensed collector surface reads the AI flags endpoint", async ({ page }) => {
   const responsePromise = page.waitForResponse((res) => res.url().includes("/api/ai/unlicensed-flags"), { timeout: 20000 });
-  await page.getByRole("tab", { name: "Kolektor liar" }).click();
+  await page.locator(".records-doc-link", { hasText: "Kolektor Liar" }).click();
   expect((await responsePromise).ok()).toBeTruthy();
 });

@@ -20,23 +20,39 @@ async function signIn(page) {
 
 test.beforeEach(async ({ page }) => signIn(page));
 
-test("fleet opens as a map-led decision workspace", async ({ page }) => {
+test("fleet opens as a map-led command deck with a decision overlay", async ({ page }) => {
   const map = page.getByTestId("fleet-map-stage");
-  const action = page.getByTestId("action-card");
+  const overlay = page.getByTestId("decision-overlay");
   await expect(map).toBeVisible();
-  await expect(action).toBeVisible();
+  await expect(overlay).toBeVisible();
   await expect(page.getByRole("heading", { name: "Tindakan prioritas" })).toBeVisible();
-  const [mapBox, railBox] = await Promise.all([
-    map.boundingBox(),
-    page.locator(".fleet-decision-rail").boundingBox(),
-  ]);
-  expect(mapBox.width).toBeGreaterThan(railBox.width);
-  expect(mapBox.x).toBeLessThan(railBox.x);
+  await expect(overlay.getByTestId("action-card")).toBeVisible();
+
+  // The deck is one full-bleed canvas: the decision instrument floats over the
+  // map's own right edge rather than competing in a separate rail column.
+  const [mapBox, overlayBox] = await Promise.all([map.boundingBox(), overlay.boundingBox()]);
+  expect(overlayBox.x).toBeGreaterThan(mapBox.x + mapBox.width * 0.5);
+  expect(overlayBox.x + overlayBox.width).toBeLessThanOrEqual(mapBox.x + mapBox.width + 2);
+});
+
+test("problem strip focuses the worst deviation and opens evidence tabs", async ({ page }) => {
+  const deviationChip = page.getByTestId("problem-chip-deviation");
+  await expect(deviationChip).toBeVisible();
+  await expect(deviationChip).toBeEnabled();
+  await deviationChip.click();
+  await expect(page.getByTestId("decision-overlay").getByTestId("action-card")).toBeVisible();
+
+  const queueChip = page.getByTestId("problem-chip-queue");
+  if (await queueChip.isEnabled()) {
+    await queueChip.click();
+    await expect(page.getByTestId("fleet-queue-surface")).toBeVisible();
+  }
 });
 
 test("fleet evidence tabs reveal one surface and support keyboard selection", async ({ page }) => {
-  const fleet = page.getByRole("tab", { name: "Status Armada" });
-  const history = page.getByRole("tab", { name: "Riwayat Perjalanan" });
+  const tablist = page.getByRole("tablist", { name: "Detail armada" });
+  const fleet = tablist.getByRole("tab", { name: "Status Armada" });
+  const history = tablist.getByRole("tab", { name: "Riwayat Perjalanan" });
   await expect(fleet).toHaveAttribute("aria-selected", "true");
   await history.click();
   await expect(history).toHaveAttribute("aria-selected", "true");
@@ -49,15 +65,37 @@ test("fleet evidence tabs reveal one surface and support keyboard selection", as
   await expect(fleet).toHaveAttribute("aria-selected", "true");
 });
 
-test("mobile fleet puts the urgent decision before the map without overflow", async ({ page }) => {
+test("document links open operational document surfaces", async ({ page }) => {
+  await page.locator(".records-doc-link", { hasText: "Surat Perintah Jalan" }).click();
+  await expect(page.getByTestId("fleet-spj-surface")).toBeVisible();
+  await page.locator(".records-doc-link", { hasText: "Laporan Kerusakan" }).click();
+  await expect(page.getByTestId("fleet-damage-surface")).toBeVisible();
+});
+
+test("mobile fleet collapses the decision into a bottom sheet without overflow", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
+  const sheet = page.getByTestId("deck-action-sheet");
+  await expect(sheet).toBeVisible();
   const geometry = await page.evaluate(() => {
-    const decision = document.querySelector(".fleet-decision-rail").getBoundingClientRect();
-    const map = document.querySelector(".fleet-map-surface").getBoundingClientRect();
-    return { decisionTop: decision.top, mapTop: map.top, overflow: document.documentElement.scrollWidth - innerWidth };
+    const overlay = document.querySelector(".deck-decision-overlay");
+    return {
+      overlayHidden: overlay ? getComputedStyle(overlay).display === "none" : true,
+      overflow: document.documentElement.scrollWidth - innerWidth,
+    };
   });
-  expect(geometry.decisionTop).toBeLessThan(geometry.mapTop);
+  expect(geometry.overlayHidden).toBe(true);
   expect(geometry.overflow).toBeLessThanOrEqual(2);
+
+  await page.locator(".deck-sheet-handle").click();
+  await expect(sheet.getByTestId("action-card")).toBeVisible();
+});
+
+test("map layers panel opens inside the deck and lists controls", async ({ page }) => {
+  await page.getByTestId("deck-tools-toggle").click();
+  const panel = page.getByTestId("deck-tools-panel");
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("Lapisan", { exact: true })).toBeVisible();
+  await expect(panel.locator(".map-controls-grid label").first()).toBeVisible();
 });
 
 test("forecast keeps district demand primary and horizon controls functional", async ({ page }) => {
