@@ -132,11 +132,43 @@ def build_executive_summary(snapshot: dict[str, Any]) -> str:
     )
 
 
+def _answer_locally(question: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    """No-LLM responder: retrieved knowledge + live snapshot, plainly labelled.
+
+    `.env.example` promises "falls back to local responder"; until now the
+    handler returned a raw 502 instead.
+    """
+    kpis = snapshot.get("kpis", {})
+    top = _top_prediction(snapshot)
+    rag = format_rag_context(question, top_k=3, max_chars=1800).strip()
+    answer_parts = [
+        "Mode lokal aktif (asisten LLM tidak dikonfigurasi).",
+        (
+            f"Status saat ini: {kpis.get('active_trucks', '-')} armada aktif, "
+            f"{kpis.get('trucks_with_issues', '-')} kendala, antrean TPA "
+            f"{kpis.get('tpa_wait_minutes', '-')} menit, lonjakan terprediksi "
+            f"+{kpis.get('predicted_spike_percent', '-')} %."
+        ),
+    ]
+    if top:
+        answer_parts.append(
+            f"Lonjakan tertinggi: {top.get('district', '-')} (+{top.get('spike_percent', '-')} %)."
+        )
+    if rag and rag.lower() not in {"no matching jwis knowledge found."}:
+        answer_parts.append(f"Jawaban dari basis pengetahuan JWIS:\n{rag}")
+    else:
+        answer_parts.append(
+            "Basis pengetahuan tidak memuat topik ini; coba pertanyaan seputar "
+            "armada, rute, antrean TPA, atau prediksi timbulan."
+        )
+    return {"provider": "local", "mode": "local", "answer": "\n\n".join(answer_parts), "tools_used": []}
+
+
 def answer_with_openai_if_configured(question, snapshot, history=None, tool_ctx=None,
                                      images=None) -> dict[str, Any]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return {"provider": "error", "error": "OPENAI_API_KEY is not configured", "answer": ""}
+        return _answer_locally(question, snapshot)
 
     rag_context = format_rag_context(question, top_k=5, max_chars=3000)
     base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")

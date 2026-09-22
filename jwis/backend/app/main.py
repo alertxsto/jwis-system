@@ -12,15 +12,15 @@ from __future__ import annotations
 
 from dotenv import load_dotenv
 load_dotenv()
+import logging
 import os
 key = os.getenv("OPENAI_API_KEY", "")
-print("JWIS STARTUP CWD:", os.getcwd())
-print("JWIS STARTUP API_KEY EXISTS:", bool(key))
-print("JWIS STARTUP API_KEY VALUE:", (key[:6] + "..." + key[-4:]) if key else "None")
-print("JWIS STARTUP BASE_URL:", os.getenv("OPENAI_BASE_URL"))
+logging.getLogger(__name__).info(
+    "startup cwd=%s openai_configured=%s base_url=%s",
+    os.getcwd(), bool(key), os.getenv("OPENAI_BASE_URL"),
+)
 
 import json
-import logging
 import re
 import threading
 import time
@@ -302,8 +302,8 @@ def auth_login(payload: LoginRequest) -> dict[str, Any]:
     }
 
 
-def require_permission(permission: str):
-    """FastAPI dependency: 401 if no valid token, 403 if role lacks the permission."""
+def require_any_permission(*permissions: str):
+    """FastAPI dependency: 401 if no valid token, 403 if the role holds none of the permissions."""
     def _dep(authorization: str | None = Header(default=None)) -> str:
         if not authorization or not authorization.lower().startswith("bearer "):
             raise HTTPException(status_code=401, detail="Missing bearer token.")
@@ -311,10 +311,15 @@ def require_permission(permission: str):
         role = role_for_token(token)
         if role is None:
             raise HTTPException(status_code=401, detail="Invalid or expired token.")
-        if not has_permission(role, permission):
-            raise HTTPException(status_code=403, detail=f"Role '{role}' lacks '{permission}'.")
+        if not any(has_permission(role, p) for p in permissions):
+            raise HTTPException(status_code=403, detail=f"Role '{role}' lacks all of {permissions}.")
         return role
     return _dep
+
+
+def require_permission(permission: str):
+    """FastAPI dependency: 401 if no valid token, 403 if role lacks the permission."""
+    return require_any_permission(permission)
 
 @app.get("/api/data/provenance")
 def data_provenance_endpoint() -> dict[str, Any]:
@@ -606,15 +611,12 @@ def weather() -> dict:
     return fetch_jakarta_weather_forecast()
 
 @app.post("/api/assistant/query")
-async def assistant_query(payload: AssistantRequest) -> dict:
+async def assistant_query(payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))) -> dict:
     # Run everything synchronously on the main thread to avoid Session 0 threadpool deadlock
-    print("SYNC STEP 1: Route start")
     try:
         from app.tools import ToolContext
         weather = fetch_jakarta_weather_forecast()
-        print("SYNC STEP 2: Weather done")
         snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=weather)
-        print("SYNC STEP 3: Snapshot done")
         tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
         images = None
         if payload.file_data and payload.file_type:
@@ -624,9 +626,8 @@ async def assistant_query(payload: AssistantRequest) -> dict:
             payload.question, snapshot, history=payload.history, tool_ctx=tool_ctx,
             images=images
         )
-        print("SYNC STEP 4: OpenAI done")
     except Exception as e:
-        print("SYNC STEP ERROR:", str(e))
+        logger.exception("assistant query failed")
         raise HTTPException(status_code=502, detail=f"AI gateway error: {e}") from e
 
     if result.get("provider") == "error":
@@ -645,17 +646,27 @@ def executive_summary() -> dict:
     
     from app.assistant import _top_prediction
     top = _top_prediction(snapshot)
-    top_district = top.get("district", "Jakarta Barat")
-    top_spike = top.get("spike_percent", 41)
-    extra_trucks = top.get("recommended_extra_trucks", 28)
-    extra_crews = top.get("recommended_extra_crews", 14)
+    # Numbers must come from the live snapshot — a literal default here once
+    # shipped "41% / Jakarta Barat / 28 trucks" while the KPI card said +4%.
     tpa_wait = snapshot["kpis"]["tpa_wait_minutes"]
+    if top.get("district"):
+        top_spike = int(top.get("spike_percent") or snapshot["kpis"].get("predicted_spike_percent") or 0)
+        extra_trucks = int(top.get("recommended_extra_trucks") or 0)
+        extra_crews = int(top.get("recommended_extra_crews") or 0)
+        spike_clause = (
+            f"Proyeksi peningkatan volume sampah puncak sebesar {top_spike}% terjadi di {top['district']}, "
+            f"didorong curah hujan/event, "
+            + (f"yang membutuhkan {extra_trucks} armada truk tambahan. " if extra_trucks else "")
+        )
+        crew_clause = f" dan pengerahan {extra_crews} tim kru tambahan ke kelurahan terdampak" if extra_crews else ""
+    else:
+        spike_clause = "Tidak ada lonjakan volume signifikan pada horizon 7 hari. "
+        crew_clause = ""
     summary_id = (
         f"JWIS mendeteksi {snapshot['kpis']['trucks_with_issues']} kendala operasional di lapangan. "
-        f"Proyeksi peningkatan volume sampah puncak sebesar {top_spike}% terjadi di {top_district}, didorong curah hujan/event, "
-        f"yang membutuhkan {extra_trucks} armada truk tambahan. "
-        f"Antrian di Bantargebang saat ini mencapai {tpa_wait} menit. Direkomendasikan implementasi staggered dispatch "
-        f"untuk mereduksi beban TPA dan pengerahan {extra_crews} tim kru tambahan ke kelurahan terdampak."
+        + spike_clause
+        + f"Antrian di Bantargebang saat ini mencapai {tpa_wait} menit. Direkomendasikan implementasi staggered dispatch "
+        + f"untuk mereduksi beban TPA{crew_clause}."
     )
     
     history_store.record_event("executive_summary", {"summary": summary})
@@ -710,7 +721,7 @@ def alert_follow_ups() -> list[dict]:
     ]
 
 @app.post("/api/alert/follow-up")
-def alert_follow_up(payload: dict[str, Any]) -> dict[str, Any]:
+def alert_follow_up(payload: dict[str, Any], _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     """Record a supervisor follow-up action (status + operator + note)."""
     alert_id = str(payload.get("alert_id", "")).strip()
     status = str(payload.get("status", "OPEN")).upper()
@@ -786,6 +797,13 @@ def load_contacts():
         return DEFAULT_CONTACTS
 
 def save_contacts(data):
+    # An unauthenticated {"drivers": {}} probe once wiped every contact. Never
+    # let a POST reduce the stored driver set to fewer entries than before
+    # unless the caller explicitly sends the whole list.
+    existing = load_contacts()
+    new_drivers = dict(data).get("drivers")
+    if isinstance(new_drivers, dict) and len(new_drivers) < len(existing.get("drivers", {})):
+        raise HTTPException(status_code=409, detail="Refusing to shrink the driver contact list; send the full list.")
     normalized = dict(data)
     if isinstance(normalized.get("drivers"), dict):
         normalized["drivers"] = {name: normalize_phone_number(num) for name, num in normalized["drivers"].items()}
@@ -808,7 +826,7 @@ def get_whatsapp_contacts():
     return load_contacts()
 
 @app.post("/api/whatsapp/contacts")
-def post_whatsapp_contacts(payload: dict):
+def post_whatsapp_contacts(payload: dict, _role: str = Depends(require_permission("admin:manage"))):
     save_contacts(payload)
     return {"status": "success"}
 
@@ -835,11 +853,11 @@ def whatsapp_groups() -> dict:
     return OpenWAClient.from_env().groups()
 
 @app.post("/api/whatsapp/logout")
-def whatsapp_logout() -> dict:
+def whatsapp_logout(_role: str = Depends(require_permission("admin:manage"))) -> dict:
     return OpenWAClient.from_env().logout()
 
 @app.post("/api/whatsapp/alert")
-def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
+def whatsapp_alert(payload: WhatsAppAlertRequest, _role: str = Depends(require_permission("dispatch:create"))) -> dict:
     client = OpenWAClient.from_env()
     config = load_contacts()
     info = get_truck_info(payload.truck_code)
@@ -918,7 +936,7 @@ def whatsapp_alert(payload: WhatsAppAlertRequest) -> dict:
 
 
 @app.post("/api/whatsapp/alert/simulate")
-def whatsapp_alert_simulate(payload: WhatsAppAlertRequest) -> dict:
+def whatsapp_alert_simulate(payload: WhatsAppAlertRequest, _role: str = Depends(require_permission("dispatch:create"))) -> dict:
     """Explicit demo-only simulation of a WhatsApp alert (clearly not a real send)."""
     msg = build_alert_message(payload.truck_code, payload.issue, payload.recommendation)
     return {
@@ -930,7 +948,7 @@ def whatsapp_alert_simulate(payload: WhatsAppAlertRequest) -> dict:
     }
 
 @app.post("/api/dispatch")
-def create_dispatch(payload: DispatchRequest) -> dict:
+def create_dispatch(payload: DispatchRequest, _role: str = Depends(require_permission("dispatch:create"))) -> dict:
     d = history_store.save_dispatch(payload.truck_code, payload.instruction, payload.manager_id)
     dispatch_center._dispatches.append(d)
     history_store.record_event("dispatch_created", {"truck_code": payload.truck_code, "dispatch_id": d["id"]})
@@ -941,7 +959,7 @@ def pending_dispatches(truck_code: str) -> list[dict]:
     return history_store.pending_dispatches(truck_code)
 
 @app.post("/api/dispatch/{dispatch_id}/confirm")
-def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest) -> dict:
+def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict:
     try:
         d = history_store.update_dispatch_status(dispatch_id, payload.status, payload.note)
     except KeyError as error:
@@ -1018,6 +1036,7 @@ def create_operations_plan(
     event_attendance: int = 0,
     is_weekend: bool = False,
     top_n: int = 5,
+    _role: str = Depends(require_permission("operations:plan")),
 ) -> dict[str, Any]:
     """Build a dispatch plan from forecast hotspots + real fleet via CP-SAT."""
     preds = predictions_kecamatan(rainfall_mm=rainfall_mm, event_attendance=event_attendance,
@@ -1096,7 +1115,7 @@ def fleet_carbon() -> dict[str, Any]:
     }
 
 @app.post("/api/simulator/stagger")
-def post_stagger_simulation(active_trucks: int = 5) -> dict[str, Any]:
+def post_stagger_simulation(active_trucks: int = 5, _role: str = Depends(require_permission("operations:plan"))) -> dict[str, Any]:
     return simulate_staggered_dispatch(active_trucks)
 
 
@@ -1130,7 +1149,7 @@ _EVENT_WASTE_KG_PER_PERSON = 1.2  # consistent with the labeled fixture permits 
 
 
 @app.post("/api/events/permits", status_code=201)
-def submit_event_permit(payload: EventPermitRequest) -> dict[str, Any]:
+def submit_event_permit(payload: EventPermitRequest, _role: str = Depends(require_permission("operations:plan"))) -> dict[str, Any]:
     """Case 2 crowd-permit intake: a permit submitted to the authority becomes a
     live scenario — the system estimates waste generation, resource needs, and
     the affected kecamatan, and the permit joins the map's event layer."""
@@ -1262,7 +1281,13 @@ def route_decision(truck_code: str = "T-047") -> dict[str, Any]:
     jam_active = is_traffic_jam_active()
     route = reroute_payload(jam_active, origin_position=origin)
     active = route["active_route"]
-    queue = simulate_queue(47 if jam_active else 14, weighbridges=2, service_rate_per_hour=4.5, seed=42)
+    # Single queue source: same payload the TPA panel renders, so the decision
+    # endpoint can no longer disagree with the panel (was 117 min vs 15 min).
+    queue_payload = tpa_queue_status_payload(scenario="peak" if jam_active else "live")
+    queue = {
+        "mean_wait_minutes": queue_payload["avg_wait_minutes"],
+        "p95_wait_minutes": queue_payload["p95_wait_minutes"],
+    }
     vehicle_status = "DAMAGED" if truck.get("is_damaged") else ("DEVIATION" if truck["deviation"]["violated"] else "OK")
     recs = []
     if truck.get("is_damaged"):
@@ -1332,7 +1357,7 @@ def fleet_breadcrumbs(truck_code: str) -> dict[str, Any]:
     }
 
 @app.post("/api/fleet/astar-simulate-jam")
-def post_astar_simulate_jam(active: bool) -> dict[str, Any]:
+def post_astar_simulate_jam(active: bool, _role: str = Depends(require_permission("operations:plan"))) -> dict[str, Any]:
     set_traffic_jam_active(active)
     note_manual_override()
     # Necessary: the toggled jam state feeds map-truth (jam_active, abandoned
@@ -1600,14 +1625,14 @@ def get_spj(spj_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/spj", status_code=201)
-def create_spj(body: SpjCreateBody) -> dict[str, Any]:
+def create_spj(body: SpjCreateBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     return _spj_or_409(SPJ_STORE.create, body.driver_name, body.truck_code,
                        body.destination, body.weigh_on_site, body.priority,
                        body.note)
 
 
 @app.post("/api/spj/{spj_id}/stops")
-def add_spj_stop(spj_id: str, body: SpjStopBody) -> dict[str, Any]:
+def add_spj_stop(spj_id: str, body: SpjStopBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     return _spj_or_409(SPJ_STORE.add_stop, spj_id, body.name, body.kecamatan,
                        body.address, body.lat, body.lng, body.location_type)
 
@@ -1621,7 +1646,7 @@ def _refresh_fleet_caches() -> None:
 
 
 @app.post("/api/spj/{spj_id}/activate")
-def activate_spj(spj_id: str) -> dict[str, Any]:
+def activate_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     result = _spj_or_409(SPJ_STORE.activate, spj_id)
     _refresh_fleet_caches()
     return result
@@ -1629,7 +1654,8 @@ def activate_spj(spj_id: str) -> dict[str, Any]:
 
 @app.post("/api/spj/{spj_id}/stops/{index}/complete")
 def complete_spj_stop(spj_id: str, index: int,
-                      body: SpjCompleteBody | None = None) -> dict[str, Any]:
+                      body: SpjCompleteBody | None = None,
+                      _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     result = _spj_or_409(SPJ_STORE.complete_stop, spj_id, index,
                          (body.evidence if body else None))
     _refresh_fleet_caches()
@@ -1637,14 +1663,14 @@ def complete_spj_stop(spj_id: str, index: int,
 
 
 @app.post("/api/spj/{spj_id}/complete")
-def complete_spj(spj_id: str) -> dict[str, Any]:
+def complete_spj(spj_id: str, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     result = _spj_or_409(SPJ_STORE.complete, spj_id)
     _refresh_fleet_caches()
     return result
 
 
 @app.post("/api/spj/{spj_id}/cancel")
-def cancel_spj(spj_id: str) -> dict[str, Any]:
+def cancel_spj(spj_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     result = _spj_or_409(SPJ_STORE.cancel, spj_id)
     _refresh_fleet_caches()
     return result
@@ -1684,7 +1710,7 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
 
 
 @app.post("/api/spj/{spj_id}/receipt", status_code=201)
-def submit_spj_receipt(spj_id: str, body: SpjReceiptBody) -> dict[str, Any]:
+def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
@@ -1703,7 +1729,7 @@ def submit_spj_receipt(spj_id: str, body: SpjReceiptBody) -> dict[str, Any]:
 
 
 @app.post("/api/pretrip", status_code=201)
-def submit_pretrip(body: PretripBody) -> dict[str, Any]:
+def submit_pretrip(body: PretripBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     try:
         rec = PRETRIP_STORE.submit(body.truck_code, body.driver_name,
                                    body.items, body.note)
@@ -1719,7 +1745,7 @@ def pretrip_today(truck_code: str) -> dict[str, Any]:
 
 
 @app.post("/api/damage-reports", status_code=201)
-def create_damage_report(body: DamageReportBody) -> dict[str, Any]:
+def create_damage_report(body: DamageReportBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     try:
         rep = DAMAGE_STORE.create(body.truck_code, body.driver_name,
                                   body.component, body.severity, body.note,
@@ -1742,7 +1768,7 @@ def list_damage_reports(status: str | None = None) -> dict[str, Any]:
 
 
 @app.post("/api/damage-reports/{report_id}/resolve")
-def resolve_damage_report(report_id: str) -> dict[str, Any]:
+def resolve_damage_report(report_id: str, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     try:
         rep = DAMAGE_STORE.resolve(report_id)
     except ValueError as exc:
@@ -1772,7 +1798,7 @@ class ServiceRecordBody(BaseModel):
 
 
 @app.post("/api/service-records", status_code=201)
-def create_service_record(body: ServiceRecordBody) -> dict[str, Any]:
+def create_service_record(body: ServiceRecordBody, _role: str = Depends(require_permission("dispatch:create"))) -> dict[str, Any]:
     rec = SERVICE_STORE.create(
         body.truck_code, body.service_date, body.component,
         body.description, cost_idr=body.cost_idr,
@@ -1840,6 +1866,6 @@ class OcrBody(BaseModel):
 
 
 @app.post("/api/ocr/timbangan")
-def ocr_timbangan(body: OcrBody) -> dict[str, Any]:
+def ocr_timbangan(body: OcrBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
     from app.timbangan_ocr import read_weight_from_photo
     return read_weight_from_photo(body.photo_b64)
