@@ -61,6 +61,8 @@ class ServiceStoreTests(unittest.TestCase):
 class ServiceEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
+        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_create_and_list_endpoint(self):
         r = self.client.post("/api/service-records", json={

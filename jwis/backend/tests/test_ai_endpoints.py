@@ -13,6 +13,8 @@ from app.ai.engine_loop import maybe_start_engine
 class AiEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
+        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
         EVENT_FEED.clear()
 
     def tearDown(self):

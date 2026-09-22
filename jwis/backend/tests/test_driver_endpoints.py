@@ -12,6 +12,8 @@ ALL_OK = {"rem": True, "mesin": True, "ban": True, "bbm": True,
 class PretripEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
+        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_submit_and_today(self):
         r = self.client.post("/api/pretrip", json={
@@ -39,6 +41,8 @@ class PretripEndpointTests(unittest.TestCase):
 class DamageEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
+        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_create_list_resolve_flow(self):
         r = self.client.post("/api/damage-reports", json={
@@ -173,6 +177,8 @@ class DamageEndpointTests(unittest.TestCase):
 class OcrTimbanganEndpointTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
+        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_ocr_without_api_key_is_failed(self):
         old = os.environ.pop("OPENAI_API_KEY", None)

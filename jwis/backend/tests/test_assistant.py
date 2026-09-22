@@ -5,14 +5,16 @@ from app.assistant import answer_with_openai_if_configured, build_executive_summ
 
 
 class AssistantTests(unittest.TestCase):
-    def test_answer_with_openai_reports_error_without_api_key(self):
+    def test_answer_falls_back_to_local_responder_without_api_key(self):
         snapshot = {"kpis": {"active_trucks": 0, "trucks_with_issues": 0, "tpa_wait_minutes": 10}, "alerts": [], "predictions": [], "critical_predictions": []}
 
         with patch.dict("os.environ", {}, clear=True):
             result = answer_with_openai_if_configured("berapa truk?", snapshot, tool_ctx=None)
 
-        self.assertEqual(result["provider"], "error")
-        self.assertIn("OPENAI_API_KEY", result["error"])
+        # No key → labelled local responder, not a 502 (issue #9).
+        self.assertEqual(result["provider"], "local")
+        self.assertEqual(result["mode"], "local")
+        self.assertIn("Mode lokal", result["answer"])
 
     def test_answer_with_openai_reports_gateway_failure(self):
         snapshot = {

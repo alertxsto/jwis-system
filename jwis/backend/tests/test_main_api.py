@@ -9,6 +9,8 @@ from app.main import app
 class MainApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app, raise_server_exceptions=False)
+        _login = self.client.post("/api/auth/login", json={"username": "administrator", "password": "administrator-demo-pass"})
+        self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_ml_predict_rejects_invalid_target_date(self):
         response = self.client.post(
