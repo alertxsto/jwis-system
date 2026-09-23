@@ -95,7 +95,8 @@ class MainApiTests(unittest.TestCase):
 
     def test_assistant_accepts_history_field(self):
         fake_openai = {"provider": "openai", "model": "guts", "answer": "jawaban", "tools_used": []}
-        with patch("app.main.answer_with_openai_if_configured", return_value=fake_openai):
+        with patch("app.main.answer_with_openai_if_configured", return_value=fake_openai) as answer, \
+             patch("app.main.command_center_snapshot", side_effect=AssertionError("eager snapshot")):
             response = self.client.post(
                 "/api/assistant/query",
                 json={"question": "berapa truk bermasalah?", "history": [{"role": "user", "content": "halo"}, {"role": "assistant", "content": "siap"}]},
@@ -103,6 +104,7 @@ class MainApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertIn("provider", body)
+        self.assertEqual(answer.call_args.args[1], {}, "assistant should retrieve only requested data via tools")
         self.assertIn("answer", body)
 
     def test_assistant_returns_502_when_gateway_error(self):

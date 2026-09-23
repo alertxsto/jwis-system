@@ -27,7 +27,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import date
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Literal
 from fastapi import FastAPI, HTTPException, Query, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -659,13 +659,12 @@ def weather() -> dict:
     return fetch_jakarta_weather_forecast()
 
 @app.post("/api/assistant/query")
-async def assistant_query(payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))) -> dict:
-    # Run everything synchronously on the main thread to avoid Session 0 threadpool deadlock
+def assistant_query(payload: AssistantRequest, _role: str = Depends(require_permission("dashboard:read"))) -> dict:
+    # FastAPI executes sync endpoints in a worker; gateway latency must not block the event loop.
     try:
         from app.tools import ToolContext
-        weather = fetch_jakarta_weather_forecast()
-        snapshot = command_center_snapshot(dispatch_center.audit_log(), weather=weather)
         tool_ctx = ToolContext(dispatch_center=dispatch_center, history_store=history_store)
+        snapshot = {}
         images = None
         if payload.file_data and payload.file_type:
             from app.pdf_vision import resolve_file_to_images
@@ -1634,7 +1633,8 @@ class SpjCompleteBody(BaseModel):
 class SpjReceiptBody(BaseModel):
     photo_name: str
     photo_b64: str = Field(default="", max_length=7_000_000)
-    total_weight_kg: float | None = None
+    total_weight_kg: float = Field(gt=0, allow_inf_nan=False)
+    weight_source: Literal["ocr", "manual"]
 
 
 class PretripBody(BaseModel):
@@ -1769,16 +1769,12 @@ def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, _role: str = Depends(r
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
-    if spj.status != "selesai":
-        raise HTTPException(status_code=409,
-                            detail="receipt can only be submitted after the SPJ is selesai")
-    if not body.photo_name.strip() or not body.photo_b64.strip():
-        raise HTTPException(status_code=409,
-                            detail="receipt photo_name and photo_b64 are required")
+    _spj_or_409(SPJ_STORE.record_receipt, spj_id, body.photo_name,
+                body.photo_b64, body.total_weight_kg, body.weight_source)
     history_store.record_event("spj_receipt_submitted", {
         "spj_id": spj_id, "spj_number": spj.spj_number,
-        "photo_name": body.photo_name,
-        "total_weight_kg": body.total_weight_kg,
+        "photo_name": body.photo_name, "total_weight_kg": body.total_weight_kg,
+        "weight_source": body.weight_source,
     })
     return {"status": "recorded", "spj_id": spj_id}
 

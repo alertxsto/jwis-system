@@ -1,8 +1,7 @@
-"""Weighbridge display OCR via OpenAI-compatible vision API (Fase 3).
+"""Read the loaded truck's weighbridge receipt/display via GutsAI vision.
 
-Never fabricates a number: any parse/transport/config failure yields
-weight_kg=None with an explicit confidence label — the driver falls back
-to manual entry with a clear message.
+Never fabricate a number: config, transport, or parsing failures return null
+so the driver can confirm the weight manually against the same photo.
 """
 
 from __future__ import annotations
@@ -19,9 +18,14 @@ logger = logging.getLogger(__name__)
 MAX_WEIGHT_KG = 100_000.0
 _TIMEOUT_SECONDS = 15.0
 
-_SYSTEM_PROMPT = "Kamu pembaca display timbangan digital. Jawab HANYA JSON."
-_USER_PROMPT = ("Baca angka berat (kg) pada foto display timbangan ini. "
-                "Jawab JSON {\"weight_kg\": <number|null>} — null bila tidak terbaca.")
+_SYSTEM_PROMPT = "Kamu pembaca struk atau display timbangan truk. Jawab HANYA JSON."
+_USER_PROMPT = (
+    'Baca berat truk berisi sampah dalam kg pada foto ini. Jika struk memuat '
+    'bruto/gross dan tara/netto, gunakan bruto/gross (berat truk bermuatan). '
+    'Jika hanya ada satu angka berat jelas pada display, gunakan angka itu. '
+    'Jangan menebak angka yang buram atau ambigu. '
+    'Jawab JSON {"weight_kg": <number|null>} — null jika tidak terbaca.'
+)
 
 
 def _default_http_post(url: str, headers: dict, json_body: dict,
@@ -43,6 +47,8 @@ def _extract_weight(content: str) -> float | None:
         return None
     if value is None:
         return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
     try:
         weight = float(value)
     except (TypeError, ValueError):
@@ -54,15 +60,16 @@ def _extract_weight(content: str) -> float | None:
 
 def read_weight_from_photo(photo_b64: str,
                            http_post: Callable[..., dict] | None = None) -> dict[str, Any]:
-    source = f"openai-vision ({os.getenv('OPENAI_MODEL', 'gpt-4.1-mini')})"
-    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("GUTS_VISION_MODEL") or "gemini-3.8-flash"
+    source = f"gutsai-vision ({model})"
+    api_key = os.getenv("GUTS_API_KEY")
     if not api_key:
-        return {"weight_kg": None, "raw_text": "OPENAI_API_KEY is not set",
+        return {"weight_kg": None, "raw_text": "GUTS_API_KEY is not set",
                 "confidence": "failed", "source": source}
     post = http_post or _default_http_post
-    base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+    base_url = (os.getenv("GUTS_BASE_URL") or "https://api.gutsai.id/v1").rstrip("/")
     body = {
-        "model": os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
+        "model": model,
         "messages": [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {"role": "user", "content": [
@@ -77,9 +84,9 @@ def read_weight_from_photo(photo_b64: str,
                     headers={"Authorization": f"Bearer {api_key}"},
                     json_body=body, timeout=_TIMEOUT_SECONDS)
         content = resp["choices"][0]["message"]["content"]
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         logger.exception("timbangan OCR call failed")
-        return {"weight_kg": None, "raw_text": f"OCR call failed: {exc}",
+        return {"weight_kg": None, "raw_text": "OCR request failed",
                 "confidence": "failed", "source": source}
     if not isinstance(content, str):
         return {"weight_kg": None, "raw_text": "OCR returned empty content",

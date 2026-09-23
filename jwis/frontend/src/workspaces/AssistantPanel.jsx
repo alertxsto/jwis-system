@@ -1,9 +1,8 @@
 import React, { useState, useRef } from "react";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { API_URL } from "../config.js";
+import { authenticatedRequest } from "../dispatchApi.js";
 import {
-  Check,
   Send,
   X,
   Bot,
@@ -15,7 +14,7 @@ export function AssistantPanel() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
-      text: "Hi, I am Ana. Ask me about route deviation, rainfall risk, TPA queue, dispatch priority, or waste forecast spikes. You can also upload a photo or PDF for analysis.",
+      text: "Halo, saya Ana. Tanyakan status armada, antrean TPA, rute, sumber data, atau cara kerja JWIS. Saya juga dapat menelaah foto atau PDF.",
     },
   ]);
   const [loading, setLoading] = useState(false);
@@ -24,22 +23,12 @@ export function AssistantPanel() {
 
   function handleFileSelect(event) {
     const file = event.target.files[0];
-    if (!file) return;
-    const isPdf = file.type === "application/pdf";
-    const fileType = isPdf ? "pdf" : "image";
+    const fileType = file.type === "application/pdf" ? "pdf" : "image";
     const reader = new FileReader();
     reader.onload = () => {
-      let dataUrl = reader.result;
-      if (isPdf && dataUrl instanceof ArrayBuffer) {
-        const bytes = new Uint8Array(dataUrl);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-        dataUrl = "data:application/pdf;base64," + btoa(binary);
-      }
-      setAttachedFile({ data: dataUrl, type: fileType, name: file.name });
+      setAttachedFile({ data: reader.result, type: fileType, name: file.name });
     };
-    if (isPdf) reader.readAsArrayBuffer(file);
-    else reader.readAsDataURL(file);
+    reader.readAsDataURL(file);
     event.target.value = "";
   }
 
@@ -47,23 +36,22 @@ export function AssistantPanel() {
     const prompt = (promptOverride || question).trim();
     if ((!prompt && !attachedFile) || loading) return;
     const fileMeta = attachedFile ? ` [${attachedFile.name}]` : "";
-    setMessages((current) => [...current, { role: "user", text: (prompt || "Analyze this file") + fileMeta }]);
+    setMessages((current) => [...current, { role: "user", text: (prompt || "Jelaskan isi berkas ini") + fileMeta }]);
     const currentFile = attachedFile;
     setQuestion("");
     setAttachedFile(null);
     setLoading(true);
     try {
       const body = {
-        question: prompt || "Analyze this file/image and tell me what you see related to JWIS waste operations.",
-        history: messages.slice(-8).map((m) => ({ role: m.role, content: m.text })),
+        question: prompt || "Jelaskan isi berkas ini terkait operasional JWIS.",
+        history: messages.slice(1).filter((m) => m.provider !== "error" && m.provider !== "offline").slice(-8).map((m) => ({ role: m.role, content: m.text })),
       };
       if (currentFile) {
         body.file_data = currentFile.data;
         body.file_type = currentFile.type;
       }
-      const response = await fetch(`${API_URL}/assistant/query`, {
+      const response = await authenticatedRequest("/assistant/query", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const data = await response.json();
@@ -72,7 +60,7 @@ export function AssistantPanel() {
           ...current,
           {
             role: "assistant",
-            text: `Ana tidak dapat menjawab saat ini. AI gateway error: ${data.detail || "unknown"}`,
+            text: `Ana belum dapat menjawab. ${data.detail || "Layanan AI tidak tersedia."} Coba lagi nanti.`,
             provider: "error",
           },
         ]);
@@ -93,7 +81,7 @@ export function AssistantPanel() {
         ...current,
         {
           role: "assistant",
-          text: "Assistant fallback unavailable. Check the API server, then retry the operational query.",
+          text: "Ana tidak dapat terhubung ke server. Periksa koneksi, lalu coba lagi.",
           provider: "offline",
         },
       ]);
@@ -139,7 +127,7 @@ export function AssistantPanel() {
         </span>
         <div>
           <h2>Ana</h2>
-          <p>Live command guide for routing, weather risk, and dispatch decisions.</p>
+          <p>Tanya status operasional, sumber data, atau cara kerja JWIS.</p>
         </div>
       </header>
 
@@ -166,12 +154,12 @@ export function AssistantPanel() {
         )}
       </div>
 
-      <div className="assistant-quick-prompts" aria-label="Suggested assistant prompts">
-        <button type="button" onClick={() => askAssistant("What is the highest operational risk today?")}>
-          Highest risk today
+      <div className="assistant-quick-prompts" aria-label="Pertanyaan yang disarankan">
+        <button type="button" disabled={loading} onClick={() => askAssistant("Berapa truk yang bermasalah saat ini?")}>
+          Status armada
         </button>
-        <button type="button" onClick={() => askAssistant("Which truck should be dispatched first and why?")}>
-          Dispatch priority
+        <button type="button" disabled={loading} onClick={() => askAssistant("Bagaimana cara JWIS menentukan prioritas dispatch?")}>
+          Cara kerja dispatch
         </button>
       </div>
 

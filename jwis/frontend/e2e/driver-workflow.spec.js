@@ -107,10 +107,19 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   const afterStop = await (await page.request.get(`${API}/spj/${spj.spj_id}`)).json();
   expect(afterStop.stops[0].status).toBe("completed");
 
-  // ── Receipt upload → done ──
+  // ── Receipt: OCR may be unavailable; confirmed manual weight remains usable ──
   await page.locator('[data-testid="receipt-input"]').setInputFiles(PHOTO);
-  await page.getByRole("button", { name: "Kirim Struk" }).click();
+  const sendReceipt = page.getByRole("button", { name: "Kirim Struk" });
+  await expect(sendReceipt).toBeDisabled();
+  await page.getByLabel("Berat truk bermuatan (kg)").fill("12450");
+  await expect(sendReceipt).toBeDisabled();
+  await page.getByLabel("Saya sudah mencocokkan berat dengan struk foto.").check();
+  await sendReceipt.click();
   await expect(page.getByText("Tugas selesai")).toBeVisible({ timeout: 10000 });
+  const receipt = (await (await page.request.get(`${API}/spj/${spj.spj_id}`)).json()).receipt;
+  expect(receipt.total_weight_kg).toBe(12450);
+  expect(receipt.weight_source).toBe("manual");
+  expect(receipt.photo_b64).toContain("data:image/");
 });
 
 test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, context }) => {

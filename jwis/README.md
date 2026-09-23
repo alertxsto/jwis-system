@@ -12,7 +12,7 @@ with the repository's `taste-redesign` and `taste-default` constraints.
 ## Project Architecture
 
 - **Frontend:** React + Vite, MapLibre GL, and a responsive command-center design system based on Geist Sans/Mono.
-- **Backend:** FastAPI, OR-Tools CP-SAT (Integrated Planning optimizer), Prophet + XGBoost (Waste Forecast models), and an OpenAI Assistant route configured to stream via 9Router.
+- **Backend:** FastAPI, OR-Tools CP-SAT (Integrated Planning optimizer), Prophet + XGBoost (Waste Forecast models), and an optional OpenAI-compatible Ana assistant gateway. Without an assistant key, Ana gives labelled local answers from relevant JWIS tools instead of inventing data.
 - **WhatsApp Gateway:** A standalone Express + `@whiskeysockets/baileys` gateway running on port 2785 for direct WhatsApp alert dispatching (no Puppeteer/headless browser overhead).
 
 ### Driver analytics data contract
@@ -55,11 +55,22 @@ and assignments are simulated; fleet composition uses the DKI 2023 truck census.
 3. **Waste Forecast & AI Assistant (Case 2):**
    - Navigate to **Waste Forecast**.
    - Browse/filter the 42 Kecamatan map/list. Click a Kecamatan to expand its 3-column resource optimization dashboard (predicted waste tonnage, fuel consumption, carbon emissions, crew, and fleet mix).
-   - Use the **Operational AI Assistant** at the bottom: type a question, and it will respond via the 9Router gateway using custom domain knowledge.
+   - Use **Ana** to ask a specific operational question. It selects relevant read-only tools rather than injecting a prediction into every answer; image/PDF analysis requires a configured assistant gateway.
 4. **Integrated Planning:**
    - Review constraints and approve the weekly staggered queue plan.
 5. **Data & ML Audit:**
    - Audit the Prophet/XGBoost models' accuracy metrics (WAPE, MAE), training limits, and data provenance.
+
+
+### Driver weighbridge receipt
+
+After completing all SPJ stops, the driver uploads a photo of the loaded truck's
+weighbridge receipt. GutsAI vision suggests the gross weight in kilograms when
+configured; the driver must check it against the receipt before submission.
+If OCR is unavailable or unreadable, the same photo can be submitted with a
+confirmed manually entered weight. The SPJ detail retains the receipt photo,
+weight, and whether the submitted value came from OCR or manual entry; the SPJ
+list omits the photo bytes.
 
 ## Installation & Running Locally
 
@@ -78,10 +89,13 @@ Make sure Python (3.10+) is installed. Install dependencies and run the API:
 cd "jwis/backend"
 pip install -r requirements.txt
 
-# Create a .env file inside jwis/backend/ with the following:
-# OPENAI_API_KEY=your-9router-api-key
-# OPENAI_BASE_URL=http://100.67.31.81:20128/v1
-# OPENAI_MODEL=graphify
+# Copy jwis/.env.example to jwis/.env and fill only the providers you use:
+# OPENAI_API_KEY=             (optional Ana gateway; blank uses local tools)
+# OPENAI_BASE_URL=            (optional OpenAI-compatible endpoint)
+# OPENAI_MODEL=               (optional compatible model)
+# GUTS_API_KEY=               (optional receipt OCR; leave blank for manual entry)
+# GUTS_BASE_URL=https://api.gutsai.id/v1
+# GUTS_VISION_MODEL=gemini-3.8-flash
 # OPENWA_BASE_URL=http://localhost:2785/api
 # OPENWA_API_KEY=your-wa-api-key
 # OPENWA_SESSION_ID=default

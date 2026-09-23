@@ -61,3 +61,23 @@ test("mobile assistant trigger keeps an accessible name in both languages", asyn
   await trigger.click();
   await expect(page.getByRole("dialog", { name: "Operations assistant" })).toBeVisible();
 });
+
+test("signed-in operator can query the protected assistant endpoint", async ({ page }) => {
+  await page.route("**/api/assistant/query", async (route) => {
+    const authorized = route.request().headers().authorization?.startsWith("Bearer ");
+    await route.fulfill({
+      status: authorized ? 200 : 401,
+      contentType: "application/json",
+      body: JSON.stringify(authorized
+        ? { provider: "local", answer: "Data armada JWIS: 1 truk mengalami deviasi rute." }
+        : { detail: "Missing bearer token" }),
+    });
+  });
+  await page.getByRole("button", { name: "Asisten operasi" }).click();
+  const dialog = page.getByRole("dialog", { name: "Asisten operasi" });
+  await dialog.getByRole("textbox", { name: "Ask Ana anything" })
+    .fill("Berapa truk yang mengalami deviasi rute?");
+  await dialog.getByRole("button", { name: "Send message" }).click();
+  await expect(dialog.getByText("Data armada JWIS: 1 truk mengalami deviasi rute."))
+    .toBeVisible();
+});

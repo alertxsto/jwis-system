@@ -35,19 +35,26 @@ def _validate_evidence(evidence: dict) -> None:
 
 
 def spj_summary_payload(spj: Spj) -> dict:
-    payload = asdict(spj)
-    for stop in payload["stops"]:
-        ev = stop.pop("evidence", None)
-        if ev is None:
-            stop["evidence_summary"] = None
-            continue
-        weighing = ev.get("weighing") or []
-        stop["evidence_summary"] = {
-            "has_evidence": True,
-            "weighing_count": len(weighing),
-            "total_weight_kg": round(
-                sum(float(w.get("weight_kg") or 0) for w in weighing), 1),
-        }
+    # A list response must not copy multi-megabyte receipt or stop photos.
+    payload = {key: value for key, value in vars(spj).items()
+               if key not in {"stops", "receipt"}}
+    payload["stops"] = []
+    for stop in spj.stops:
+        item = {key: value for key, value in vars(stop).items() if key != "evidence"}
+        evidence = stop.evidence
+        if evidence is None:
+            item["evidence_summary"] = None
+        else:
+            weighing = evidence.get("weighing") or []
+            item["evidence_summary"] = {
+                "has_evidence": True,
+                "weighing_count": len(weighing),
+                "total_weight_kg": round(
+                    sum(float(w.get("weight_kg") or 0) for w in weighing), 1),
+            }
+        payload["stops"].append(item)
+    payload["receipt"] = ({key: value for key, value in spj.receipt.items()
+                            if key != "photo_b64"} if spj.receipt else None)
     return payload
 
 
@@ -81,6 +88,7 @@ class Spj:
     created_at: str = ""
     activated_at: str | None = None
     completed_at: str | None = None
+    receipt: dict | None = None
 
 
 def _utc_now() -> str:
@@ -222,6 +230,26 @@ class SpjStore:
             if all(s.status == "completed" for s in spj.stops):
                 spj.status = "selesai"
                 spj.completed_at = _utc_now()
+            self._save()
+            return spj
+
+    def record_receipt(self, spj_id: str, photo_name: str, photo_b64: str,
+                       total_weight_kg: float, weight_source: str) -> Spj:
+        with self._lock:
+            spj = self._require(spj_id)
+            if spj.status != "selesai":
+                raise ValueError("receipt can only be submitted after the SPJ is selesai")
+            if spj.receipt is not None:
+                raise ValueError("receipt already submitted")
+            if not photo_name.strip() or not photo_b64.strip():
+                raise ValueError("receipt photo_name and photo_b64 are required")
+            spj.receipt = {
+                "photo_name": photo_name,
+                "photo_b64": photo_b64,
+                "total_weight_kg": total_weight_kg,
+                "weight_source": weight_source,
+                "recorded_at": _utc_now(),
+            }
             self._save()
             return spj
 

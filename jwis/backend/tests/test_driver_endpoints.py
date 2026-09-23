@@ -99,7 +99,7 @@ class DamageEndpointTests(unittest.TestCase):
         spj_id = create.json()["spj_id"]
         early = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
-            "total_weight_kg": 120.5})
+            "total_weight_kg": 120.5, "weight_source": "manual"})
         self.assertEqual(early.status_code, 409)
         self.client.post(f"/api/spj/{spj_id}/stops", json={
             "name": "S", "kecamatan": "K", "address": "A",
@@ -108,8 +108,17 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
         ok = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
-            "total_weight_kg": 120.5})
+            "total_weight_kg": 120.5, "weight_source": "manual"})
         self.assertEqual(ok.status_code, 201)
+        receipt = self.client.get(f"/api/spj/{spj_id}").json()["receipt"]
+        self.assertEqual(receipt["photo_b64"], "data:image/jpeg;base64,AA")
+        self.assertEqual(receipt["total_weight_kg"], 120.5)
+        self.assertEqual(receipt["weight_source"], "manual")
+        self.assertNotIn("photo_b64", self.client.get("/api/spj").text)
+        duplicate = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+            "photo_name": "other.jpg", "photo_b64": "data:image/jpeg;base64,BB",
+            "total_weight_kg": 999, "weight_source": "ocr"})
+        self.assertEqual(duplicate.status_code, 409)
 
     def test_complete_stop_with_evidence_and_summary(self):
         create = self.client.post("/api/spj", json={
@@ -170,8 +179,13 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/activate")
         self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
         r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
-            "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0})
+            "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0,
+            "weight_source": "manual"})
         self.assertEqual(r.status_code, 409)
+        invalid_weight = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+            "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
+            "total_weight_kg": 0, "weight_source": "ocr"})
+        self.assertEqual(invalid_weight.status_code, 422)
 
 
 class OcrTimbanganEndpointTests(unittest.TestCase):
@@ -181,13 +195,13 @@ class OcrTimbanganEndpointTests(unittest.TestCase):
         self.client.headers.update({"Authorization": f"Bearer {_login.json()['token']}"})
 
     def test_ocr_without_api_key_is_failed(self):
-        old = os.environ.pop("OPENAI_API_KEY", None)
+        old = os.environ.pop("GUTS_API_KEY", None)
         try:
             r = self.client.post("/api/ocr/timbangan", json={
                 "photo_b64": "data:image/jpeg;base64,AA"})
         finally:
             if old is not None:
-                os.environ["OPENAI_API_KEY"] = old
+                os.environ["GUTS_API_KEY"] = old
         self.assertEqual(r.status_code, 200)
         body = r.json()
         self.assertIsNone(body["weight_kg"])

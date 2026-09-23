@@ -31,7 +31,6 @@ from app.weather import fetch_jakarta_weather_forecast
 from app.astar_routing import (
     is_traffic_jam_active,
     reroute_payload,
-    set_traffic_jam_active,
 )
 from app.real_data import (
     build_provenance_records,
@@ -109,12 +108,11 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "simulate_astar_reroute",
-            "description": "Simulasi rerouting A* untuk sebuah truk: menyalakan/memadamkan kondisi kemacetan (jam_active true/false didapat) dan menghasilkan rute aktif + rute pemulihan.",
+            "description": "Simulasi baca-saja rerouting A* untuk satu truk berdasarkan kondisi kemacetan saat ini.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "truck_code": {"type": "string", "description": "Default T-047"},
-                    "jam_active": {"type": "boolean", "description": "Opsional; toggle status kemacetan simulasi"},
                 },
             },
         },
@@ -133,6 +131,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     "event_attendance": {"type": "integer", "description": "Opsional jumlah pengunjung event"},
                     "is_weekend": {"type": "boolean", "description": "Opsional penanda akhir pekan"},
                     "is_holiday": {"type": "boolean", "description": "Opsional penanda hari libur"},
+                    "include_kecamatan": {"type": "boolean", "description": "Aktifkan hanya untuk prediksi tingkat kecamatan; lebih mahal dari prediksi kota"},
                 },
             },
         },
@@ -203,7 +202,9 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 
 
 def sanitize_json_payload(value: Any, max_chars: int = 8000) -> str:
-    text = json.dumps(value, ensure_ascii=False, default=str)[:max_chars]
+    text = json.dumps(value, ensure_ascii=False, default=str)
+    if len(text) > max_chars:
+        return json.dumps({"error": "Tool output exceeds size limit; request a narrower result."})
     return text
 
 
@@ -243,6 +244,9 @@ def _fleet_status_tool(args: dict) -> dict[str, Any]:
     problem = [t for t in slim if t["deviation_violated"] or t["is_damaged"]]
     return {
         "total_trucks": len(slim),
+        "active_count": sum(t["status"] == "active" for t in slim),
+        "damaged_count": sum(t["is_damaged"] for t in slim),
+        "deviation_count": sum(t["deviation_violated"] for t in slim),
         "problem_count": len(problem),
         "problem_trucks": problem,
         "note": "Kerusakan (is_damaged) dan deviasi rute (deviation_violated) adalah status TERPISAH — jangan digabung.",
@@ -300,8 +304,6 @@ _TOOLS_IMPL: dict[str, Any] = {
 
 def _simulate_reroute(args: dict) -> dict[str, Any]:
     truck_code = args.get("truck_code", "T-047")
-    if args.get("jam_active") is not None:
-        set_traffic_jam_active(bool(args["jam_active"]))
     trucks = get_dynamic_trucks()
     truck = next((t for t in trucks if t["truck_code"] == truck_code), None)
     if truck is None:
@@ -321,26 +323,27 @@ def _predictions_payload(args: dict) -> dict[str, Any]:
         preds = [p for p in preds if p["date"] == args["date"]]
     out: dict[str, Any] = {"predictions_daily_city": preds[:14]}
 
-    hotspots = []
-    for k in load_kecamatan_map():
-        pred = predict_waste_hybrid(
-            kelurahan=k["slug"],
-            rainfall_mm=float(args.get("rainfall_mm", 0)),
-            is_weekend=bool(args.get("is_weekend", False)),
-            is_holiday=bool(args.get("is_holiday", False)),
-            event_attendance=int(args.get("event_attendance", 0)),
-        )
-        hotspots.append({
-            "kecamatan": k["kecamatan"], "city": k["city"],
-            "predicted_tons": pred["predicted_tons"],
-            "trucks_required": max(1, round(pred["predicted_tons"] / 18)),
-            "crews_required": pred["crews_required"],
-            "man_hours_required": pred["man_hours_required"],
-        })
-    hotspots.sort(key=lambda h: -h["predicted_tons"])
-    out["kecamatan_hotspots_top5"] = hotspots[:5]
-    out["kecamatan_count"] = len(hotspots)
-    out["note"] = "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan; pakai angka ini apa adanya."
+    if args.get("include_kecamatan"):
+        hotspots = []
+        for k in load_kecamatan_map():
+            pred = predict_waste_hybrid(
+                kelurahan=k["slug"],
+                rainfall_mm=float(args.get("rainfall_mm", 0)),
+                is_weekend=bool(args.get("is_weekend", False)),
+                is_holiday=bool(args.get("is_holiday", False)),
+                event_attendance=int(args.get("event_attendance", 0)),
+            )
+            hotspots.append({
+                "kecamatan": k["kecamatan"], "city": k["city"],
+                "predicted_tons": pred["predicted_tons"],
+                "trucks_required": max(1, round(pred["predicted_tons"] / 18)),
+                "crews_required": pred["crews_required"],
+                "man_hours_required": pred["man_hours_required"],
+            })
+        hotspots.sort(key=lambda h: -h["predicted_tons"])
+        out["kecamatan_hotspots_top5"] = hotspots[:5]
+        out["kecamatan_count"] = len(hotspots)
+        out["note"] = "kecamatan_hotspots_top5 dari model hybrid Prophet+XGBoost per kecamatan."
 
     if args.get("kelurahan"):
         out["detail"] = predict_waste_hybrid(
@@ -363,20 +366,30 @@ def execute_tool(name: str, args: dict, ctx: ToolContext) -> dict[str, Any]:
         return {"tool": name, "error": f"Tool execution failed: {error}"}
 
 
-def run_tools_pass(tool_calls: list[dict], ctx: ToolContext) -> list[dict]:
-    """Turn OpenAI tool_calls into assistant('tool') messages."""
+def run_tools_pass(tool_calls: list[dict], ctx: ToolContext, max_calls: int = 2) -> list[dict]:
+    """Return a response for every gateway call, executing at most max_calls."""
     messages = []
-    for call in tool_calls:
+    seen: set[tuple[str, str]] = set()
+    for index, call in enumerate(tool_calls):
         fname = call.get("function", {}).get("name", "")
         raw_args = call.get("function", {}).get("arguments", "{}")
         try:
             args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
-        except json.JSONDecodeError:
-            args = {}
-        try:
-            output = execute_tool(fname, args, ctx)
-        except KeyError:
-            output = {"tool": fname, "error": f"Unknown or unavailable tool: {fname}"}
+            if not isinstance(args, dict):
+                raise ValueError("Tool arguments must be an object")
+            signature = (fname, json.dumps(args, sort_keys=True))
+            if index >= max_calls:
+                output = {"tool": fname, "error": "Tool call limit reached."}
+            elif signature in seen:
+                output = {"tool": fname, "error": "Duplicate tool call omitted."}
+            else:
+                seen.add(signature)
+                try:
+                    output = execute_tool(fname, args, ctx)
+                except KeyError:
+                    output = {"tool": fname, "error": f"Unknown or unavailable tool: {fname}"}
+        except (ValueError, TypeError):
+            output = {"tool": fname, "error": "Invalid tool arguments."}
         messages.append({
             "role": "tool",
             "tool_call_id": call.get("id", ""),
