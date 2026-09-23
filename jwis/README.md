@@ -68,9 +68,24 @@ After completing all SPJ stops, the driver uploads a photo of the loaded truck's
 weighbridge receipt. GutsAI vision suggests the gross weight in kilograms when
 configured; the driver must check it against the receipt before submission.
 If OCR is unavailable or unreadable, the same photo can be submitted with a
-confirmed manually entered weight. The SPJ detail retains the receipt photo,
-weight, and whether the submitted value came from OCR or manual entry; the SPJ
-list omits the photo bytes.
+confirmed manually entered weight.
+
+Receipt contract:
+
+- One receipt per SPJ. The first accepted submission wins; a replay carrying the
+  same `operation_id` returns the original receipt, and any other second
+  submission is rejected with `409` rather than silently replacing handover
+  evidence. Replacement would need an explicit, audited workflow.
+- Weight must be greater than 0; a non-positive or non-finite value fails field
+  validation and records nothing.
+- Metadata (photo name, weight, OCR/manual source, submitter, timestamp) lives in
+  the `spj_receipts` table alongside the SPJ. `GET /api/spj/{id}` and the SPJ list
+  return that metadata and a `has_photo` flag, never the image bytes;
+  `GET /api/spj/{id}/receipt/photo` serves the image to authorized roles.
+- Every receipt writes an audit entry, readable at `GET /api/spj/{id}/audit`.
+  Receipts are retained with the SPJ record in the project SQLite store
+  (`jwis_spj.db`); there is no separate expiry, so the receipt outlives the
+  browser session that submitted it.
 
 ## Installation & Running Locally
 

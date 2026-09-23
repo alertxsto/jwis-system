@@ -494,12 +494,16 @@ function DeliveryCard({ spj, say, onDone }) {
   const [ocr, setOcr] = useState({ status: "idle", source: "" });
   const [busy, setBusy] = useState(false);
   const photoVersion = useRef(0);
+  // One id per submission attempt: a retry after a dropped response replays the
+  // same id, so the server returns the original receipt instead of a conflict.
+  const operationId = useRef(null);
   const kg = Number(totalWeight);
   const validWeight = totalWeight.trim() !== "" && Number.isFinite(kg) && kg > 0;
 
   const handlePhoto = async (file) => {
     if (!file) return;
     const version = ++photoVersion.current;
+    operationId.current = null;
     setReceipt(null);
     setTotalWeight("");
     setWeightSource("manual");
@@ -545,6 +549,7 @@ function DeliveryCard({ spj, say, onDone }) {
 
   const useManual = () => {
     photoVersion.current += 1; // ignore a response from OCR still in flight
+    operationId.current = null;
     setTotalWeight("");
     setWeightSource("manual");
     setConfirmed(false);
@@ -554,12 +559,16 @@ function DeliveryCard({ spj, say, onDone }) {
   const submit = async () => {
     if (!receipt || !validWeight || !confirmed || busy || ocr.status === "loading") return;
     setBusy(true);
+    // Kept across a failed attempt so an immediate retry is idempotent; a new
+    // photo or a weight change starts a new operation.
+    operationId.current = operationId.current || `${spj.spj_id}-${Date.now()}`;
     try {
       await post(`/spj/${spj.spj_id}/receipt`, {
         photo_name: receipt.name,
         photo_b64: receipt.b64,
         total_weight_kg: kg,
         weight_source: weightSource,
+        operation_id: operationId.current,
       });
       onDone();
     } catch (err) {
@@ -644,6 +653,7 @@ function DeliveryCard({ spj, say, onDone }) {
               setTotalWeight(e.target.value);
               setWeightSource("manual");
               setConfirmed(false);
+              operationId.current = null; // edited weight is a new submission
             }}
             placeholder="Contoh: 12450"
           />

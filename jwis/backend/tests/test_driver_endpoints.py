@@ -8,6 +8,31 @@ from app.main import app
 ALL_OK = {"rem": True, "mesin": True, "ban": True, "bbm": True,
           "oli": True, "bak_compactor": True, "lampu": True}
 
+EVIDENCE = {
+    "arrival": {"photo_name": "a.jpg", "lat": -6.2, "lng": 106.8,
+                "at": "2026-09-14T08:00:00"},
+    "weighing": [{"fraction": "Residu", "weight_kg": 40.0, "photo_name": "t.jpg"}],
+    "officer": {"photo_name": "p.jpg", "name": "Dicky"},
+}
+
+
+def _completed_spj(client, truck_code: str, stops: int = 1) -> tuple[str, dict]:
+    """Create, activate, and evidence-complete an SPJ so a receipt is allowed."""
+    created = client.post("/api/spj", json={
+        "driver_name": "E2E", "truck_code": truck_code,
+        "destination": "TPST Bantargebang", "weigh_on_site": True,
+        "priority": "normal", "note": ""})
+    spj = created.json()
+    for index in range(stops):
+        client.post(f"/api/spj/{spj['spj_id']}/stops", json={
+            "name": f"S{index}", "kecamatan": "K", "address": "A",
+            "lat": -6.2, "lng": 106.8})
+    client.post(f"/api/spj/{spj['spj_id']}/activate")
+    for index in range(stops):
+        client.post(f"/api/spj/{spj['spj_id']}/stops/{index}/complete",
+                    json={"evidence": EVIDENCE})
+    return spj["spj_id"], spj
+
 
 class PretripEndpointTests(unittest.TestCase):
     def setUp(self):
@@ -105,20 +130,71 @@ class DamageEndpointTests(unittest.TestCase):
             "name": "S", "kecamatan": "K", "address": "A",
             "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
-        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
+            "arrival": {"photo_name": "a.jpg",
+                        "photo_b64": "data:image/jpeg;base64,AAA"},
+            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
         ok = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
             "total_weight_kg": 120.5, "weight_source": "manual"})
         self.assertEqual(ok.status_code, 201)
         receipt = self.client.get(f"/api/spj/{spj_id}").json()["receipt"]
-        self.assertEqual(receipt["photo_b64"], "data:image/jpeg;base64,AA")
         self.assertEqual(receipt["total_weight_kg"], 120.5)
         self.assertEqual(receipt["weight_source"], "manual")
+        self.assertTrue(receipt["has_photo"])
+        self.assertEqual(receipt["photo_name"], "struk.jpg")
+        self.assertNotIn("photo_b64", receipt)
+        photo = self.client.get(f"/api/spj/{spj_id}/receipt/photo")
+        self.assertEqual(photo.status_code, 200)
+        self.assertEqual(photo.json()["photo_b64"], "data:image/jpeg;base64,AA")
         self.assertNotIn("photo_b64", self.client.get("/api/spj").text)
+        listing = self.client.get("/api/spj").json()["spj"]
+        listed = next(s for s in listing if s["spj_id"] == spj_id)
+        self.assertEqual(listed["receipt"]["total_weight_kg"], 120.5)
         duplicate = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "other.jpg", "photo_b64": "data:image/jpeg;base64,BB",
             "total_weight_kg": 999, "weight_source": "ocr"})
         self.assertEqual(duplicate.status_code, 409)
+        audit = self.client.get(f"/api/spj/{spj_id}/audit").json()["audit"]
+        self.assertIn("receipt", [entry["action"] for entry in audit])
+        self.assertEqual([entry["action"] for entry in audit].count("receipt"), 1)
+
+    def test_completed_list_is_newest_first_and_exposes_receipt_state(self):
+        older, _ = _completed_spj(self.client, "T-243")
+        newer, _ = _completed_spj(self.client, "T-244")
+        listing = self.client.get("/api/spj?status=selesai").json()["spj"]
+        ids = [s["spj_id"] for s in listing]
+        self.assertLess(ids.index(newer), ids.index(older),
+                        "the newest completed SPJ must come first")
+        by_id = {s["spj_id"]: s for s in listing}
+        self.assertIsNone(by_id[newer]["receipt"])
+        self.client.post(f"/api/spj/{newer}/receipt", json={
+            "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
+            "total_weight_kg": 12450, "weight_source": "ocr"})
+        refreshed = {s["spj_id"]: s for s in
+                     self.client.get("/api/spj?status=selesai").json()["spj"]}
+        self.assertIsNotNone(refreshed[newer]["receipt"])
+        self.assertIsNone(refreshed[older]["receipt"])
+
+    def test_receipt_retry_with_operation_id_is_not_a_conflict(self):
+        spj_id, _ = _completed_spj(self.client, "T-242")
+        payload = {"photo_name": "struk.jpg",
+                   "photo_b64": "data:image/jpeg;base64,AA",
+                   "total_weight_kg": 12450, "weight_source": "ocr",
+                   "operation_id": "op-retry-1"}
+        first = self.client.post(f"/api/spj/{spj_id}/receipt", json=payload)
+        self.assertEqual(first.status_code, 201)
+        replay = self.client.post(f"/api/spj/{spj_id}/receipt", json=payload)
+        self.assertEqual(replay.status_code, 201)
+        receipt = self.client.get(f"/api/spj/{spj_id}").json()["receipt"]
+        self.assertEqual(receipt["total_weight_kg"], 12450)
+        self.assertEqual(receipt["weight_source"], "ocr")
+        audit = self.client.get(f"/api/spj/{spj_id}/audit").json()["audit"]
+        self.assertEqual([entry["action"] for entry in audit].count("receipt"), 1,
+                         "a replayed operation id must not add a second receipt")
+        different = self.client.post(f"/api/spj/{spj_id}/receipt", json=dict(
+            payload, operation_id="op-retry-2", total_weight_kg=9999))
+        self.assertEqual(different.status_code, 409)
 
     def test_complete_stop_with_evidence_and_summary(self):
         create = self.client.post("/api/spj", json={
@@ -177,7 +253,10 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/stops", json={
             "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
-        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
+            "arrival": {"photo_name": "a.jpg",
+                        "photo_b64": "data:image/jpeg;base64,AAA"},
+            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
         r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0,
             "weight_source": "manual"})
@@ -186,6 +265,13 @@ class DamageEndpointTests(unittest.TestCase):
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
             "total_weight_kg": 0, "weight_source": "ocr"})
         self.assertEqual(invalid_weight.status_code, 422)
+        for bad_weight in (-1, 0.0):
+            response = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+                "photo_name": "struk.jpg",
+                "photo_b64": "data:image/jpeg;base64,AA",
+                "total_weight_kg": bad_weight, "weight_source": "ocr"})
+            self.assertEqual(response.status_code, 422, bad_weight)
+        self.assertEqual(self.client.get(f"/api/spj/{spj_id}").json()["receipt"], None)
 
 
 class OcrTimbanganEndpointTests(unittest.TestCase):

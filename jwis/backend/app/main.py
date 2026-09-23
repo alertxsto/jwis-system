@@ -321,6 +321,19 @@ def require_permission(permission: str):
     """FastAPI dependency: 401 if no valid token, 403 if role lacks the permission."""
     return require_any_permission(permission)
 
+
+def _principal_actor(authorization: str | None = Header(default=None)) -> str:
+    """Resolve the bearer token's role as the audit actor.
+
+    The pilot-grade token registry maps token -> (role, issued_at); the
+    role is the stable identity available for audit entries.
+    """
+    if authorization and authorization.lower().startswith("bearer "):
+        role = role_for_token(authorization.split(" ", 1)[1].strip())
+        if role:
+            return role
+    return "unknown"
+
 @app.get("/api/data/provenance")
 def data_provenance_endpoint() -> dict[str, Any]:
     """Transparency: which real government datasets are currently loaded."""
@@ -1598,6 +1611,11 @@ def ai_event_forecast() -> dict[str, Any]:
 # ── SPJ (Surat Perintah Jalan) ───────────────────────────────────────────────
 
 def _spj_payload(spj) -> dict[str, Any]:
+    """Detail projection: receipt metadata plus a media reference, no bytes.
+
+    The receipt image is multi-megabyte; clients fetch it from the
+    receipt-photo endpoint only when they display it.
+    """
     return _asdict(spj)
 
 
@@ -1617,6 +1635,15 @@ class SpjCreateBody(BaseModel):
     note: str = ""
 
 
+class SpjCompleteBody(BaseModel):
+    evidence: dict | None = None
+
+
+class SpjCompleteOverrideBody(BaseModel):
+    override: bool = False
+    reason: str = ""
+
+
 class SpjStopBody(BaseModel):
     name: str
     kecamatan: str
@@ -1626,15 +1653,15 @@ class SpjStopBody(BaseModel):
     location_type: str = "Pemukiman Kelas Menengah"
 
 
-class SpjCompleteBody(BaseModel):
-    evidence: dict | None = None
-
 
 class SpjReceiptBody(BaseModel):
     photo_name: str
     photo_b64: str = Field(default="", max_length=7_000_000)
     total_weight_kg: float = Field(gt=0, allow_inf_nan=False)
     weight_source: Literal["ocr", "manual"]
+    # Client-generated id for one submission attempt; a retry with the same id
+    # returns the original receipt instead of a conflict.
+    operation_id: str | None = Field(default=None, max_length=64)
 
 
 class PretripBody(BaseModel):
@@ -1718,10 +1745,38 @@ def complete_spj_stop(spj_id: str, index: int,
 
 
 @app.post("/api/spj/{spj_id}/complete")
-def complete_spj(spj_id: str, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
-    result = _spj_or_409(SPJ_STORE.complete, spj_id)
+def complete_spj(spj_id: str, body: SpjCompleteOverrideBody | None = None,
+                 _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+    """Close an SPJ. Normal completion needs full field evidence; an
+    override requires the spj:override permission and a reason, and is
+    written to the SPJ audit trail."""
+    body = body or SpjCompleteOverrideBody()
+    override = None
+    if body.override:
+        # Re-gate the request: only supervisor/administrator may override.
+        if not has_permission(_role, "spj:override"):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{_role}' lacks spj:override permission.")
+        if not body.reason.strip():
+            raise HTTPException(
+                status_code=409,
+                detail="override requires a non-empty reason")
+        override = {"actor": _role, "reason": body.reason.strip()}
+    result = _spj_or_409(SPJ_STORE.complete, spj_id, override)
     _refresh_fleet_caches()
     return result
+
+
+@app.get("/api/spj/{spj_id}/audit")
+def spj_audit(spj_id: str, _role: str = Depends(require_any_permission(
+        "dispatch:confirm", "dispatch:create", "history:read"))) -> dict[str, Any]:
+    """Audit trail for one SPJ: lifecycle actions and supervisor overrides."""
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id)}
+
 
 
 @app.post("/api/spj/{spj_id}/cancel")
@@ -1766,17 +1821,39 @@ def spj_evidence_summary(spj_id: str) -> dict[str, Any]:
 
 @app.post("/api/spj/{spj_id}/receipt", status_code=201)
 def submit_spj_receipt(spj_id: str, body: SpjReceiptBody, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+    """Record the weighbridge receipt once.
+
+    Replaying the same operation_id is a no-op retry; a different submission
+    for an SPJ that already has a receipt is a conflict, so a double tap or a
+    second browser cannot silently replace handover evidence.
+    """
     spj = SPJ_STORE.get(spj_id)
     if spj is None:
         raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    already_recorded = spj.receipt is not None
     _spj_or_409(SPJ_STORE.record_receipt, spj_id, body.photo_name,
-                body.photo_b64, body.total_weight_kg, body.weight_source)
-    history_store.record_event("spj_receipt_submitted", {
-        "spj_id": spj_id, "spj_number": spj.spj_number,
-        "photo_name": body.photo_name, "total_weight_kg": body.total_weight_kg,
-        "weight_source": body.weight_source,
-    })
+                body.photo_b64, body.total_weight_kg, body.weight_source,
+                _role, body.operation_id)
+    if not already_recorded:  # a replayed operation_id is not a second event
+        history_store.record_event("spj_receipt_submitted", {
+            "spj_id": spj_id, "spj_number": spj.spj_number,
+            "photo_name": body.photo_name, "total_weight_kg": body.total_weight_kg,
+            "weight_source": body.weight_source, "submitted_by": _role,
+        })
     return {"status": "recorded", "spj_id": spj_id}
+
+
+@app.get("/api/spj/{spj_id}/receipt/photo")
+def spj_receipt_photo(spj_id: str, _role: str = Depends(require_any_permission(
+        "dispatch:confirm", "dispatch:create", "history:read"))) -> dict[str, Any]:
+    """Retrieval path for the stored receipt image (kept out of detail reads)."""
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    photo = SPJ_STORE.receipt_photo(spj_id)
+    if not photo:
+        raise HTTPException(status_code=404, detail="no receipt photo recorded")
+    return {"spj_id": spj_id, "photo_b64": photo}
 
 
 @app.post("/api/pretrip", status_code=201)

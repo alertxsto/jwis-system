@@ -119,7 +119,11 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   const receipt = (await (await page.request.get(`${API}/spj/${spj.spj_id}`)).json()).receipt;
   expect(receipt.total_weight_kg).toBe(12450);
   expect(receipt.weight_source).toBe("manual");
-  expect(receipt.photo_b64).toContain("data:image/");
+  expect(receipt.has_photo).toBe(true);
+  expect(receipt.photo_b64).toBeUndefined();
+  const photo = await page.request.get(`${API}/spj/${spj.spj_id}/receipt/photo`);
+  expect(photo.ok()).toBeTruthy();
+  expect((await photo.json()).photo_b64).toContain("data:image/");
 });
 
 test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, context }) => {
