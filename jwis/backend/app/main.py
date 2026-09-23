@@ -321,6 +321,19 @@ def require_permission(permission: str):
     """FastAPI dependency: 401 if no valid token, 403 if role lacks the permission."""
     return require_any_permission(permission)
 
+
+def _principal_actor(authorization: str | None = Header(default=None)) -> str:
+    """Resolve the bearer token's role as the audit actor.
+
+    The pilot-grade token registry maps token -> (role, issued_at); the
+    role is the stable identity available for audit entries.
+    """
+    if authorization and authorization.lower().startswith("bearer "):
+        role = role_for_token(authorization.split(" ", 1)[1].strip())
+        if role:
+            return role
+    return "unknown"
+
 @app.get("/api/data/provenance")
 def data_provenance_endpoint() -> dict[str, Any]:
     """Transparency: which real government datasets are currently loaded."""
@@ -1618,6 +1631,15 @@ class SpjCreateBody(BaseModel):
     note: str = ""
 
 
+class SpjCompleteBody(BaseModel):
+    evidence: dict | None = None
+
+
+class SpjCompleteOverrideBody(BaseModel):
+    override: bool = False
+    reason: str = ""
+
+
 class SpjStopBody(BaseModel):
     name: str
     kecamatan: str
@@ -1626,9 +1648,6 @@ class SpjStopBody(BaseModel):
     lng: float
     location_type: str = "Pemukiman Kelas Menengah"
 
-
-class SpjCompleteBody(BaseModel):
-    evidence: dict | None = None
 
 
 class SpjReceiptBody(BaseModel):
@@ -1718,10 +1737,38 @@ def complete_spj_stop(spj_id: str, index: int,
 
 
 @app.post("/api/spj/{spj_id}/complete")
-def complete_spj(spj_id: str, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
-    result = _spj_or_409(SPJ_STORE.complete, spj_id)
+def complete_spj(spj_id: str, body: SpjCompleteOverrideBody | None = None,
+                 _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict[str, Any]:
+    """Close an SPJ. Normal completion needs full field evidence; an
+    override requires the spj:override permission and a reason, and is
+    written to the SPJ audit trail."""
+    body = body or SpjCompleteOverrideBody()
+    override = None
+    if body.override:
+        # Re-gate the request: only supervisor/administrator may override.
+        if not has_permission(_role, "spj:override"):
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{_role}' lacks spj:override permission.")
+        if not body.reason.strip():
+            raise HTTPException(
+                status_code=409,
+                detail="override requires a non-empty reason")
+        override = {"actor": _role, "reason": body.reason.strip()}
+    result = _spj_or_409(SPJ_STORE.complete, spj_id, override)
     _refresh_fleet_caches()
     return result
+
+
+@app.get("/api/spj/{spj_id}/audit")
+def spj_audit(spj_id: str, _role: str = Depends(require_any_permission(
+        "dispatch:confirm", "dispatch:create", "history:read"))) -> dict[str, Any]:
+    """Audit trail for one SPJ: lifecycle actions and supervisor overrides."""
+    spj = SPJ_STORE.get(spj_id)
+    if spj is None:
+        raise HTTPException(status_code=404, detail=f"SPJ {spj_id} not found")
+    return {"spj_id": spj_id, "audit": SPJ_STORE.audit_log(spj_id)}
+
 
 
 @app.post("/api/spj/{spj_id}/cancel")

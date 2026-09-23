@@ -42,11 +42,15 @@ def _make_spj(spj_store, driver, truck, complete_with_evidence=True):
     spj_store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
                        lat=-6.2, lng=106.8)
     spj_store.activate(spj.spj_id)
-    evidence = None
     if complete_with_evidence:
         evidence = {"arrival": {"photo_name": "a.jpg"},
                     "weighing": [], "officer": {"photo_name": "p.jpg", "name": "X"}}
-    spj_store.complete_stop(spj.spj_id, 0, evidence=evidence)
+        spj_store.complete_stop(spj.spj_id, 0, evidence=evidence)
+    else:
+        # Unevidenced closure only happens through an audited supervisor
+        # override now (issue #63 contract).
+        spj_store.complete(spj.spj_id,
+                           override={"actor": "supervisor", "reason": "test"})
     return spj
 
 

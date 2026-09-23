@@ -38,11 +38,44 @@ class SpjEvidenceTests(unittest.TestCase):
         self.assertEqual(spj.stops[0].evidence["officer"]["name"], "Dicky")
         self.assertEqual(spj.status, "selesai")  # only stop -> auto complete
 
-    def test_complete_stop_without_evidence_stays_compatible(self):
+    def test_complete_stop_without_evidence_rejected(self):
         store = _store()
         spj = self._active_spj(store)
-        spj = store.complete_stop(spj.spj_id, 0)
-        self.assertIsNone(spj.stops[0].evidence)
+        with self.assertRaises(ValueError):
+            store.complete_stop(spj.spj_id, 0)
+
+    def test_complete_with_unevidenced_stops_rejected(self):
+        store = _store("test_spj_evi_complete.json")
+        spj = store.create(driver_name="A", truck_code="T-001",
+                           destination="TPST Bantargebang", weigh_on_site=True,
+                           priority="normal", note="")
+        store.add_stop(spj.spj_id, name="S1", kecamatan="K", address="A",
+                       lat=-6.2, lng=106.8)
+        store.add_stop(spj.spj_id, name="S2", kecamatan="K", address="B",
+                       lat=-6.25, lng=106.85)
+        store.activate(spj.spj_id)
+        store.complete_stop(spj.spj_id, 0, evidence=EVIDENCE)
+        with self.assertRaises(ValueError):
+            store.complete(spj.spj_id)  # stop 2 has no evidence
+
+    def test_complete_override_records_audit(self):
+        store = _store("test_spj_evi_override.json")
+        spj = self._active_spj(store)
+        with self.assertRaises(ValueError):
+            store.complete(spj.spj_id)  # unevidenced stop
+        completed = store.complete(
+            spj.spj_id,
+            override={"actor": "supervisor", "reason": "driver device lost"})
+        self.assertEqual(completed.status, "selesai")
+        entries = store.audit_log(spj.spj_id)
+        actions = [(e["action"], e["actor"], e["reason"]) for e in entries]
+        self.assertIn(("override", "supervisor", "driver device lost"), actions)
+
+    def test_override_requires_reason(self):
+        store = _store("test_spj_evi_override_reason.json")
+        spj = self._active_spj(store)
+        with self.assertRaises(ValueError):
+            store.complete(spj.spj_id, override={"actor": "supervisor", "reason": ""})
 
     def test_evidence_requires_arrival_photo(self):
         store = _store()

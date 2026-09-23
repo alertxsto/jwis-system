@@ -194,12 +194,51 @@ class SpjStore:
                     )
                     """
                 )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS spj_audit (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        spj_id TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        actor TEXT NOT NULL,
+                        reason TEXT NOT NULL DEFAULT '',
+                        payload TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL
+                    )
+                    """
+                )
+
+    @staticmethod
+    def _audit(connection: sqlite3.Connection, spj_id: str, action: str,
+               actor: str, reason: str = "", payload: dict | None = None) -> None:
+        connection.execute(
+            "INSERT INTO spj_audit (spj_id, action, actor, reason, payload, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (spj_id, action, actor, reason, json.dumps(payload or {}),
+             _utc_now()),
+        )
+
+    def audit_log(self, spj_id: str) -> list[dict]:
+        """Audit entries for one SPJ, oldest first."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT action, actor, reason, payload, created_at FROM spj_audit "
+                "WHERE spj_id=? ORDER BY id", (spj_id,)).fetchall()
+        return [
+            {"action": r["action"], "actor": r["actor"], "reason": r["reason"],
+             "payload": json.loads(r["payload"]), "created_at": r["created_at"]}
+            for r in rows
+        ]
 
     def _migrate_legacy_json(self) -> None:
         """One-time import from the pre-SQLite whole-file JSON store."""
         legacy = _legacy_json_path(self._path)
         if not os.path.exists(legacy):
             return
+        with open(legacy, "rb") as fh:
+            head = fh.read(16)
+        if head.startswith(b"SQLite format 3"):
+            return  # the "legacy" path is itself a SQLite file (test habit)
         try:
             with closing(self._connect()) as connection:
                 row = connection.execute("SELECT COUNT(*) AS n FROM spj").fetchone()
@@ -401,6 +440,7 @@ class SpjStore:
             connection.execute(
                 "UPDATE spj SET status='aktif', activated_at=? WHERE spj_id=?",
                 (_utc_now(), spj_id))
+            self._audit(connection, spj_id, "activate", row["created_by"])
         return self._mutate(spj_id, mutate)
 
     def complete_stop(self, spj_id: str, index: int,
@@ -414,18 +454,19 @@ class SpjStore:
                 (spj_id,)).fetchall()
             if not 0 <= index < len(stops):
                 raise ValueError(f"stop index {index} out of range")
-            if evidence is not None:
-                _validate_evidence(evidence)
-            if stops[index]["status"] != "completed":
-                if evidence is not None:
-                    connection.execute(
-                        "UPDATE spj_stops SET status='completed', completed_at=?, "
-                        "evidence=? WHERE spj_id=? AND idx=?",
-                        (_utc_now(), json.dumps(evidence), spj_id, index))
-                else:
-                    connection.execute(
-                        "UPDATE spj_stops SET status='completed', completed_at=? "
-                        "WHERE spj_id=? AND idx=?", (_utc_now(), spj_id, index))
+            if stops[index]["status"] == "completed":
+                return  # idempotent
+            if evidence is None:
+                raise ValueError(
+                    "stop completion requires field evidence "
+                    "(arrival, weighing, officer)")
+            _validate_evidence(evidence)
+            connection.execute(
+                "UPDATE spj_stops SET status='completed', completed_at=?, "
+                "evidence=? WHERE spj_id=? AND idx=?",
+                (_utc_now(), json.dumps(evidence), spj_id, index))
+            self._audit(connection, spj_id, "complete_stop", row["created_by"],
+                        payload={"stop_index": index})
             pending = connection.execute(
                 "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
                 "AND status != 'completed'", (spj_id,)).fetchone()[0]
@@ -435,11 +476,33 @@ class SpjStore:
                     (_utc_now(), spj_id))
         return self._mutate(spj_id, mutate)
 
-    def complete(self, spj_id: str) -> Spj:
+    def complete(self, spj_id: str, override: dict | None = None) -> Spj:
+        """Close an active SPJ.
+
+        Normal completion requires every stop to be completed WITH field
+        evidence — the same invariant the driver workflow enforces. A
+        supervisor override ({"actor": ..., "reason": ...}) forces closure
+        and is recorded in the audit trail; the reason must be non-empty.
+        """
         def mutate(connection):
             row = self._fetch_status(connection, spj_id)
             if row["status"] != "aktif":
                 raise ValueError(f"cannot complete SPJ in status '{row['status']}'")
+            unevidenced = connection.execute(
+                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
+                "AND (status != 'completed' OR evidence IS NULL)",
+                (spj_id,)).fetchone()[0]
+            actor = None
+            reason = None
+            if unevidenced:
+                if override is None:
+                    raise ValueError(
+                        f"cannot complete: {unevidenced} stop(s) lack field evidence; "
+                        "a supervisor override with a reason is required")
+                actor = (override or {}).get("actor") or "unknown"
+                reason = str((override or {}).get("reason") or "").strip()
+                if not reason:
+                    raise ValueError("override requires a non-empty reason")
             now = _utc_now()
             connection.execute(
                 "UPDATE spj_stops SET status='completed', completed_at=? "
@@ -447,6 +510,11 @@ class SpjStore:
             connection.execute(
                 "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?",
                 (now, spj_id))
+            if unevidenced:
+                self._audit(connection, spj_id, "override", actor, reason,
+                            payload={"forced_stops": unevidenced})
+            else:
+                self._audit(connection, spj_id, "complete", row["created_by"])
         return self._mutate(spj_id, mutate)
 
     def cancel(self, spj_id: str) -> Spj:
@@ -455,6 +523,7 @@ class SpjStore:
             if row["status"] not in ("draft", "aktif"):
                 raise ValueError(f"cannot cancel SPJ in status '{row['status']}'")
             connection.execute("UPDATE spj SET status='batal' WHERE spj_id=?", (spj_id,))
+            self._audit(connection, spj_id, "cancel", row["created_by"])
         return self._mutate(spj_id, mutate)
 
     def _load_fresh(self, spj_id: str) -> Spj:
