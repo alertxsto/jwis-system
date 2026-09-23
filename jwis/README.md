@@ -76,8 +76,10 @@ Receipt contract:
   same `operation_id` returns the original receipt, and any other second
   submission is rejected with `409` rather than silently replacing handover
   evidence. Replacement would need an explicit, audited workflow.
-- Weight must be greater than 0; a non-positive or non-finite value fails field
-  validation and records nothing.
+- Weight must be greater than 0 and below 100,000 kg — the same ceiling the OCR
+  reader applies, so a manual correction cannot admit a figure the reader would
+  have discarded as a misread. Out-of-range values fail field validation and
+  record nothing.
 - Metadata (photo name, weight, OCR/manual source, submitter, timestamp) lives in
   the `spj_receipts` table alongside the SPJ. `GET /api/spj/{id}` and the SPJ list
   return that metadata and a `has_photo` flag, never the image bytes;

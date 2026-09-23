@@ -265,13 +265,20 @@ class DamageEndpointTests(unittest.TestCase):
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
             "total_weight_kg": 0, "weight_source": "ocr"})
         self.assertEqual(invalid_weight.status_code, 422)
-        for bad_weight in (-1, 0.0):
+        for bad_weight in (-1, 0.0, 100_000, 100_001, 1e12):
             response = self.client.post(f"/api/spj/{spj_id}/receipt", json={
                 "photo_name": "struk.jpg",
                 "photo_b64": "data:image/jpeg;base64,AA",
                 "total_weight_kg": bad_weight, "weight_source": "ocr"})
             self.assertEqual(response.status_code, 422, bad_weight)
         self.assertEqual(self.client.get(f"/api/spj/{spj_id}").json()["receipt"], None)
+        boundary = self.client.post(f"/api/spj/{spj_id}/receipt", json={
+            "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
+            "total_weight_kg": 99_999.5, "weight_source": "manual"})
+        self.assertEqual(boundary.status_code, 201)
+        self.assertEqual(
+            self.client.get(f"/api/spj/{spj_id}").json()["receipt"]["total_weight_kg"],
+            99_999.5)
 
 
 class OcrTimbanganEndpointTests(unittest.TestCase):

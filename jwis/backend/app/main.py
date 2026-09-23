@@ -70,7 +70,7 @@ from app.ai.forecasters.event_impact import EventImpactForecaster
 from app.ai.forecasters.fuel_model import CarbonCalculator
 from app.ai.forecasters.queue_predictor import TpaQueuePredictor
 from app.spj import SPJ_STORE, active_path_for as spj_active_path, \
-    spj_summary_payload
+    spj_summary_payload, MAX_RECEIPT_WEIGHT_KG
 from app.service_history import SERVICE_STORE, due_date_for
 from dataclasses import asdict as _asdict
 
@@ -1657,7 +1657,8 @@ class SpjStopBody(BaseModel):
 class SpjReceiptBody(BaseModel):
     photo_name: str
     photo_b64: str = Field(default="", max_length=7_000_000)
-    total_weight_kg: float = Field(gt=0, allow_inf_nan=False)
+    total_weight_kg: float = Field(gt=0, lt=MAX_RECEIPT_WEIGHT_KG,
+                                   allow_inf_nan=False)
     weight_source: Literal["ocr", "manual"]
     # Client-generated id for one submission attempt; a retry with the same id
     # returns the original receipt instead of a conflict.

@@ -18,11 +18,17 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from app.timbangan_ocr import MAX_WEIGHT_KG
+
 logger = logging.getLogger(__name__)
 
 DESTINATIONS = ("TPST Bantargebang", "JRC Pesanggrahan", "RDF Plant Jakarta")
 
 MAX_EVIDENCE_PHOTO_CHARS = 7_000_000
+
+# Same ceiling the weighbridge OCR reader applies (MAX_WEIGHT_KG), so a manual
+# correction cannot admit a figure the reader would have discarded as a misread.
+MAX_RECEIPT_WEIGHT_KG = MAX_WEIGHT_KG
 
 
 def _validate_evidence(evidence: dict) -> None:
@@ -542,6 +548,10 @@ class SpjStore:
                 raise ValueError("receipt can only be submitted after the SPJ is selesai")
             if not photo_name.strip() or not photo_b64.strip():
                 raise ValueError("receipt photo_name and photo_b64 are required")
+            if not 0 < total_weight_kg < MAX_RECEIPT_WEIGHT_KG:
+                raise ValueError(
+                    f"total_weight_kg must be greater than 0 and below "
+                    f"{MAX_RECEIPT_WEIGHT_KG:g}")
             existing = connection.execute(
                 "SELECT * FROM spj_receipts WHERE spj_id=?", (spj_id,)).fetchone()
             if existing is not None:
