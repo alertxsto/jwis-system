@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { API_URL } from "../config.js";
+import React, { useState, useEffect, useRef } from "react";
+import { authenticatedRequest } from "../dispatchApi.js";
 import { useLanguage } from "../i18n.jsx";
 import { StatusPill } from "../ui/StatusPill.jsx";
 import {
@@ -27,10 +27,13 @@ export function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
   const { t, lang } = useLanguage();
   const [followUps, setFollowUps] = useState({});
   const [notes, setNotes] = useState({});
+  const [busy, setBusy] = useState({});
+  const [errors, setErrors] = useState({});
+  const dispatching = useRef(new Set());
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${API_URL}/alert/follow-ups`)
+    authenticatedRequest("/alert/follow-ups")
       .then((r) => (r.ok ? r.json() : []))
       .then((records) => {
         if (cancelled) return;
@@ -52,16 +55,43 @@ export function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
       operator: localStorage.getItem("jwis_role") || "dispatcher",
       note,
     };
-    setFollowUps((s) => ({ ...s, [alert.id]: { ...payload, updated_at: new Date().toISOString() } }));
-    setNotes((s) => ({ ...s, [alert.id]: "" }));
     try {
-      await fetch(`${API_URL}/alert/follow-up`, {
+      const response = await authenticatedRequest("/alert/follow-up", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      if (!response.ok) throw new Error(response.status === 401 || response.status === 403
+        ? (lang === "id" ? "Akses ditolak saat menyimpan tindak lanjut." : "Access denied while saving follow-up.")
+        : (lang === "id" ? "Gagal menyimpan tindak lanjut. Coba lagi." : "Could not save follow-up. Try again."));
+      setFollowUps((current) => ({ ...current, [alert.id]: { ...payload, updated_at: new Date().toISOString() } }));
+      setNotes((current) => ({ ...current, [alert.id]: "" }));
+      setErrors((current) => ({ ...current, [alert.id]: "" }));
+      return true;
     } catch (error) {
-      console.warn("Follow-up sync failed; kept local only", error);
+      setErrors((current) => ({
+        ...current,
+        [alert.id]: error.message || (lang === "id" ? "Layanan tindak lanjut tidak tersedia." : "Follow-up service unavailable."),
+      }));
+      return false;
+    }
+  }
+
+  async function dispatchOnce(alert, recommendedRoute) {
+    if (dispatching.current.has(alert.id) || followUps[alert.id]?.status === "DISPATCHED") return;
+    dispatching.current.add(alert.id);
+    setBusy((current) => ({ ...current, [alert.id]: true }));
+    try {
+      if (await onDispatch(alert)) {
+        // The persisted dispatch remains sent even if optional follow-up logging fails.
+        setFollowUps((current) => ({
+          ...current,
+          [alert.id]: { status: "DISPATCHED", operator: localStorage.getItem("jwis_role") || "dispatcher", note: "" },
+        }));
+        await recordFollowUp(alert, "DISPATCHED", `Routed via ${recommendedRoute?.name || "backup route"}`);
+      }
+    } finally {
+      dispatching.current.delete(alert.id);
+      setBusy((current) => ({ ...current, [alert.id]: false }));
     }
   }
 
@@ -124,13 +154,14 @@ export function AlertQueue({ alerts, onDispatch, onWhatsApp }) {
               {status !== "RESOLVED" ? (
                 <div className="alert-actions">
                   <div className="alert-btn-row">
-                    <button className="primary-button" onClick={() => { onDispatch(alert); recordFollowUp(alert, "DISPATCHED", `Routed via ${recommendedRoute?.name || "backup route"}`); }}>
+                    <button className="primary-button" disabled={busy[alert.id] || status === "DISPATCHED"} onClick={() => dispatchOnce(alert, recommendedRoute)}>
                       <Send size={14} /> {t("btn_approve_dispatch")}
                     </button>
                     <button className="alert-wa-button" onClick={() => onWhatsApp(alert)}>
                       <MessageCircle size={14} /> {t("btn_wa_alert")}
                     </button>
                   </div>
+                  {errors[alert.id] && <p role="alert" className="action-card-warning">{errors[alert.id]}</p>}
                   <div className="alert-resolve-row">
                     <input
                       type="text"

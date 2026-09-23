@@ -15,6 +15,19 @@ with the repository's `taste-redesign` and `taste-default` constraints.
 - **Backend:** FastAPI, OR-Tools CP-SAT (Integrated Planning optimizer), Prophet + XGBoost (Waste Forecast models), and an OpenAI Assistant route configured to stream via 9Router.
 - **WhatsApp Gateway:** A standalone Express + `@whiskeysockets/baileys` gateway running on port 2785 for direct WhatsApp alert dispatching (no Puppeteer/headless browser overhead).
 
+### Driver analytics data contract
+
+`GET /api/fleet/driver-analytics` returns one current assignment per truck from
+the cached `/api/command-center` fleet snapshot. The response includes
+`sampled_at` (UTC ISO timestamp), `source: "command-center.trucks"`, bilingual
+`provenance.id`/`provenance.en`, and `drivers` with truck code, driver name,
+assigned zone, current status, damage flag, and current route-deviation flag
+and distance. The interface refreshes every 15 seconds, marks snapshots older
+than 30 seconds or failed refreshes as stale, and keeps the last snapshot visible
+on refresh failure. Rows and KPIs describe current assignments, **not**
+historical trips, fuel efficiency, or driver performance scores. Pilot telemetry
+and assignments are simulated; fleet composition uses the DKI 2023 truck census.
+
 ## Interface
 
 | Entry | Preview |
@@ -32,7 +45,7 @@ with the repository's `taste-redesign` and `taste-default` constraints.
 
 1. **Sign In:** Enter username `dispatcher` and password `dispatcher-demo-pass`.
 2. **Fleet Operations (Case 1):**
-   - View the full-width Live Fleet Map with real-time GPS coordinates.
+   - View simulated fleet positions and route deviations on the Live Fleet Map; positions are not live GPS.
    - Observe that `T-047` is off-corridor (marked in yellow).
    - Click the **A* Simulate Jam** button. Watch `T-047` dynamically calculate a new road-following route to TPA Bantargebang.
    - Look at the TPA Queue and staggered dispatch slots.
@@ -95,4 +108,4 @@ cd "jwis/frontend"
 npm run build   # required: the preview server serves dist/ — a stale dist causes false e2e failures
 npx playwright test --workers 1
 ```
-*(All 42 tests will pass successfully in headless mode).*
+*(The suite covers the current end-to-end workflows.)*

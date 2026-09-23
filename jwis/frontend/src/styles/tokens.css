@@ -1,8 +1,8 @@
 :root {
   --ui-primary: #13211d;
   --ui-primary-hover: #20342e;
-  --ui-accent: #e85d32;
-  --ui-accent-hover: #cf4c25;
+  --ui-accent: #b53b1a;
+  --ui-accent-hover: #9c3215;
   --ui-accent-foreground: #ffffff;
   --ui-accent-soft: #fff0e9;
   --ui-canvas: #f2f5f3;
@@ -13,14 +13,14 @@
   --ui-border-strong: #bdc8c2;
   --ui-ink: #14201c;
   --ui-ink-soft: #33443e;
-  --ui-muted: #65746e;
+  --ui-muted: #52635c;
   --fs-body: 15px;
   --fs-caption: 13px;
   --fs-kpi: 28px;
   --tap-min: 44px;
   --ui-success: #177a57;
-  --ui-warning: #b76516;
-  --ui-danger: #c43d39;
+  --ui-warning: #99500d;
+  --ui-danger: #b42f2b;
   --ui-info: #1b6f84;
   --ui-radius: 8px;
   --ui-radius-card: 12px;
@@ -38,7 +38,7 @@
   --space-8: 64px;
   --ui-sidebar-width: 232px;
   --ui-topbar-height: 68px;
-  --ui-focus: 0 0 0 3px rgba(232, 93, 50, 0.25);
+  --ui-focus: 0 0 0 3px rgba(181, 59, 26, 0.32);
   --z-dropdown: 20;
   --z-sticky: 30;
   --z-modal-backdrop: 40;

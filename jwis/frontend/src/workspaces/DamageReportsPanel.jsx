@@ -27,6 +27,7 @@ export function DamageReportsPanel() {
       {reports.length === 0 ? (
         <div className="ai-feed-empty">Belum ada laporan kerusakan.</div>
       ) : (
+        <div className="table-wrap" role="region" aria-label="Daftar laporan kerusakan" tabIndex={0}>
         <table className="spj-table">
           <thead>
             <tr>
@@ -63,6 +64,7 @@ export function DamageReportsPanel() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

@@ -1,0 +1,53 @@
+.field-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.field-language {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 8px;
+  background: #33443e;
+}
+
+.field-language button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 6px;
+  color: #fff;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.field-language button.active {
+  color: #14201c;
+  background: #fff;
+}
+
+.field-language button:focus-visible {
+  outline: 2px solid #e85d32;
+  outline-offset: 2px;
+}
+
+@media (max-width: 360px) {
+  .field-app-header .field-brand small {
+    font-size: 10px;
+  }
+
+  .field-header-actions {
+    gap: 6px;
+  }
+
+  .field-language button {
+    min-width: 40px;
+  }
+}

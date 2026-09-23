@@ -143,14 +143,6 @@ test("planning presents scenario, allocation, and approval as one flow", async (
   await expect(page.getByText("Izin sesuai")).toBeVisible();
 });
 
-test("driver workspace pairs fleet scores with one coaching priority", async ({ page }) => {
-  await page.getByTestId("workspace-navigation").getByRole("button", { name: "Sopir" }).click();
-  await expect(page.getByRole("heading", { name: "Kinerja pengemudi" })).toBeVisible();
-  await expect(page.locator(".driver-table tbody tr")).toHaveCount(4);
-  await expect(page.getByRole("heading", { name: "Agus Pratama" })).toBeVisible();
-  await expect(page.getByText("Prioritas pembinaan")).toBeVisible();
-});
-
 test("audit workspace exposes provenance and model suitability evidence", async ({ page }) => {
   await page.getByRole("button", { name: "Audit Data & Model ML" }).click();
   await expect(page.getByRole("heading", { name: "Audit data & model" })).toBeVisible();

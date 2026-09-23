@@ -1,13 +1,8 @@
-import React from "react";
-import { AlertTriangle, Fuel, Gauge, Route, Users } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { AlertTriangle, Clock3, Route, Truck, Users, Wrench } from "lucide-react";
+import { API_URL } from "../config.js";
 import { useLanguage } from "../i18n.jsx";
 
-const drivers = [
-  { name: "Budi Santoso", truck: "T-001", score: 98, fuel: 4.8, trips: 142, deviations: 0 },
-  { name: "Agus Pratama", truck: "T-047", score: 72, fuel: 3.5, trips: 118, deviations: 12 },
-  { name: "Joko Wijaya", truck: "T-088", score: 95, fuel: 4.6, trips: 135, deviations: 1 },
-  { name: "Rizky Maulana", truck: "T-112", score: 90, fuel: 4.2, trips: 98, deviations: 0 },
-];
 
 function initials(name) {
   return name.split(" ").map((part) => part[0]).slice(0, 2).join("");
@@ -15,62 +10,160 @@ function initials(name) {
 
 export function DriverAnalytics() {
   const { lang } = useLanguage();
-  const risky = drivers.find((driver) => driver.deviations > 5);
+  const id = lang === "id";
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    let controller;
+    async function load() {
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch(`${API_URL}/fleet/driver-analytics`, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        if (!Array.isArray(payload.drivers) || !Number.isFinite(Date.parse(payload.sampled_at))
+          || !payload.provenance?.id || !payload.provenance?.en || !payload.source) {
+          throw new Error("Invalid driver analytics response");
+        }
+        if (!active) return;
+        setData(payload);
+        setError(false);
+        setNow(Date.now());
+      } catch (reason) {
+        if (active && reason.name !== "AbortError") setError(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    const interval = setInterval(() => {
+      setNow(Date.now());
+      load();
+    }, 15000);
+    return () => {
+      active = false;
+      controller?.abort();
+      clearInterval(interval);
+    };
+  }, [refreshKey]);
+
+  const drivers = data?.drivers || [];
+  const stale = Boolean(data && (error || now - Date.parse(data.sampled_at) > 30000));
+  const deviations = drivers.filter((driver) => driver.deviation_violated);
+  const damaged = drivers.filter((driver) => driver.is_damaged);
+  const priority = deviations.reduce((worst, driver) => (
+    !worst || (driver.deviation_meters ?? 0) > (worst.deviation_meters ?? 0) ? driver : worst
+  ), null) || damaged[0];
+  const distance = (value) => Number.isFinite(value)
+    ? `${Math.round(value).toLocaleString(id ? "id-ID" : "en-US")} m`
+    : (id ? "Tidak tersedia" : "Unavailable");
 
   return (
     <section className="driver-workspace workspace-page">
       <header className="workspace-heading">
         <div>
-          <span className="workspace-kicker"><Users size={14} /> Kesiapan personel</span>
-          <h1>{lang === "id" ? "Kinerja pengemudi" : "Driver performance"}</h1>
-          <p>{lang === "id" ? "Temukan pengemudi yang membutuhkan tindak lanjut berdasarkan kepatuhan rute dan efisiensi kendaraan." : "Identify drivers who need follow-up based on route compliance and vehicle efficiency."}</p>
+          <h1>{id ? "Kondisi pengemudi dan armada" : "Driver and fleet status"}</h1>
+          <p>{id
+            ? "Penugasan kendaraan dan sinyal operasi saat ini; bukan nilai kinerja historis."
+            : "Current vehicle assignments and operational signals, not historical performance scores."}</p>
         </div>
+        {data && (
+          <div className="workspace-freshness" role="status">
+            <Clock3 size={16} />
+            <span>{stale ? (id ? "Data tidak mutakhir" : "Data is stale") : (id ? "Cuplikan armada" : "Fleet snapshot")}</span>
+            <strong><time dateTime={data.sampled_at}>{new Date(data.sampled_at).toLocaleTimeString(id ? "id-ID" : "en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</time></strong>
+          </div>
+        )}
       </header>
 
-      <div className="driver-metric-strip">
-        <div><Gauge size={18} /><span>Skor rata-rata<strong>88,8</strong></span></div>
-        <div><Users size={18} /><span>Pengemudi aktif<strong>{drivers.length}</strong></span></div>
-        <div><Fuel size={18} /><span>Efisiensi rata-rata<strong>4,28 km/L</strong></span></div>
-        <div><Route size={18} /><span>Perlu pembinaan<strong>1 orang</strong></span></div>
-      </div>
-
-      <div className="driver-command-grid">
-        <section className="driver-table-surface">
-          <div className="section-intro compact">
-            <div><span className="surface-kicker">Seluruh pengemudi</span><h2>Skor kepatuhan</h2></div>
+      {loading && !data && <p role="status">{id ? "Memuat data pengemudi…" : "Loading driver records…"}</p>}
+      {error && (
+        <div role="alert">
+          <p>{data
+            ? (id ? "Pembaruan gagal. Data terakhir tetap ditampilkan sebagai data tidak mutakhir." : "Refresh failed. The last snapshot remains visible as stale data.")
+            : (id ? "Data pengemudi tidak dapat dimuat. Periksa koneksi lalu coba lagi." : "Driver records could not be loaded. Check your connection and try again.")}</p>
+          <button type="button" onClick={() => setRefreshKey((key) => key + 1)}>{id ? "Coba lagi" : "Try again"}</button>
+        </div>
+      )}
+      {data && (
+        <>
+          <p className="workspace-data-note">
+            {id ? "Sumber" : "Source"}: {data.source}. {data.provenance[lang]}
+          </p>
+          <div className="driver-metric-strip">
+            <div><Truck size={18} /><span>{id ? "Unit tercatat" : "Assigned units"}<strong>{drivers.length}</strong></span></div>
+            <div><Users size={18} /><span>{id ? "Nama pengemudi" : "Named drivers"}<strong>{new Set(drivers.map((driver) => driver.driver_name)).size}</strong></span></div>
+            <div><Route size={18} /><span>{id ? "Deviasi saat ini" : "Current deviations"}<strong>{deviations.length}</strong></span></div>
+            <div><Wrench size={18} /><span>{id ? "Unit bermasalah" : "Damaged units"}<strong>{damaged.length}</strong></span></div>
           </div>
-          <div className="table-wrap">
-            <table className="driver-table">
-              <thead><tr><th>Pengemudi</th><th>Kendaraan</th><th>Kepatuhan rute</th><th>Efisiensi</th><th>Perjalanan</th><th>Deviasi</th></tr></thead>
-              <tbody>
-                {drivers.map((driver) => (
-                  <tr key={driver.truck} className={driver.deviations > 5 ? "needs-attention" : ""}>
-                    <td><span className="driver-person"><i>{initials(driver.name)}</i><strong>{driver.name}</strong></span></td>
-                    <td><code>{driver.truck}</code></td>
-                    <td><span className="score-cell"><span><i style={{ width: `${driver.score}%` }} /></span><b>{driver.score}%</b></span></td>
-                    <td>{driver.fuel.toFixed(1)} km/L</td>
-                    <td>{driver.trips}</td>
-                    <td><span className={`deviation-badge ${driver.deviations > 5 ? "danger" : driver.deviations ? "warning" : "success"}`}>{driver.deviations ? `${driver.deviations} kali` : "Nihil"}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
 
-        <aside className="driver-attention-rail">
-          <span className="attention-icon"><AlertTriangle size={19} /></span>
-          <span className="surface-kicker">Prioritas pembinaan</span>
-          <h2>{risky.name}</h2>
-          <p>{risky.deviations} deviasi rute terdeteksi pada {risky.trips} perjalanan. Efisiensi BBM juga berada di bawah rerata armada.</p>
-          <dl>
-            <div><dt>Kendaraan</dt><dd>{risky.truck}</dd></div>
-            <div><dt>Kepatuhan</dt><dd>{risky.score}%</dd></div>
-            <div><dt>Efisiensi</dt><dd>{risky.fuel.toFixed(1)} km/L</dd></div>
-          </dl>
-          <div className="attention-note"><strong>Rekomendasi</strong><span>Tinjau bukti rute dan lakukan briefing sebelum sif berikutnya.</span></div>
-        </aside>
-      </div>
+          {drivers.length === 0 ? (
+            <p role="status">{id ? "Belum ada penugasan pengemudi dalam cuplikan armada." : "No driver assignments in this fleet snapshot."}</p>
+          ) : (
+            <div className="driver-command-grid">
+              <section className="driver-table-surface">
+                <div className="section-intro compact">
+                  <div><h2>{id ? "Penugasan per kendaraan" : "Assignments by vehicle"}</h2></div>
+                </div>
+                <div className="table-wrap">
+                  <table className="driver-table">
+                    <thead><tr>
+                      <th scope="col">{id ? "Pengemudi" : "Driver"}</th>
+                      <th scope="col">{id ? "Kendaraan" : "Vehicle"}</th>
+                      <th scope="col">{id ? "Wilayah" : "Zone"}</th>
+                      <th scope="col">{id ? "Kondisi" : "Condition"}</th>
+                      <th scope="col">{id ? "Deviasi rute saat ini" : "Current route deviation"}</th>
+                    </tr></thead>
+                    <tbody>
+                      {drivers.map((driver) => (
+                        <tr key={driver.truck_code} className={driver.deviation_violated || driver.is_damaged ? "needs-attention" : ""}>
+                          <td><span className="driver-person"><i aria-hidden="true">{initials(driver.driver_name)}</i><strong>{driver.driver_name}</strong></span></td>
+                          <td><code>{driver.truck_code}</code></td>
+                          <td>{driver.assigned_zone || "—"}</td>
+                          <td><span className={`deviation-badge ${driver.is_damaged ? "danger" : "success"}`}>
+                            {driver.is_damaged ? (id ? "Perawatan / rusak" : "Maintenance / damaged") : (id ? "Beroperasi" : "Operating")}
+                          </span></td>
+                          <td><span className={`deviation-badge ${driver.deviation_violated ? "warning" : "success"}`}>
+                            {driver.deviation_violated ? distance(driver.deviation_meters) : (id ? "Tidak terdeteksi" : "None flagged")}
+                          </span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <aside className="driver-attention-rail">
+                <span className="attention-icon"><AlertTriangle size={19} /></span>
+                <h2>{id ? "Prioritas operasional" : "Operational priority"}</h2>
+                {priority ? (
+                  <>
+                    <p>{priority.driver_name} · {priority.truck_code}</p>
+                    <p>{priority.deviation_violated
+                      ? (id
+                        ? `Deviasi rute saat ini: ${distance(priority.deviation_meters)} dari koridor.`
+                        : `Current route deviation: ${distance(priority.deviation_meters)} from the corridor.`)
+                      : (id ? "Kendaraan ditandai untuk perawatan atau kerusakan." : "Vehicle flagged for maintenance or damage.")}</p>
+                    <div className="attention-note"><strong>{id ? "Langkah berikutnya" : "Next step"}</strong>
+                      <span>{priority.deviation_violated
+                        ? (id ? "Tinjau bukti rute kendaraan sebelum menghubungi pengemudi." : "Review this vehicle’s route evidence before contacting the driver.")
+                        : (id ? "Periksa laporan kerusakan kendaraan sebelum menugaskan perjalanan berikutnya." : "Review vehicle damage reports before the next assignment.")}</span>
+                    </div>
+                  </>
+                ) : (
+                  <p>{id ? "Tidak ada deviasi atau kerusakan yang ditandai dalam cuplikan ini." : "No flagged deviations or damaged vehicles in this snapshot."}</p>
+                )}
+              </aside>
+            </div>
+          )}
+        </>
+      )}
     </section>
   );
 }

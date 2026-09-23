@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      try {
+        document.documentElement.lang = localStorage.getItem("jwis_lang") === "en" ? "en" : "id";
+      } catch {
+        document.documentElement.lang = "id";
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#176b54" />
     <link rel="manifest" href="/manifest.webmanifest" />

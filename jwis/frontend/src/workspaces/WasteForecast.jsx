@@ -22,11 +22,11 @@ export function WasteForecast({
   ];
 
   return (
-    <section className="forecast-workspace workspace-page" data-testid="forecast-workspace">
+    <section className="forecast-workspace workspace-page" data-testid="forecast-workspace" aria-labelledby="forecast-title">
       <header className="workspace-heading forecast-heading">
         <div>
           <span className="workspace-kicker"><CloudSun size={14} /> Intelijen permintaan</span>
-          <h1>{lang === "id" ? "Prediksi timbulan sampah" : "Waste generation forecast"}</h1>
+          <h1 id="forecast-title">{lang === "id" ? "Prediksi timbulan sampah" : "Waste generation forecast"}</h1>
           <p>{lang === "id" ? "Temukan wilayah yang membutuhkan tambahan armada sebelum beban layanan meningkat." : "Find districts that need more fleet capacity before service demand rises."}</p>
         </div>
         <div className="forecast-heading-actions">
@@ -41,14 +41,14 @@ export function WasteForecast({
       <MetricStrip metrics={metrics} />
 
       <div className="forecast-command-grid" data-testid="forecast-command-grid">
-        <main className="forecast-primary-analysis" data-testid="forecast-primary-analysis">
+        <section className="forecast-primary-analysis" data-testid="forecast-primary-analysis" aria-labelledby="forecast-analysis-title">
           <div className="section-intro">
-            <div><span className="surface-kicker">Prioritas wilayah</span><h2>Peta kebutuhan layanan</h2></div>
+            <div><span className="surface-kicker">Prioritas wilayah</span><h2 id="forecast-analysis-title">Peta kebutuhan layanan</h2></div>
             <p>Urutkan wilayah berdasarkan beban prediksi dan kesiapan sumber daya.</p>
           </div>
           {districts}
-        </main>
-        <aside className="forecast-context-rail" aria-label="Faktor pemicu prediksi">
+        </section>
+        <aside className="forecast-context-rail" aria-label={lang === "id" ? "Faktor pemicu prediksi" : "Forecast drivers"}>
           <div className="section-intro compact">
             <div><span className="surface-kicker">Konteks keputusan</span><h2>Faktor pemicu</h2></div>
           </div>
@@ -57,9 +57,9 @@ export function WasteForecast({
         </aside>
       </div>
 
-      <section className="forecast-evidence-section">
+      <section className="forecast-evidence-section" aria-labelledby="forecast-evidence-title">
         <div className="section-intro">
-          <div><span className="surface-kicker">Bukti model</span><h2>Rincian prediksi</h2></div>
+          <div><span className="surface-kicker">Bukti model</span><h2 id="forecast-evidence-title">Rincian prediksi</h2></div>
           <p>Gunakan rincian ini untuk memvalidasi wilayah sebelum masuk ke penyusunan rencana.</p>
         </div>
         {forecast}

@@ -156,7 +156,7 @@ test("admin sees damage report and resolves it", async ({ page }) => {
   const rep = await create.json();
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("tab", { name: "Laporan Kerusakan" }).click();
+  await page.getByRole("button", { name: "Laporan Kerusakan" }).click();
   await expect(page.getByText("e2e admin panel note").first()).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("NON-OPERASIONAL").first()).toBeVisible();
 
@@ -191,7 +191,7 @@ test("admin sees spj evidence summary after driver flow", async ({ page }) => {
   });
 
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.getByRole("tab", { name: "Surat Perintah Jalan" }).click();
+  await page.getByRole("button", { name: "Surat Perintah Jalan" }).click();
   await page.getByText(spj.spj_number).first().click();
   await expect(page.getByText(/Petugas: Dicky/)).toBeVisible({ timeout: 15000 });
   await expect(page.getByText(/40(\.0)? kg/)).toBeVisible();

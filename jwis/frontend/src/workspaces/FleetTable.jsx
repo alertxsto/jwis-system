@@ -40,7 +40,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
         </div>
       </div>
       <div className="table-wrap fleet-table-wrap">
-        <table className="fleet-state-table" aria-label="Fleet operational status">
+        <table className="fleet-state-table" aria-label={lang === "id" ? "Status operasional armada" : "Fleet operational status"}>
           <thead>
             <tr>
               <th scope="col" style={{ width: "18%" }}>{t("ft_th_truck")}</th>
@@ -100,7 +100,7 @@ export function FleetTable({ trucks, onOpenTripHistory }) {
                       <span className="speed-badge">{truck.latest_position?.speed_kmh || 0} km/h</span>
                     </td>
                     <td>
-                      <button className="text-button" type="button" aria-label={`View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)} style={{ height: "30px", padding: "0 10px", fontSize: "12px" }}>
+                      <button className="text-button" type="button" aria-label={lang === "id" ? `Lihat riwayat perjalanan ${truck.truck_code}` : `View ${truck.truck_code} trip history`} onClick={() => onOpenTripHistory?.(truck.truck_code)} style={{ height: "30px", padding: "0 10px", fontSize: "12px" }}>
                         {t("btn_trip_history")}
                       </button>
                     </td>

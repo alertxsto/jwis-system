@@ -88,8 +88,8 @@ const translations = {
     tab_queue: "TPA Queue & Optimization",
     tab_evidence: "Route Evidence",
     tab_impact: "Carbon Footprint",
-    tab_spj: "Surat Perintah Jalan",
-    tab_damage: "Laporan Kerusakan",
+    tab_spj: "Dispatch orders",
+    tab_damage: "Damage reports",
     // Fleet KPIs
     kpi_active_trucks: "Active Trucks",
     kpi_active_trucks_sub: "live fleet in operation",
@@ -354,13 +354,17 @@ const LanguageContext = createContext({
 });
 
 export function LanguageProvider({ children }) {
-  const [lang, setLangState] = useState(() => {
-    return localStorage.getItem("jwis_lang") || "id";
-  });
+  const [lang, setLangState] = useState(() => document.documentElement.lang === "en" ? "en" : "id");
 
   function setLang(newLang) {
+    if (newLang !== "id" && newLang !== "en") return;
+    document.documentElement.lang = newLang;
     setLangState(newLang);
-    localStorage.setItem("jwis_lang", newLang);
+    try {
+      localStorage.setItem("jwis_lang", newLang);
+    } catch {
+      // The selected language still applies when browser storage is unavailable.
+    }
   }
 
   function t(key) {

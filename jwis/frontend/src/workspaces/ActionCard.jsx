@@ -1,16 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, Clock, Route, Send } from "lucide-react";
 import { useLanguage } from "../i18n.jsx";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
-
-function authHeaders() {
-  const token = localStorage.getItem("jwis_token");
-  return {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+import { authenticatedRequest, createAlertDispatch } from "../dispatchApi.js";
 
 function pickAlert(alerts) {
   if (!Array.isArray(alerts) || alerts.length === 0) return null;
@@ -20,6 +11,12 @@ function pickAlert(alerts) {
 function localizeIssue(text, lang) {
   if (lang !== "id") return text;
   const corridor = String(text).match(/Truck is ([\d.]+) meters from the assigned corridor\.?/i);
+  if (String(text).trim() === "Move this truck to lower-priority pickups and assign backup capacity.") {
+    return "Alihkan kendaraan ini ke pengangkutan prioritas lebih rendah dan tugaskan armada cadangan.";
+  }
+  if (String(text).trim() === "Truck remains off the assigned corridor (sustained-deviation latch, clears under 50 m).") {
+    return "Kendaraan masih di luar koridor tugas (deviasi berlanjut, pulih saat jarak di bawah 50 m).";
+  }
   if (!corridor) return text;
   const meters = Number(corridor[1]);
   const distance = meters >= 1000
@@ -37,10 +34,15 @@ function localizeRoute(name, lang) {
 
 export function ActionCard({ snapshot, targetTruck = null }) {
   const { t, lang } = useLanguage();
-  const [phase, setPhase] = useState("idle"); // idle | sending | sent | confirmed | error
-  const [waConnected, setWaConnected] = useState(null); // null = unknown, checked on click
+  const [phase, setPhase] = useState("idle"); // idle | sending | sent | confirmed | escalated | cancelled | error
+  const [waConnected, setWaConnected] = useState(null);
   const [confirmedAt, setConfirmedAt] = useState("");
+  const [fieldNote, setFieldNote] = useState("");
+  const [statusError, setStatusError] = useState("");
+  const [sendError, setSendError] = useState("");
   const pollRef = useRef(null);
+  const inFlightRef = useRef(false);
+  const requestGeneration = useRef(0);
 
   const fallbackAlert = pickAlert(snapshot?.alerts);
   const alerts = Array.isArray(snapshot?.alerts) ? snapshot.alerts : [];
@@ -58,93 +60,129 @@ export function ActionCard({ snapshot, targetTruck = null }) {
 
   useEffect(() => {
     return () => {
+      requestGeneration.current += 1;
       clearInterval(pollRef.current);
     };
   }, []);
 
   useEffect(() => {
-    // Retargeting the overlay resets the send flow so a "sent/confirmed"
-    // state never bleeds onto a different truck.
+    // An old request must not update the card after the operator retargets it.
+    requestGeneration.current += 1;
+    inFlightRef.current = false;
     setPhase("idle");
     setConfirmedAt("");
+    setFieldNote("");
+    setStatusError("");
+    setSendError("");
+    setWaConnected(null);
     clearInterval(pollRef.current);
     pollRef.current = null;
   }, [truckCode]);
 
-  function startConfirmationPoll(code) {
+  function startConfirmationPoll(dispatchId, generation) {
     clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
+    const poll = async () => {
       try {
-        const res = await fetch(`${API_URL}/dispatch/${code}`, { headers: authHeaders() });
-        if (!res.ok) return;
-        const pending = await res.json();
-        if (Array.isArray(pending) && pending.length === 0) {
+        const response = await authenticatedRequest(`/dispatch/${encodeURIComponent(dispatchId)}/status`);
+        if (generation !== requestGeneration.current) return;
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            setStatusError(response.status === 401
+              ? (lang === "id" ? "Sesi berakhir. Masuk kembali untuk memeriksa respons lapangan." : "Session expired. Sign in again to check the field response.")
+              : (lang === "id" ? "Akses ditolak. Tidak dapat memeriksa respons lapangan." : "Access denied. Cannot check the field response."));
+            clearInterval(pollRef.current);
+            pollRef.current = null;
+          }
+          return;
+        }
+        const dispatch = await response.json();
+        if (generation !== requestGeneration.current || dispatch.id !== dispatchId) return;
+        const status = dispatch.field_status?.toUpperCase();
+        if (status === "PENDING") return;
+        if (status === "READY" || status === "ISSUE" || status === "CANCELLED" || status === "CANCELED") {
           clearInterval(pollRef.current);
           pollRef.current = null;
-          setConfirmedAt(new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" }));
-          setPhase("confirmed");
+          setFieldNote(dispatch.confirmed_note || "");
+          if (status === "READY") {
+            setConfirmedAt(new Date(dispatch.confirmed_at || Date.now()).toLocaleTimeString(
+              lang === "id" ? "id-ID" : "en-US", { hour: "2-digit", minute: "2-digit" },
+            ));
+            setPhase("confirmed");
+          } else {
+            setPhase(status === "ISSUE" ? "escalated" : "cancelled");
+          }
         }
       } catch {
-        /* keep polling */
+        // Retain pending status until a later poll can read an actual field response.
       }
-    }, 8000);
+    };
+    poll();
+    pollRef.current = setInterval(poll, 8000);
   }
 
   async function handleSend() {
-    if (!alert || phase === "sending" || phase === "sent") return;
-
-    // Check the WhatsApp gateway once before sending.
-    if (waConnected === null) {
-      try {
-        const res = await fetch(`${API_URL}/whatsapp/status`, { headers: authHeaders() });
-        const body = await res.json();
-        setWaConnected(body.connected === true);
-      } catch {
-        setWaConnected(false);
-      }
-    }
-
+    if (!alert || inFlightRef.current || phase !== "idle" && phase !== "error") return;
+    inFlightRef.current = true;
+    const generation = requestGeneration.current;
     setPhase("sending");
-    const instruction = route
-      ? `${t("ac_instruction_route")} ${route.name}. ${t("ac_instruction_confirm")}`
-      : `${t("ac_instruction_handle")}: ${issueText}`;
+    setSendError("");
 
     try {
-      const dispatchRes = await fetch(`${API_URL}/dispatch`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          truck_code: truckCode,
-          instruction,
-          manager_id: localStorage.getItem("jwis_role") || "manager_central",
-        }),
-      });
-      if (!dispatchRes.ok) throw new Error("dispatch failed");
-    } catch {
-      setPhase("error");
-      return;
-    }
+      const dispatchRes = await createAlertDispatch(alert, t, issueText);
+      if (generation !== requestGeneration.current) return;
+      if (!dispatchRes.ok) {
+        setSendError(dispatchRes.status === 401
+          ? (lang === "id" ? "Sesi berakhir. Masuk kembali untuk mengirim instruksi." : "Session expired. Sign in again to dispatch.")
+          : dispatchRes.status === 403
+            ? (lang === "id" ? "Akses ditolak. Anda tidak dapat mengirim instruksi." : "Access denied. You cannot dispatch this instruction.")
+            : t("ac_send_failed"));
+        setPhase("error");
+        return;
+      }
+      const created = await dispatchRes.json();
+      if (generation !== requestGeneration.current) return;
+      setPhase("sent");
+      if (created.id) startConfirmationPoll(created.id, generation);
 
-    // Best-effort WhatsApp notification; failure must not roll back the dispatch.
-    try {
-      await fetch(`${API_URL}/whatsapp/alert`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: JSON.stringify({
-          truck_code: truckCode,
-          issue: issueText,
-          route_name: route?.name || "",
-          recommendation: route
-            ? `${route.name} (ETA ${route.eta_minutes} ${t("ac_minutes")})`
-            : t("ac_instruction_handle"),
-        }),
-      });
+      // Notification failure does not undo an already persisted dispatch.
+      try {
+        const status = await authenticatedRequest("/whatsapp/status");
+        if (generation !== requestGeneration.current) return;
+        const gateway = status.ok ? await status.json() : null;
+        if (generation !== requestGeneration.current) return;
+        setWaConnected(gateway?.connected === true);
+        const notification = await authenticatedRequest("/whatsapp/alert", {
+          method: "POST",
+          body: JSON.stringify({
+            truck_code: truckCode,
+            issue: issueText,
+            recommendation: route
+              ? `${route.name} (ETA ${route.eta_minutes} ${t("ac_minutes")})`
+              : t("ac_instruction_handle"),
+          }),
+        });
+        if (generation !== requestGeneration.current) return;
+        if (notification.status === 401 || notification.status === 403) {
+          setStatusError(notification.status === 401
+            ? (lang === "id" ? "Instruksi tersimpan, tetapi sesi berakhir sebelum notifikasi WhatsApp dikirim." : "Dispatch saved, but the session expired before WhatsApp notification.")
+            : (lang === "id" ? "Instruksi tersimpan, tetapi akses notifikasi WhatsApp ditolak." : "Dispatch saved, but WhatsApp notification access was denied."));
+        } else if (!notification.ok) {
+          setWaConnected(false);
+        } else {
+          const result = await notification.json();
+          if (generation === requestGeneration.current && !result.sent) setWaConnected(false);
+        }
+      } catch {
+        if (generation === requestGeneration.current) setWaConnected(false);
+      }
     } catch {
-      /* gateway offline is surfaced via the warning */
+      if (generation === requestGeneration.current) {
+        setSendError(t("ac_send_failed"));
+        setPhase("error");
+      }
+    } finally {
+      if (generation === requestGeneration.current) inFlightRef.current = false;
     }
-
-    setPhase("sent");
-    startConfirmationPoll(truckCode);
   }
 
   if (!alert && !infoTruck) {
@@ -208,20 +246,33 @@ export function ActionCard({ snapshot, targetTruck = null }) {
           {t("ac_wa_offline")}
         </p>
       )}
+      {statusError && <p className="action-card-warning" role="alert">{statusError}</p>}
 
       {phase === "sent" && (
-        <p className="action-card-success" data-testid="action-card-sent">
+        <p className="action-card-issue" role="status" data-testid="action-card-sent">
           {t("ac_sent_waiting").replace("{driver}", driverName).replace("{truck}", truckCode)}
         </p>
       )}
       {phase === "confirmed" && (
-        <p className="action-card-success" data-testid="action-card-confirmed">
+        <p className="action-card-success" role="status" data-testid="action-card-confirmed">
           {t("ac_confirmed")} {confirmedAt}
+        </p>
+      )}
+      {phase === "escalated" && (
+        <p className="action-card-warning" role="alert" data-testid="action-card-escalated">
+          {lang === "id" ? "Masalah dilaporkan dari lapangan. Eskalasi ke pengawas." : "Field issue reported. Escalate to the supervisor."}
+          {fieldNote && <> {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}</>}
+        </p>
+      )}
+      {phase === "cancelled" && (
+        <p className="action-card-issue" role="status" data-testid="action-card-cancelled">
+          {lang === "id" ? "Instruksi dibatalkan di lapangan. Tinjau sebelum mengirim ulang." : "Instruction cancelled in the field. Review before dispatching again."}
+          {fieldNote && <> {lang === "id" ? "Catatan:" : "Note:"} {fieldNote}</>}
         </p>
       )}
       {phase === "error" && (
         <p className="action-card-warning" role="alert" data-testid="action-card-error">
-          {t("ac_send_failed")}
+          {sendError || t("ac_send_failed")}
         </p>
       )}
 

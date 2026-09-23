@@ -93,6 +93,7 @@ const LiveFleetMap = lazy(() => import("./LiveFleetMap.jsx").then((m) => ({ defa
 import "./styles.css";
 
 import { API_URL } from "./config.js";
+import { authenticatedRequest, createAlertDispatch } from "./dispatchApi.js";
 
 if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -257,41 +258,57 @@ function CommandCenter({ onLogout }) {
   }
 
   async function dispatch(alert) {
-    const route = alert.recommended_routes?.[0]?.name || "backup operating route";
-    const instruction = "Use " + route + ". Confirm when accepted.";
     try {
-      const response = await fetch(`${API_URL}/dispatch`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ truck_code: alert.truck_code, instruction }),
-      });
-      if (!response.ok) throw new Error("dispatch failed");
-      setToast("Instruction sent to " + alert.truck_code);
+      const response = await createAlertDispatch(alert, t);
+      if (!response.ok) {
+        setToast({ error: true, message: response.status === 401
+          ? (lang === "id" ? "Sesi berakhir. Masuk kembali untuk mengirim instruksi." : "Session expired. Sign in again to dispatch.")
+          : response.status === 403
+            ? (lang === "id" ? "Akses ditolak. Anda tidak dapat mengirim instruksi." : "Access denied. You cannot dispatch this instruction.")
+            : (lang === "id" ? "Gagal mengirim instruksi. Coba lagi." : "Dispatch failed. Try again.") });
+        return false;
+      }
+      setToast(lang === "id" ? `Instruksi dikirim ke ${alert.truck_code}` : `Instruction sent to ${alert.truck_code}`);
       refresh();
+      return true;
     } catch {
-      setToast("Demo mode: instruction prepared for " + alert.truck_code);
+      setToast({ error: true, message: lang === "id" ? "Tidak dapat menghubungi server dispatch. Coba lagi." : "Cannot reach dispatch server. Try again." });
+      return false;
+    } finally {
+      setTimeout(() => setToast(""), 4200);
     }
-    setTimeout(() => setToast(""), 3200);
   }
 
   async function sendWhatsAppAlert(alert) {
-    const route = alert.recommended_routes?.[0]?.name || "dispatch backup fleet";
+    const route = alert.recommended_routes?.[0]?.name || (lang === "id" ? "tugaskan armada cadangan" : "dispatch backup fleet");
     try {
-      const response = await fetch(`${API_URL}/whatsapp/alert`, {
+      const response = await authenticatedRequest("/whatsapp/alert", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           truck_code: alert.truck_code,
-          issue: alert.description,
+          issue: alert.description || alert.title,
           recommendation: route,
         }),
       });
+      if (!response.ok) {
+        setToast({ error: true, message: response.status === 401
+          ? (lang === "id" ? "Sesi berakhir. Masuk kembali untuk mengirim WhatsApp." : "Session expired. Sign in again to send WhatsApp.")
+          : response.status === 403
+            ? (lang === "id" ? "Akses ditolak. WhatsApp tidak terkirim." : "Access denied. WhatsApp was not sent.")
+            : (lang === "id" ? "WhatsApp gagal dikirim. Coba lagi." : "WhatsApp delivery failed. Try again.") });
+        return;
+      }
       const data = await response.json();
-      setToast(data.sent || data.partial ? data.message : "WhatsApp: " + (data.message || "send failed"));
+      setToast(data.sent
+        ? (lang === "id" ? "WhatsApp berhasil dikirim." : "WhatsApp delivered.")
+        : { error: !data.partial, message: data.partial
+          ? (lang === "id" ? "WhatsApp hanya terkirim ke sebagian penerima." : "WhatsApp delivered to some recipients only.")
+          : (lang === "id" ? "WhatsApp tidak terkirim. Periksa gateway." : "WhatsApp not delivered. Check the gateway.") });
     } catch {
-      setToast("WhatsApp alert endpoint unavailable");
+      setToast({ error: true, message: lang === "id" ? "Tidak dapat menghubungi layanan WhatsApp." : "Cannot reach the WhatsApp service." });
+    } finally {
+      setTimeout(() => setToast(""), 4200);
     }
-    setTimeout(() => setToast(""), 4200);
   }
 
   return (
@@ -341,30 +358,30 @@ function CommandCenter({ onLogout }) {
               <div className="deck-tools-section">
                 <span className="deck-tools-label">{lang === "id" ? "Replay rute" : "Route replay"}</span>
                 <div className="playback-select-wrap">
-                  <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
+                  <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label={lang === "id" ? "Putar ulang perjalanan" : "Trip playback"}>
                     <option value="">{lang === "id" ? "Putar riwayat rute..." : "Trip playback..."}</option>
                     {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                   {playbackTruck && (
                     <button className="compact-enforce-btn" onClick={() => setPlaybackTruck(null)}>
-                      Tutup replay
+                      {lang === "id" ? "Tutup putar ulang" : "Close replay"}
                     </button>
                   )}
                 </div>
               </div>
               <details className="deck-tools-section deck-legend">
                 <summary>{lang === "id" ? "Legenda peta" : "Map legend"}</summary>
-                <div className="map-legend deck-legend-body" aria-label="Map legend">
-                  <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Titik TPS" : "TPS locations"} <em className="legend-tag">REAL</em></span>
-                  <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"} <em className="legend-tag">REAL</em></span>
+                <div className="map-legend deck-legend-body" aria-label={lang === "id" ? "Legenda peta" : "Map legend"}>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Titik TPS" : "TPS locations"} <em className="legend-tag">{lang === "id" ? "RIIL" : "REAL"}</em></span>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"} <em className="legend-tag">{lang === "id" ? "RIIL" : "REAL"}</em></span>
                   <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> {lang === "id" ? "Risiko Sampah Wilayah" : "District waste risk"} <em className="legend-tag">MODEL</em></span>
-                  <span><i className="legend-assigned" style={{ display: "inline-block" }} /> {lang === "id" ? "Koridor Ditugaskan" : "Assigned corridor"} <em className="legend-tag">SIM</em></span>
-                  <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> {lang === "id" ? "Rute Aktual" : "Actual (clean)"} <em className="legend-tag">SIM</em></span>
-                  <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> {lang === "id" ? "Segmen Pelanggaran" : "Violation segment"} <em className="legend-tag">SIM</em></span>
-                  <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> {lang === "id" ? "Rute OSRM" : "OSRM route"} <em className="legend-tag">LIVE</em></span>
+                  <span><i className="legend-assigned" style={{ display: "inline-block" }} /> {lang === "id" ? "Koridor Ditugaskan" : "Assigned corridor"} <em className="legend-tag">{lang === "id" ? "SIMULASI" : "SIMULATED"}</em></span>
+                  <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> {lang === "id" ? "Rute Aktual" : "Actual (clean)"} <em className="legend-tag">{lang === "id" ? "SIMULASI" : "SIMULATED"}</em></span>
+                  <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> {lang === "id" ? "Segmen Pelanggaran" : "Violation segment"} <em className="legend-tag">{lang === "id" ? "SIMULASI" : "SIMULATED"}</em></span>
+                  <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> {lang === "id" ? "Rute OSRM" : "OSRM route"} <em className="legend-tag">{lang === "id" ? "LANGSUNG" : "LIVE"}</em></span>
                   <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
-                  <span><span className="legend-icon-unlicensed" /> {lang === "id" ? "Kolektor Liar" : "Unlicensed Collector"} <em className="legend-tag">SIM</em></span>
-                  <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> {lang === "id" ? "Event Keramaian" : "Crowd Event"} <em className="legend-tag">SIM</em></span>
+                  <span><span className="legend-icon-unlicensed" /> {lang === "id" ? "Kolektor Liar" : "Unlicensed Collector"} <em className="legend-tag">{lang === "id" ? "SIMULASI" : "SIMULATED"}</em></span>
+                  <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> {lang === "id" ? "Acara Keramaian" : "Crowd Event"} <em className="legend-tag">{lang === "id" ? "SIMULASI" : "SIMULATED"}</em></span>
                 </div>
               </details>
               <div className="deck-tools-section">
@@ -430,6 +447,7 @@ function CommandCenter({ onLogout }) {
         {activeWorkspace === "planning" && (
         <ErrorBoundary name="planning">
           <PlanningDecisionFlow
+            snapshot={snapshot}
             attendance={attendance}
             setAttendance={setAttendance}
             rainfall={rainfall}
@@ -474,7 +492,7 @@ function CommandCenter({ onLogout }) {
         {activeWorkspace === "audit" && <ErrorBoundary name="audit"><DataAuditWorkspace /></ErrorBoundary>}
       </section>
       )}
-      {toast && <div className="toast"><Check size={16} /> {toast}</div>}
+      {toast && <div className="toast" role={toast.error ? "alert" : "status"}>{toast.error ? <AlertTriangle size={16} /> : <Check size={16} />} {toast.message || toast}</div>}
     </AppShell>
   );
 }

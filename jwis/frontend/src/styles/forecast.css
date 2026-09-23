@@ -55,7 +55,7 @@
 }
 
 .prediction-meta b {
-  color: var(--ui-accent-foreground);
+  color: var(--ui-accent);
   font-weight: 800;
 }
 
@@ -68,7 +68,7 @@
   border: 1px solid #d8d9f5;
   border-radius: 8px;
   margin-bottom: 12px;
-  color: var(--ui-accent-foreground);
+  color: var(--ui-ink);
 }
 
 .weather-hero strong {
@@ -78,8 +78,7 @@
 .weather-hero span {
   display: block;
   font-size: 12px;
-  color: var(--ui-accent-foreground);
-  opacity: 0.9;
+  color: var(--ui-ink-soft);
 }
 
 .weather-hero b {

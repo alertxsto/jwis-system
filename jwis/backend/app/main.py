@@ -491,6 +491,54 @@ def fleet() -> list[dict]:
     return get_dynamic_trucks()
 
 
+@app.get("/api/fleet/driver-analytics")
+def fleet_driver_analytics() -> dict[str, Any]:
+    """Current truck/driver assignments from the same cached snapshot as Fleet.
+
+    Each row represents one truck assignment, not a historical trip or an
+    individual driver's lifetime performance. Deviation is a current corridor
+    observation, not a count of past incidents. Positions and driver identities
+    in this pilot are simulated; the generated fleet's mix is grounded in the
+    DKI truck census. No fuel efficiency, trip totals, or driver scores are
+    available from this source.
+    """
+    snapshot = command_center()
+    return {
+        "sampled_at": time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ", time.gmtime(_command_center_cache["ts"])
+        ),
+        "source": "command-center.trucks",
+        "provenance": {
+            "id": (
+                "Telemetri dan penugasan pengemudi disimulasikan; komposisi "
+                "armada mengikuti sensus truk DKI 2023. Bukan GPS langsung "
+                "atau ukuran kinerja pengemudi."
+            ),
+            "en": (
+                "Simulated fleet telemetry and driver assignments; generated "
+                "fleet composition is grounded in the DKI 2023 truck census. "
+                "Not live GPS or measured driver performance."
+            ),
+        },
+        "drivers": [
+            {
+                "truck_code": truck["truck_code"],
+                "driver_name": truck["driver_name"],
+                "assigned_zone": truck.get("assigned_zone"),
+                "status": truck.get("status"),
+                "is_damaged": bool(truck.get("is_damaged")),
+                "deviation_violated": bool(
+                    (truck.get("deviation") or {}).get("violated")
+                ),
+                "deviation_meters": (truck.get("deviation") or {}).get(
+                    "distance_meters"
+                ),
+            }
+            for truck in snapshot["trucks"]
+        ],
+    }
+
+
 @app.get("/api/fleet/status-overview")
 def fleet_status_overview() -> dict[str, Any]:
     """Case 1 'position AND activity' + fleet damage status: fleet-wide roll-up
@@ -957,6 +1005,13 @@ def create_dispatch(payload: DispatchRequest, _role: str = Depends(require_permi
 @app.get("/api/dispatch/{truck_code}")
 def pending_dispatches(truck_code: str) -> list[dict]:
     return history_store.pending_dispatches(truck_code)
+
+@app.get("/api/dispatch/{dispatch_id}/status")
+def dispatch_status(dispatch_id: str, _role: str = Depends(require_any_permission("dispatch:create", "dispatch:confirm"))) -> dict:
+    dispatch = history_store.get_dispatch(dispatch_id)
+    if dispatch is None:
+        raise HTTPException(status_code=404, detail="Dispatch not found")
+    return dispatch
 
 @app.post("/api/dispatch/{dispatch_id}/confirm")
 def confirm_dispatch(dispatch_id: str, payload: DispatchConfirmRequest, _role: str = Depends(require_any_permission("dispatch:confirm", "dispatch:create"))) -> dict:

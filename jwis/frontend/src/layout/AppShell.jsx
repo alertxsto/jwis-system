@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useLayoutEffect, useRef, useState } from "react";
 import {
   BarChart3,
   Bot,
@@ -33,14 +33,63 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
   const resolvedWorkspace = ALIASES[activeWorkspace] || activeWorkspace;
   const current = items.find((item) => item.id === resolvedWorkspace) || items[0];
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const assistantTriggerRef = useRef(null);
+  const assistantDialogRef = useRef(null);
+  const shellRef = useRef(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    if (!assistantOpen) return;
+
+    const dialog = assistantDialogRef.current;
+    const main = dialog.parentElement.parentElement;
+    const background = [
+      ...Array.from(shellRef.current.children).filter((element) => element !== main),
+      ...Array.from(main.children).filter((element) => !element.contains(dialog)),
+    ];
+    const previousInert = background.map((element) => element.inert);
+    background.forEach((element) => { element.inert = true; });
+
+    const focusable = () => Array.from(dialog.querySelectorAll(
+      'a[href], button:not(:disabled), input:not(:disabled):not([type="hidden"]), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => element.tabIndex >= 0 && !element.matches(":disabled") && !element.closest("[inert]") && element.getClientRects().length > 0);
+    const initial = dialog.querySelector("#assistant-question");
+    (initial && !initial.disabled ? initial : focusable()[0] || dialog).focus();
+
     function onKeyDown(event) {
-      if (event.key === "Escape") setAssistantOpen(false);
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setAssistantOpen(false);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = focusable();
+      if (!controls.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
     }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+    function onFocusIn(event) {
+      if (!dialog.contains(event.target)) (focusable()[0] || dialog).focus();
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("focusin", onFocusIn, true);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("focusin", onFocusIn, true);
+      background.forEach((element, index) => { element.inert = previousInert[index]; });
+      assistantTriggerRef.current?.focus();
+    };
+  }, [assistantOpen]);
 
   function selectWorkspace(id) {
     onWorkspaceChange(id);
@@ -48,7 +97,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
   }
 
   return (
-    <div className="command-shell">
+    <div className="command-shell" ref={shellRef}>
       <aside className="command-sidebar" aria-label="Navigasi utama JWIS">
         <div className="command-brand">
           <span className="command-brand-mark" aria-hidden="true">J</span>
@@ -104,7 +153,7 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
               <button type="button" data-testid="lang-switch-id" className={lang === "id" ? "active" : ""} onClick={() => setLang("id")}>ID</button>
               <button type="button" data-testid="lang-switch-en" className={lang === "en" ? "active" : ""} onClick={() => setLang("en")}>EN</button>
             </div>
-            <button className="command-assistant" type="button" onClick={() => setAssistantOpen(true)}>
+            <button className="command-assistant" type="button" ref={assistantTriggerRef} aria-label={lang === "id" ? "Asisten operasi" : "Operations assistant"} onClick={() => setAssistantOpen(true)}>
               <Sparkles size={17} />
               <span>Asisten operasi</span>
             </button>
@@ -135,8 +184,8 @@ export function AppShell({ activeWorkspace, onWorkspaceChange, online, onLogout,
 
         {assistantOpen && (
           <div className="assistant-modal-backdrop" role="presentation" onMouseDown={() => setAssistantOpen(false)}>
-            <section className="assistant-modal" role="dialog" aria-modal="true" aria-label="Asisten operasi" onMouseDown={(event) => event.stopPropagation()}>
-              <button className="assistant-close" type="button" aria-label="Tutup asisten" onClick={() => setAssistantOpen(false)}>×</button>
+            <section className="assistant-modal" ref={assistantDialogRef} role="dialog" aria-modal="true" aria-label={lang === "id" ? "Asisten operasi" : "Operations assistant"} tabIndex={-1} onMouseDown={(event) => event.stopPropagation()}>
+              <button className="assistant-close" type="button" aria-label={lang === "id" ? "Tutup asisten" : "Close assistant"} onClick={() => setAssistantOpen(false)}>×</button>
               {assistant}
             </section>
           </div>

@@ -29,11 +29,11 @@ export function PredictionPanel({ predictions, allPredictions = predictions }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginBottom: "16px" }}>
         <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
           <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_hr_districts")}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#dc2626" }}>{predictions.length} {lang === "id" ? "distrik" : "districts"}</strong>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-danger)" }}>{predictions.length} {lang === "id" ? "distrik" : "districts"}</strong>
         </div>
         <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
           <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_peak_spike")}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#d97706" }}>+{highestSpike}%</strong>
+          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-warning)" }}>+{highestSpike}%</strong>
         </div>
         <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
           <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{t("fc_extra_cap")}</span>
@@ -77,7 +77,7 @@ export function PredictionPanel({ predictions, allPredictions = predictions }) {
                   <td>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       <div style={{ flex: 1, height: "6px", background: "var(--ui-surface-muted)", borderRadius: "9999px", overflow: "hidden", border: "1px solid var(--ui-border)" }}>
-                        <div style={{ height: "100%", width: `${Math.min(100, spike * 2)}%`, background: isCrit ? "#dc2626" : isHigh ? "#d97706" : "var(--ui-accent)" }} />
+                        <div style={{ height: "100%", width: `${Math.min(100, spike * 2)}%`, background: isCrit ? "var(--ui-danger)" : isHigh ? "var(--ui-warning)" : "var(--ui-accent)" }} />
                       </div>
                       <span className={`pill ${tone}`} style={{ minWidth: "48px", justifyContent: "center" }}>
                         +{spike}%

@@ -1255,7 +1255,7 @@
 }
 
 .compact-enforce-btn:hover:not(:disabled) {
-  background: #c96647;
+  background: var(--ui-accent-hover);
   transform: translateY(-1px);
 }
 

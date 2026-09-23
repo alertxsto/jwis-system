@@ -34,6 +34,20 @@ test("map canvas renders (not blank)", async ({ page }) => {
   await expect(canvas).toBeVisible({ timeout: 15000 });
 });
 
+test("cold Fleet load reuses aggregate map truth for route playback", async ({ page }) => {
+  const breadcrumbRequests = [];
+  page.on("request", (request) => {
+    if (/\/api\/fleet\/[^/]+\/breadcrumbs(?:\?|$)/.test(request.url())) breadcrumbRequests.push(request.url());
+  });
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByTestId("deck-tools-toggle").click();
+  const playback = page.getByRole("combobox", { name: "Putar ulang perjalanan" });
+  await expect(playback.locator('option[value="T-047"]')).toHaveCount(1);
+  expect(breadcrumbRequests).toEqual([]);
+  await playback.selectOption("T-047");
+  await expect(page.locator(".playback-marker")).toBeVisible();
+});
+
 test("actual routes colored by violation state", async ({ page }) => {
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(
@@ -52,9 +66,9 @@ test("map legend shows provenance tags", async ({ page }) => {
   await page.getByTestId("deck-tools-toggle").click();
   await page.locator(".deck-legend > summary").click();
   const legend = page.locator(".deck-legend-body");
-  await expect(legend).toContainText("LIVE");
+  await expect(legend).toContainText("LANGSUNG");
   await expect(legend).toContainText("MODEL");
-  await expect(legend).toContainText("SIM");
+  await expect(legend).toContainText("SIMULASI");
 });
 
 test("fleet panel labels positions as simulated data", async ({ page }) => {

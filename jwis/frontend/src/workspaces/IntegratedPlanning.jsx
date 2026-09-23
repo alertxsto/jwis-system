@@ -3,7 +3,7 @@ import { CheckCircle2, CircleDot, Workflow } from "lucide-react";
 import { StatusBadge } from "../ui/StatusBadge.jsx";
 import { useLanguage } from "../i18n.jsx";
 
-export function IntegratedPlanning({ summary, scenario, evidence, unmetCount }) {
+export function IntegratedPlanning({ summary, scenario, evidence, unmetCount, planStatus }) {
   const { lang } = useLanguage();
   const stages = [
     { number: "01", title: lang === "id" ? "Tetapkan skenario" : "Set scenario", description: lang === "id" ? "Uji permintaan dan cuaca" : "Test demand and weather", key: "inputs" },
@@ -14,19 +14,19 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount }) 
     <section className="planning-workspace workspace-page" data-testid="planning-workspace">
       <header className="workspace-heading">
         <div>
-          <span className="workspace-kicker"><Workflow size={14} /> Ruang keputusan</span>
+          <span className="workspace-kicker"><Workflow size={14} /> {lang === "id" ? "Ruang keputusan" : "Decision workspace"}</span>
           <h1>{lang === "id" ? "Rencana operasi terpadu" : "Integrated operations plan"}</h1>
           <p>{lang === "id" ? "Ubah prediksi menjadi alokasi armada yang dapat ditinjau, disetujui, dan dijalankan." : "Turn forecasts into fleet allocations that can be reviewed, approved, and dispatched."}</p>
         </div>
         <div className="planning-status">
-          {unmetCount > 0 ? <StatusBadge tone="danger">{unmetCount} kendala belum terpenuhi</StatusBadge> : <StatusBadge tone="success">Siap disusun</StatusBadge>}
+          {unmetCount > 0 ? <StatusBadge tone="danger">{lang === "id" ? `${unmetCount.toLocaleString("id-ID")} kendala belum terpenuhi` : `${unmetCount.toLocaleString("en-US")} unresolved constraints`}</StatusBadge> : <StatusBadge tone="success">{planStatus === "approved" ? (lang === "id" ? "Disetujui" : "Approved") : planStatus === "proposed" ? (lang === "id" ? "Siap ditinjau" : "Ready for review") : (lang === "id" ? "Siap disusun" : "Ready to plan")}</StatusBadge>}
         </div>
       </header>
 
-      <ol className="planning-progress" aria-label="Tahapan perencanaan">
-        <li className="active"><CircleDot size={17} /><span><b>01</b>Skenario</span></li>
-        <li><span className="progress-line" /><CircleDot size={17} /><span><b>02</b>Alokasi</span></li>
-        <li><span className="progress-line" /><CheckCircle2 size={17} /><span><b>03</b>Persetujuan</span></li>
+      <ol className="planning-progress" aria-label={lang === "id" ? "Tahapan perencanaan" : "Planning stages"}>
+        <li className="active"><CircleDot size={17} /><span><b>01</b>{lang === "id" ? "Skenario" : "Scenario"}</span></li>
+        <li><span className="progress-line" /><CircleDot size={17} /><span><b>02</b>{lang === "id" ? "Alokasi" : "Allocation"}</span></li>
+        <li><span className="progress-line" /><CheckCircle2 size={17} /><span><b>03</b>{lang === "id" ? "Persetujuan" : "Approval"}</span></li>
       </ol>
 
       <div className="planning-decision-grid">
@@ -43,7 +43,7 @@ export function IntegratedPlanning({ summary, scenario, evidence, unmetCount }) 
         <section className="planning-stage-card planning-approval-stage" aria-labelledby="planning-stage-03">
           <header className="planning-stage-heading">
             <span>03</span>
-            <div><h2 id="planning-stage-03">Tinjau & setujui</h2><p>Pastikan kapasitas, antrean TPA, dan kewenangan keputusan.</p></div>
+            <div><h2 id="planning-stage-03">{lang === "id" ? "Tinjau & setujui" : "Review & approve"}</h2><p>{lang === "id" ? "Pastikan kapasitas, antrean TPA, dan kewenangan keputusan." : "Check capacity, TPA queues, and decision authority."}</p></div>
           </header>
           <div className="planning-review-grid">
             <div className="planning-summary">{summary}</div>

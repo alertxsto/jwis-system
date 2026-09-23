@@ -27,6 +27,52 @@ function resolveStreetsStyle() {
   return IS_AUTOMATION ? MAP_STYLE : STREETS_STYLE_URL;
 }
 const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8001/api";
+const MAP_LOCALE_ID = {
+  "AttributionControl.ToggleAttribution": "Tampilkan atribusi",
+  "FullscreenControl.Enter": "Masuk layar penuh",
+  "FullscreenControl.Exit": "Keluar layar penuh",
+  "Map.Title": "Peta armada",
+  "Marker.Title": "Penanda peta",
+  "NavigationControl.ResetBearing": "Seret untuk memutar peta, klik untuk menghadap utara",
+  "NavigationControl.ZoomIn": "Perbesar",
+  "NavigationControl.ZoomOut": "Perkecil",
+  "Popup.Close": "Tutup popup",
+};
+
+function dataClass(value, lang) {
+  const classes = {
+    SIMULATED: ["Simulasi", "Simulated"],
+    MODEL_OUTPUT: ["Hasil model", "Model output"],
+    REAL: ["Data riil", "Real data"],
+    PROXY: ["Proksi", "Proxy"],
+  };
+  return classes[value]?.[lang === "id" ? 0 : 1] || value || (lang === "id" ? "Simulasi" : "Simulated");
+}
+
+function countUnit(value, lang, id, singular, plural) {
+  return lang === "id" ? id : Number(value) === 1 ? singular : plural;
+}
+
+const ACTIVITY_ID = {
+  maintenance_hold: "Ditahan untuk perawatan",
+  returning: "Kembali ke depo",
+  dumping_at_tpa: "Antre / bongkar di TPA",
+  loading_at_tps: "Muat sampah di TPS",
+  hauling_to_tpa: "Menuju TPA",
+};
+
+const DAMAGE_NOTE_ID = {
+  "Hydraulic compactor leak — held at depot": "Kebocoran hidraulik pemadat — ditahan di depo",
+  "Brake service due — limited duty": "Servis rem diperlukan — tugas dibatasi",
+  "Tire replacement scheduled": "Penggantian ban dijadwalkan",
+  "Engine overheating — backup dispatched": "Mesin terlalu panas — armada cadangan dikirim",
+  "Compactor fault reported by driver": "Kerusakan pemadat dilaporkan pengemudi",
+  "No open work order": "Tidak ada perintah kerja terbuka",
+};
+
+function localizedDamage(note, lang) {
+  return lang === "id" ? DAMAGE_NOTE_ID[note] || note : note;
+}
 
 function toLngLat(point) {
   return [point.lng, point.lat];
@@ -72,15 +118,18 @@ function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
     : truckData?.is_damaged 
       ? (lang === "id" ? "Kerusakan Armada" : "Fleet damage") 
       : (lang === "id" ? "Sesuai Koridor Normal" : "Normal corridor");
-  const rawStr = truthData?.raw_gps ? `${truthData.raw_gps.lat.toFixed(5)}, ${truthData.raw_gps.lng.toFixed(5)}` : "n/a";
-  const snapStr = truthData?.snapped_gps ? `${truthData.snapped_gps.lat.toFixed(5)}, ${truthData.snapped_gps.lng.toFixed(5)}` : "n/a";
-  const snapSrc = truthData?.provenance?.snapped_gps || "RAW_GPS_UNSNAPPED";
+  const rawStr = truthData?.raw_gps ? `${truthData.raw_gps.lat.toFixed(5)}, ${truthData.raw_gps.lng.toFixed(5)}` : "—";
+  const snapStr = truthData?.snapped_gps ? `${truthData.snapped_gps.lat.toFixed(5)}, ${truthData.snapped_gps.lng.toFixed(5)}` : "—";
+  const snapCode = truthData?.provenance?.snapped_gps || "RAW_GPS_UNSNAPPED";
+  const snapSrc = lang === "id"
+    ? ({ SIMULATED_NO_SNAP: "Simulasi tanpa penyelarasan", RAW_GPS_UNSNAPPED: "GPS mentah belum diselaraskan", FALLBACK_DEGRADED: "Penyelarasan tidak tersedia" }[snapCode] || snapCode)
+    : snapCode;
   const devM = Math.round(truthData?.deviation_m ?? truckData?.deviation?.distance_meters ?? 0);
   const speed = truckData?.latest_position?.speed_kmh ?? "?";
   const updated = truckData?.latest_position?.updated_seconds_ago ?? "?";
-  const activityTxt = truckData?.activity?.label ? `${lang === "id" ? "Aktivitas" : "Activity"}: ${truckData.activity.label}` : "";
-  const damageTxt = truckData?.is_damaged && truckData?.damage_status?.note ? `${lang === "id" ? "Kerusakan" : "Damage"}: ${truckData.damage_status.note}` : "";
-  const distLabel = lang === "id" ? `${devM} m dari koridor resmi - ${speed} km/jam` : `${devM} m from assigned road - ${speed} km/h`;
+  const activityTxt = truckData?.activity?.state ? `${lang === "id" ? "Aktivitas" : "Activity"}: ${lang === "id" ? ACTIVITY_ID[truckData.activity.state] || truckData.activity.label : truckData.activity.label}` : "";
+  const damageTxt = truckData?.is_damaged && truckData?.damage_status?.note ? `${lang === "id" ? "Kerusakan" : "Damage"}: ${localizedDamage(truckData.damage_status.note, lang)}` : "";
+  const distLabel = lang === "id" ? `${devM} m dari koridor resmi · ${speed} km/jam` : `${devM} m from assigned road · ${speed} km/h`;
   const trackBtn = followingCode === truckData.truck_code ? (lang === "id" ? "Berhenti Lacak" : "Stop tracking") : (lang === "id" ? "Lacak Truk" : "Track");
   const dispatchBtn = lang === "id" ? `Kirim Instruksi ${truckData.truck_code}` : `Dispatch ${truckData.truck_code}`;
   const fitBtn = lang === "id" ? "Paskan Rute" : "Fit route";
@@ -93,10 +142,10 @@ function renderTruckPopup(truckData, truthData, followingCode, lang = "id") {
         ${activityTxt ? `<small>${activityTxt}</small>` : ""}
         ${damageTxt ? `<small>${damageTxt}</small>` : ""}
         <small>${distLabel}</small>
-        <small>Raw GPS: ${rawStr}</small>
-        <small>Snapped: ${snapStr} (${snapSrc})</small>
-        <small>${lang === "id" ? "Diperbarui" : "Updated"} ${updated}s ${lang === "id" ? "lalu" : "ago"}</small>
-        <p class="popup-src">SIMULATION · not live GPS</p>
+        <small>${lang === "id" ? "GPS mentah" : "Raw GPS"}: ${rawStr}</small>
+        <small>${lang === "id" ? "Titik terselaraskan" : "Snapped position"}: ${snapStr} (${snapSrc})</small>
+        <small>${lang === "id" ? "Diperbarui" : "Updated"} ${updated} ${countUnit(updated, lang, "detik lalu", "second ago", "seconds ago")}</small>
+        <p class="popup-src">${lang === "id" ? "SIMULASI · bukan GPS langsung" : "SIMULATION · not live GPS"}</p>
         <button class="popup-track" data-track="${truckData.truck_code}">${trackBtn}</button>
         <button class="popup-dispatch" data-truck="${truckData.truck_code}">${dispatchBtn}</button>
         <button class="popup-fit" data-fit="${truckData.truck_code}">${fitBtn}</button>
@@ -224,6 +273,9 @@ export function LiveFleetMap({
   const { lang, t } = useLanguage();
   const containerRef = useRef(null);
   const mapRef = useRef(null);
+  const languageRef = useRef(lang);
+  languageRef.current = lang;
+  const mapLabel = (id, en) => languageRef.current === "id" ? id : en;
   const [mapInstance, setMapInstance] = useState(null);
 
   const [basemap, setBasemap] = useState("streets");
@@ -249,8 +301,11 @@ export function LiveFleetMap({
   // A* dynamic rerouting state
   const [astarData, setAstarData] = useState(null);
   const [eventPermits, setEventPermits] = useState([]);
-  const [breadcrumbs, setBreadcrumbs] = useState({});
   const [mapTruth, setMapTruth] = useState({});
+  const breadcrumbs = useMemo(() => Object.fromEntries(
+    Object.entries(mapTruth).filter(([, truth]) => truth.raw_breadcrumbs?.length > 1)
+      .map(([code, truth]) => [code, truth.raw_breadcrumbs]),
+  ), [mapTruth]);
   const [unlicensed, setUnlicensed] = useState([]);
   const unlicensedMarkersRef = useRef([]);
   const heatmapCacheRef = useRef(null);
@@ -284,37 +339,6 @@ export function LiveFleetMap({
     fetchPermits();
   }, []);
 
-  // Breadcrumb trails are static per truck: key the fetch on the code set so
-  // the 8s poll's new `trucks` reference does not refire one request per truck.
-  const truckCodesKey = useMemo(
-    () => (trucks || []).map((t) => t.truck_code).sort().join(","),
-    [trucks],
-  );
-  useEffect(() => {
-    if (!truckCodesKey) return;
-    let cancelled = false;
-    async function fetchBreadcrumbs() {
-      const codes = truckCodesKey.split(",");
-      const out = {};
-      await Promise.all(codes.map(async (code) => {
-        try {
-          const res = await fetch(`${API_URL}/fleet/${code}/breadcrumbs`);
-          if (res.ok) {
-            const j = await res.json();
-            if (j.breadcrumbs?.length > 1) out[code] = j.breadcrumbs;
-          }
-        } catch {}
-      }));
-      if (cancelled) return;
-      setBreadcrumbs(out);
-      if (typeof onBreadcrumbsLoaded === "function") {
-        onBreadcrumbsLoaded(Object.keys(out));
-      }
-    }
-    fetchBreadcrumbs();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [truckCodesKey]);
 
   useEffect(() => {
     async function fetchUnlicensed() {
@@ -346,6 +370,9 @@ export function LiveFleetMap({
     const timer = setInterval(fetchMapTruth, 8000);
     return () => clearInterval(timer);
   }, [jamActive]);
+  useEffect(() => {
+    onBreadcrumbsLoaded?.(Object.keys(breadcrumbs));
+  }, [breadcrumbs, onBreadcrumbsLoaded]);
 
   useEffect(() => {
     async function fetchAstar() {
@@ -359,7 +386,6 @@ export function LiveFleetMap({
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
-
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: resolveStreetsStyle(),
@@ -368,6 +394,7 @@ export function LiveFleetMap({
       pitch: 0,
       bearing: 0,
       attributionControl: false,
+      locale: languageRef.current === "id" ? MAP_LOCALE_ID : undefined,
     });
     mapRef.current = map;
 
@@ -406,10 +433,10 @@ export function LiveFleetMap({
         map,
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
-          `<div class="map-popup"><h4>${r?.name || "Recommended route"}</h4>` +
-          `<p>${r?.distance_km ?? "-"} km · ~${r?.eta_minutes ?? "-"} min</p>` +
-          `<small>${r?.source || "osrm"} · ${r?.path?.length || coords.length} geometry points</small>` +
-          `<p class="popup-src">LIVE · OSRM routing</p></div>`
+          `<div class="map-popup"><h4>${r?.name || mapLabel("Rute rekomendasi", "Recommended route")}</h4>` +
+          `<p>${r?.distance_km ?? "—"} km · ~${r?.eta_minutes ?? "—"} ${mapLabel("menit", "min")}</p>` +
+          `<small>${r?.source || "OSRM"} · ${r?.path?.length || coords.length} ${mapLabel("titik geometri", "geometry points")}</small>` +
+          `<p class="popup-src">${mapLabel("LANGSUNG · perutean OSRM", "LIVE · OSRM routing")}</p></div>`
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -424,9 +451,9 @@ export function LiveFleetMap({
         map,
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
-          `<div class="map-popup"><h4>Assigned corridor</h4>` +
-          `<p>Truck ${p.truckCode || "unknown"} · ${coords.length} road-following points</p>` +
-          `<p class="popup-src">SIMULATION · planned route</p></div>`
+          `<div class="map-popup"><h4>${mapLabel("Koridor penugasan", "Assigned corridor")}</h4>` +
+          `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik mengikuti jalan", "road-following points")}</p>` +
+          `<p class="popup-src">${mapLabel("SIMULASI · rute rencana", "SIMULATION · planned route")}</p></div>`
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -442,9 +469,9 @@ export function LiveFleetMap({
         map,
         coords[Math.floor(coords.length / 2)],
         new maplibregl.Popup({ offset: 20 }).setHTML(
-          `<div class="map-popup"><h4>${isViolation ? "Route violation segment" : "Actual movement"}</h4>` +
-          `<p>Truck ${p.truckCode || "unknown"} · ${coords.length} GPS points</p>` +
-          `<p class="popup-src">SIMULATION · breadcrumb trail</p></div>`
+          `<div class="map-popup"><h4>${isViolation ? mapLabel("Segmen pelanggaran rute", "Route violation segment") : mapLabel("Pergerakan aktual", "Actual movement")}</h4>` +
+          `<p>${mapLabel("Truk", "Truck")} ${p.truckCode || "—"} · ${coords.length} ${mapLabel("titik jalur simulasi", "simulated route points")}</p>` +
+          `<p class="popup-src">${mapLabel("SIMULASI · jejak perjalanan", "SIMULATION · breadcrumb trail")}</p></div>`
         ),
         { zoom: Math.max(12, map.getZoom()), offset: [0, -60], duration: 450 },
       );
@@ -471,6 +498,42 @@ export function LiveFleetMap({
       setMapInstance(null);
     };
   }, []);
+
+  useEffect(() => {
+    if (!mapInstance) return;
+    const controls = [
+      [".maplibregl-ctrl-zoom-in", "Perbesar", "Zoom in"],
+      [".maplibregl-ctrl-zoom-out", "Perkecil", "Zoom out"],
+      [".maplibregl-ctrl-compass", "Seret untuk memutar peta, klik untuk menghadap utara", "Drag to rotate map, click to reset north"],
+      [".maplibregl-ctrl-fullscreen", "Masuk layar penuh", "Enter fullscreen"],
+      [".maplibregl-ctrl-attrib-button", "Tampilkan atribusi", "Toggle attribution"],
+    ];
+    for (const [selector, id, en] of controls) {
+      const node = mapInstance.getContainer().querySelector(selector);
+      if (!node) continue;
+      node.setAttribute("title", lang === "id" ? id : en);
+      node.setAttribute("aria-label", lang === "id" ? id : en);
+    }
+    // MapLibre has no public runtime locale setter. New popups inherit the
+    // locale from map construction, so relabel their close control on insertion.
+    const container = mapInstance.getContainer();
+    const labelPopupClose = () => {
+      container.querySelectorAll(".maplibregl-popup-close-button").forEach((button) => {
+        const label = lang === "id" ? "Tutup popup" : "Close popup";
+        button.setAttribute("aria-label", label);
+        button.setAttribute("title", label);
+      });
+    };
+    labelPopupClose();
+    const popupObserver = new MutationObserver(labelPopupClose);
+    popupObserver.observe(container, { childList: true, subtree: true });
+    for (const entry of Object.values(activeMarkersRef.current)) {
+      entry.popup?.remove();
+      entry.marker.remove();
+    }
+    activeMarkersRef.current = {};
+    return () => popupObserver.disconnect();
+  }, [lang, mapInstance]);
 
   useEffect(() => {
     function renderFleet() {
@@ -611,17 +674,17 @@ export function LiveFleetMap({
           const element = document.createElement("button");
           element.className = "truck-marker event-permit-marker";
           element.type = "button";
-          element.innerHTML = `<span>EV</span>`;
+          element.setAttribute("aria-label", `${lang === "id" ? "Acara" : "Event"}: ${ev.name}`);
           
           const popup = new maplibregl.Popup({ offset: 25 })
             .setHTML(`
               <div class="event-popup" style="color: #0f172a; padding: 6px;">
-                <h4 style="margin: 0 0 6px; font-weight: bold;">Event: ${ev.name}</h4>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>Permit:</b> ${ev.permit_number}</p>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>Forecast:</b> ${ev.predicted_waste_tons} tons of waste</p>
-                <p style="margin: 0 0 4px; font-size: 11px;"><b>Field Crews:</b> ${ev.crews_required} people</p>
-                <p style="margin: 0; font-size: 11px;"><b>Backup Fleet:</b> ${ev.backup_trucks_required} trucks</p>
-                <p class="popup-src" style="margin: 6px 0 0;">${ev.data_class || "SIMULATED"} · ${ev.data_note || "illustrative event, not official permit data"}</p>
+                <h4 style="margin: 0 0 6px; font-weight: bold;">${lang === "id" ? "Acara" : "Event"}: ${ev.name}</h4>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Izin" : "Permit"}:</b> ${ev.permit_number}</p>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Perkiraan" : "Forecast"}:</b> ${Number(ev.predicted_waste_tons).toLocaleString(lang === "id" ? "id-ID" : "en-US")} ${countUnit(ev.predicted_waste_tons, lang, "ton sampah", "ton of waste", "tons of waste")}</p>
+                <p style="margin: 0 0 4px; font-size: 11px;"><b>${lang === "id" ? "Petugas lapangan" : "Field crews"}:</b> ${ev.crews_required} ${countUnit(ev.crews_required, lang, "orang", "person", "people")}</p>
+                <p style="margin: 0; font-size: 11px;"><b>${lang === "id" ? "Armada cadangan" : "Backup fleet"}:</b> ${ev.backup_trucks_required} ${countUnit(ev.backup_trucks_required, lang, "truk", "truck", "trucks")}</p>
+                <p class="popup-src" style="margin: 6px 0 0;">${dataClass(ev.data_class, lang)} · ${lang === "id" && ev.data_note === "Illustrative event; not official DLH permit data." ? "Acara ilustratif; bukan data izin resmi DLH." : ev.data_note || (lang === "id" ? "Acara ilustratif; bukan data izin resmi DLH." : "Illustrative event; not official DLH permit data.")}</p>
               </div>
             `);
 
@@ -823,9 +886,9 @@ popup.on("open", () => {
           if (!feature) return;
           const coordinates = feature.geometry.coordinates.slice();
           const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
-            `<div class="map-popup"><h4>${feature.properties?.label || "Congestion point"}</h4>` +
-            `<p>Active A* rerouting hazard.</p>` +
-            `<p class="popup-src">SIMULATION · traffic scenario</p></div>`
+            `<div class="map-popup"><h4>${feature.properties?.label || mapLabel("Titik kemacetan", "Congestion point")}</h4>` +
+            `<p>${mapLabel("Hambatan aktif pada pengalihan rute A*.", "Active A* rerouting hazard.")}</p>` +
+            `<p class="popup-src">${mapLabel("SIMULASI · skenario lalu lintas", "SIMULATION · traffic scenario")}</p></div>`
           );
           focusMapPin(map, coordinates, popup, { zoom: 15.5 });
         });
@@ -877,7 +940,7 @@ popup.on("open", () => {
       cancelled = true;
     };
 
-  }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs, mapTruth, styleTick, showAllFleet]);
+  }, [trucks, astarData, eventPermits, mapInstance, breadcrumbs, mapTruth, styleTick, showAllFleet, lang]);
 
   useEffect(() => {
     const map = mapInstance;
@@ -1150,10 +1213,10 @@ popup.on("open", () => {
         el.title = q.facility_name || "TPA";
         const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
           `<div class="map-popup"><h4>${q.facility_name || "TPA Bantargebang"}</h4>` +
-          `<p><b>${q.trucks_in_queue}</b> trucks queued</p>` +
-          `<p>Wait: <b>${q.avg_wait_minutes} min</b> (P95 ${q.p95_wait_minutes})</p>` +
-          `<p>${q.weighbridge_status}</p>` +
-          `<p class="popup-src">MODEL OUTPUT · queue simulation</p></div>`
+          `<p><b>${q.trucks_in_queue}</b> ${countUnit(q.trucks_in_queue, languageRef.current, "truk antre", "truck queued", "trucks queued")}</p>` +
+          `<p>${mapLabel("Waktu tunggu", "Wait")}: <b>${q.avg_wait_minutes} ${mapLabel("menit", "min")}</b> (P95 ${q.p95_wait_minutes})</p>` +
+          `<p>${q.weighbridge_status === "OPERATIONAL" ? mapLabel("Jembatan timbang beroperasi", "Weighbridge operational") : q.weighbridge_status === "DEGRADED (Overload)" ? mapLabel("Jembatan timbang terbebani", "Weighbridge overloaded") : q.weighbridge_status}</p>` +
+          `<p class="popup-src">${mapLabel("HASIL MODEL · simulasi antrean", "MODEL OUTPUT · queue simulation")}</p></div>`
         );
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat([q.lng, q.lat])
@@ -1179,9 +1242,9 @@ popup.on("open", () => {
         el.className = "unlicensed-marker";
         el.title = a.plate;
         const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
-          `<div class="map-popup"><h4>Unlicensed collector</h4>` +
+          `<div class="map-popup"><h4>${mapLabel("Kolektor tanpa izin", "Unlicensed collector")}</h4>` +
           `<p><b>${a.plate}</b></p><p>${a.message}</p>` +
-          `<p class="popup-src">${a.data_class || "SIMULATED"} · registry match</p></div>`
+          `<p class="popup-src">${dataClass(a.data_class, languageRef.current)} · ${mapLabel("pencocokan registri", "registry match")}</p></div>`
         );
         const marker = new maplibregl.Marker({ element: el })
           .setLngLat([a.lng, a.lat]).addTo(map);
@@ -1358,7 +1421,7 @@ popup.on("open", () => {
                 .setHTML(`
                   <div style="color: #0f172a; padding: 4px; font-size: 11px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">TPS: ${props.name}</strong>
-                    <span>Kel. ${props.kelurahan}, Kec. ${props.kecamatan}</span>
+                    <span>${mapLabel("Kel.", "Ward")} ${props.kelurahan}, ${mapLabel("Kec.", "District")} ${props.kecamatan}</span>
                   </div>
                 `)
                 .addTo(map);
@@ -1377,10 +1440,10 @@ popup.on("open", () => {
               popup.remove();
               const detailPopup = new maplibregl.Popup({ offset: 18 }).setHTML(`
                 <div class="map-popup">
-                  <h4>TPS: ${props.name || "Waste collection point"}</h4>
-                  <p>${props.kelurahan ? `Kelurahan ${props.kelurahan}` : "TPS location"}</p>
-                  <small>${props.kecamatan ? `Kecamatan ${props.kecamatan}` : ""}</small>
-                  <p class="popup-src">REAL · TPS coordinates</p>
+                  <h4>TPS: ${props.name || mapLabel("Titik pengumpulan sampah", "Waste collection point")}</h4>
+                  <p>${props.kelurahan ? `${mapLabel("Kelurahan", "Ward")} ${props.kelurahan}` : mapLabel("Lokasi TPS", "TPS location")}</p>
+                  <small>${props.kecamatan ? `${mapLabel("Kecamatan", "District")} ${props.kecamatan}` : ""}</small>
+                  <p class="popup-src">${mapLabel("DATA RIIL · koordinat TPS", "REAL DATA · TPS coordinates")}</p>
                 </div>
               `);
               focusMapPin(map, coordinates, detailPopup, { zoom: 16 });
@@ -1535,7 +1598,7 @@ popup.on("open", () => {
                 .setHTML(`
                   <div style="color: #0f172a; padding: 4px; font-size: 11px; max-width: 200px;">
                     <strong style="display: block; font-weight: bold; margin-bottom: 2px;">WR: ${props.name}</strong>
-                    <span style="display: block; margin-bottom: 2px;">Type: ${props.type}</span>
+                    <span style="display: block; margin-bottom: 2px;">${mapLabel("Jenis", "Type")}: ${props.type}</span>
                     <span style="display: block; color: #64748b; font-size: 10px;">${props.address || ""}</span>
                   </div>
                 `)
@@ -1555,11 +1618,11 @@ popup.on("open", () => {
               wrPopup.remove();
               const detailPopup = new maplibregl.Popup({ offset: 18 }).setHTML(`
                 <div class="map-popup">
-                  <h4>Retribution registry</h4>
-                  <p><b>${props.name || "Registered point"}</b></p>
-                  <small>${props.type || "Registry location"}</small>
+                  <h4>${mapLabel("Registri wajib retribusi", "Retribution registry")}</h4>
+                  <p><b>${props.name || mapLabel("Lokasi terdaftar", "Registered point")}</b></p>
+                  <small>${props.type || mapLabel("Lokasi registri", "Registry location")}</small>
                   <small>${props.address || ""}</small>
-                  <p class="popup-src">REAL · registry coordinates</p>
+                  <p class="popup-src">${mapLabel("DATA RIIL · koordinat registri", "REAL DATA · registry coordinates")}</p>
                 </div>
               `);
               focusMapPin(map, coordinates, detailPopup, { zoom: 16 });
@@ -1637,9 +1700,9 @@ popup.on("open", () => {
     el.className = "playback-marker";
     const marker = new maplibregl.Marker({ element: el }).setLngLat([trail[0].lng, trail[0].lat]).addTo(map);
     const popup = new maplibregl.Popup({ offset: 16 }).setHTML(
-      `<div class="map-popup"><h4>${playbackTruck} playback</h4>` +
-      `<p>Trip movement replay marker.</p>` +
-      `<p class="popup-src">SIMULATION · breadcrumb trail</p></div>`
+      `<div class="map-popup"><h4>${playbackTruck} ${lang === "id" ? "putar ulang" : "playback"}</h4>` +
+      `<p>${lang === "id" ? "Penanda pemutaran riwayat perjalanan." : "Trip movement replay marker."}</p>` +
+      `<p class="popup-src">${lang === "id" ? "SIMULASI · jejak perjalanan" : "SIMULATION · breadcrumb trail"}</p></div>`
     );
     attachFocusableMarker(el, map, () => marker.getLngLat(), popup, { zoom: 15 });
     playbackMarkerRef.current = marker;
@@ -1656,7 +1719,7 @@ popup.on("open", () => {
       playbackMarkerRef.current = null;
       cruiseRef.current?.resumeTruck(playbackTruck);
     };
-  }, [playbackTruck, breadcrumbs, mapInstance]);
+  }, [playbackTruck, breadcrumbs, mapInstance, lang]);
 
   // Continuous cruise: one global rAF loop moves all engine-registered trucks.
   // rAF auto-pauses on hidden tabs; dt clamp in the engine prevents jumps.
@@ -1707,14 +1770,14 @@ popup.on("open", () => {
       const snapped = mapTruth[t.truck_code]?.snapped_gps;
       const coords = snapped ? [snapped.lng, snapped.lat]
         : t.latest_position ? [t.latest_position.lng, t.latest_position.lat] : null;
-      push({ id: "truck-" + t.truck_code, kind: "Truck", label: t.truck_code, sub: `${t.driver_name} · ${t.assigned_zone}`, coords });
+      push({ id: "truck-" + t.truck_code, kind: lang === "id" ? "Truk" : "Truck", label: t.truck_code, sub: `${t.driver_name} · ${t.assigned_zone}`, coords });
     });
     (tpsSearch || []).forEach((t) => push({ id: "tps-" + t.label, kind: "TPS", label: t.label, sub: t.sub, coords: t.coords }));
     (wrSearch || []).forEach((w) => push({ id: "wr-" + w.label, kind: "WR", label: w.label, sub: w.sub, coords: w.coords }));
-    (heatSearch || []).forEach((h) => push({ id: "kel-" + h.label, kind: "District", label: h.label, sub: h.sub, coords: h.coords }));
-    (eventPermits || []).forEach((ev) => push({ id: "ev-" + ev.id, kind: "Event", label: ev.name, sub: `forecast ${ev.predicted_waste_tons} t`, coords: [ev.lng, ev.lat] }));
+    (heatSearch || []).forEach((h) => push({ id: "kel-" + h.label, kind: lang === "id" ? "Wilayah" : "District", label: h.label, sub: h.sub, coords: h.coords }));
+    (eventPermits || []).forEach((ev) => push({ id: "ev-" + ev.id, kind: lang === "id" ? "Acara" : "Event", label: ev.name, sub: `${lang === "id" ? "perkiraan" : "forecast"} ${ev.predicted_waste_tons} t`, coords: [ev.lng, ev.lat] }));
     return items;
-  }, [trucks, mapTruth, tpsSearch, wrSearch, heatSearch, eventPermits]);
+  }, [trucks, mapTruth, tpsSearch, wrSearch, heatSearch, eventPermits, lang]);
 
   const searchResults = (searchQuery || "").trim()
     ? searchIndex
@@ -1729,7 +1792,7 @@ popup.on("open", () => {
     setSearchQuery("");
     const popup = new maplibregl.Popup({ offset: 20 }).setHTML(
       `<div class="map-popup"><h4>${item.label}</h4><p>${item.sub || item.kind}</p>` +
-      `<p class="popup-src">${item.kind} · map search</p></div>`
+      `<p class="popup-src">${item.kind} · ${lang === "id" ? "pencarian peta" : "map search"}</p></div>`
     );
     focusMapPin(map, item.coords, popup, { zoom: 13.5 });
   }
@@ -1812,7 +1875,7 @@ popup.on("open", () => {
           onFocus={() => setSearchOpen(true)}
           onBlur={() => window.setTimeout(() => setSearchOpen(false), 200)}
           placeholder={lang === "id" ? "Cari nomor truk, TPS, kecamatan..." : "Search trucks, TPS, districts..."}
-          aria-label="Search map"
+          aria-label={lang === "id" ? "Cari pada peta" : "Search map"}
         />
         {searchOpen && searchResults.length > 0 && (
           <ul className="map-search-results">
@@ -1829,15 +1892,15 @@ popup.on("open", () => {
         )}
       </div>
 
-      <div className="map-basemap" role="group" aria-label="Basemap style">
-        {streetsOffline && <span className="basemap-offline-note" title="Remote street tiles unreachable">{lang === "id" ? "peta offline" : "offline map"}</span>}
+      <div className="map-basemap" role="group" aria-label={lang === "id" ? "Gaya peta dasar" : "Basemap style"}>
+        {streetsOffline && <span className="basemap-offline-note" title={lang === "id" ? "Ubin jalan jarak jauh tidak tersedia" : "Remote street tiles unreachable"}>{lang === "id" ? "peta offline" : "offline map"}</span>}
         <button
           className={showAllFleet ? "active" : ""}
           onClick={() => setShowAllFleet((v) => !v)}
-          title={showAllFleet ? (lang === "id" ? "Tampilkan lebih sedikit" : "Show fewer trucks") : (lang === "id" ? "Tampilkan semua 59 truk" : "Show all 59 trucks")}
+          title={showAllFleet ? (lang === "id" ? "Tampilkan lebih sedikit" : "Show fewer trucks") : (lang === "id" ? `Tampilkan semua ${trucks.length} truk` : `Show all ${trucks.length} trucks`)}
           style={{ marginLeft: 8 }}
         >
-          {showAllFleet ? `${lang === "id" ? "Armada" : "Fleet"}: ${trucks.length}` : `${lang === "id" ? "Armada" : "Fleet"}: 19`}
+          {showAllFleet ? `${lang === "id" ? "Armada" : "Fleet"}: ${trucks.length}` : `${lang === "id" ? "Armada" : "Fleet"}: ${Math.min(trucks.length, 19)}`}
         </button>
       </div>
 

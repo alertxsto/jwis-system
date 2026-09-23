@@ -456,7 +456,7 @@
 .route-evidence-grid strong {
   display: block;
   margin-top: 4px;
-  color: var(--ui-accent-foreground);
+  color: var(--ui-accent);
   font-size: 18px;
 }
 
@@ -687,7 +687,7 @@
 }
 
 .prediction-meta b {
-  color: var(--ui-accent-foreground);
+  color: var(--ui-accent);
   font-weight: 800;
 }
 
@@ -701,7 +701,7 @@
   border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius-control);
   margin-bottom: var(--space-3);
-  color: var(--ui-accent-foreground);
+  color: var(--ui-ink);
 }
 
 .weather-hero strong {
@@ -711,8 +711,7 @@
 .weather-hero span {
   display: block;
   font-size: var(--fs-caption);
-  color: var(--ui-accent-foreground);
-  opacity: 0.9;
+  color: var(--ui-ink-soft);
 }
 
 .weather-hero b {
@@ -1113,7 +1112,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
   border-radius: 0;
   padding: var(--space-4) 0;
   text-align: left;
-  color: var(--ui-accent-foreground);
+  color: var(--ui-ink);
 }
 
 .scenario-result strong {
@@ -2721,11 +2720,6 @@ input[type="range"]::-webkit-slider-thumb:hover {
   }
 }
 
-@media (max-width: 640px) {
-  .workspace-canvas {
-    overflow-x: hidden;
-  }
-}
 
 .spj-panel {
   background: var(--ui-surface);

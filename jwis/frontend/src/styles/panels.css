@@ -44,7 +44,7 @@
   padding: 10px;
   border-radius: 8px;
   background: var(--ui-accent-soft);
-  color: var(--ui-accent-foreground);
+  color: var(--ui-ink);
 }
 
 .route-rec strong {
@@ -87,7 +87,7 @@
 .route-evidence-grid strong {
   display: block;
   margin-top: 4px;
-  color: var(--ui-accent-foreground);
+  color: var(--ui-accent);
   font-size: 18px;
 }
 

@@ -113,6 +113,13 @@ class HistoryStore:
         return {"id": dispatch_id, "field_status": status, "confirmed_note": note,
                 "confirmed_at": confirmed_at}
 
+    def get_dispatch(self, dispatch_id: str) -> dict[str, Any] | None:
+        with closing(self._connect()) as connection:
+            row = connection.execute(
+                "SELECT * FROM dispatches WHERE id=?", (dispatch_id,)
+            ).fetchone()
+        return dict(row) if row is not None else None
+
     def list_dispatches(self) -> list[dict[str, Any]]:
         with closing(self._connect()) as connection:
             rows = connection.execute(

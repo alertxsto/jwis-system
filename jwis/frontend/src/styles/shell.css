@@ -88,7 +88,7 @@
 }
 
 .nav-tab-btn:hover {
-  color: var(--ui-accent-foreground);
+  color: var(--ui-accent);
   background: var(--ui-surface-muted);
 }
 
@@ -161,7 +161,7 @@
   border-radius: 50%;
   display: inline-grid;
   place-items: center;
-  color: var(--ui-accent-foreground);
+  color: var(--ui-accent);
   background: var(--ui-accent-soft);
   font-size: var(--fs-caption);
   font-weight: 800;
