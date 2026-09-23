@@ -14,45 +14,45 @@ immediately understand that this is a serious public-sector logistics system:
 structured, calm, readable, and evidence-first.
 
 Design direction:
-- Minimal white dashboard shell.
-- Thin borders, generous whitespace, restrained shadow.
-- Clear left navigation, top command bar, and content canvas.
-- One accent color only.
-- No decorative gradients, no marketing hero, no oversized empty cards.
-- English UI copy only, except official institution names and proper nouns.
+- Deep forest command rail with a light operational canvas.
+- Compact top context bar; page purpose and decision context remain visible.
+- One primary action per screen; evidence and secondary controls recede.
+- Flat joined metric strips instead of repeated KPI card grids.
+- Orange is the only product accent; status colors remain semantic.
+- No decorative gradients, marketing hero inside the app, or oversized empty cards.
+- Indonesian is the default operator language; English remains available through the global switch.
+## 1. Command-Center Composition Contract
 
-## 1. Refero Composition Contract
+Hierarchy is task-first:
 
-The reference style works because the hierarchy is strict. JWIS must follow the
-same ordering:
+1. Persistent command rail: five role-relevant workspaces.
+2. Compact context bar: current workspace, language, assistant, operator.
+3. Workspace heading: purpose and operational freshness.
+4. Joined metric strip: scan context, not four competing cards.
+5. Primary decision surface: map, district demand, plan, table, or registry.
+6. Decision rail: one problem and one action, or supporting evidence.
+7. Detail records: tabs/tables below the decision surface.
 
-1. Fixed sidebar: navigation first, not decoration.
-2. Top bar: breadcrumb/search/actions/profile; compact and quiet.
-3. Page title row: one clear title, optional small action group.
-4. KPI strip: single horizontal row, equal-height cells, no nested cards.
-5. Primary work surface: the widest and most important content.
-6. Secondary evidence rail: narrower support panels on the right.
-7. Tables/logs: full-width operational detail after the decision surface.
-
-Never let secondary cards become taller or visually heavier than the primary
-surface. If a panel has a lot of text, make it wider or move it below the main
-decision row; do not let it become a long hanging column.
+Secondary evidence must never compete with the primary task. On narrow screens,
+the decision rail moves before the primary surface when an urgent action exists.
+Fixed bottom navigation replaces a compressed desktop sidebar on mobile.
 
 ## 2. Color
 
-The current target is Refero-like light product UI adapted for JWIS:
+The redesign uses a civic operations palette:
 
-- Canvas: `#f8f8f6`
+- Canvas: `#f2f5f3`
 - Surface: `#ffffff`
-- Muted surface: `#efeeeb`
-- Ink: `#121212`
-- Body text: `#3f3f3f`
-- Muted text: `#777777`
-- Hairline border: `#e7e4de`
-- Accent: `#d97757`
-- Success: `#15803d`
-- Warning: `#b45309`
-- Critical: `#b42318`
+- Muted surface: `#e9eeeb`
+- Command rail: `#13211d`
+- Ink: `#14201c`
+- Body text: `#33443e`
+- Muted text: `#65746e`
+- Hairline border: `#dce3df`
+- Accent: `#e85d32`
+- Success: `#177a57`
+- Warning: `#b76516`
+- Critical: `#c43d39`
 
 Rules:
 - Accent is for selected nav, primary buttons, active tabs, and key chart lines.
@@ -84,19 +84,21 @@ Rules:
 
 ## 4. Layout Grid
 
-Base rhythm:
 - Page padding: 24px desktop, 16px tablet/mobile.
-- Main content max width: none inside the app shell; use the available canvas.
-- Gap: 16px inside workspace rows.
-- Panel padding: 20px.
-- Radius: 14px for major surfaces, 8px for controls.
-- Border: 1px solid hairline.
+- Command rail: 232px desktop.
+- Main canvas: fluid up to 1600px.
+- Gap: 16px between operational surfaces.
+- Surface padding: 22px desktop, 16px mobile.
+- Radius: 12px major surfaces, 8px controls.
+- Border: 1px hairline; shadows reserved for overlays and mobile task cards.
 
 Dashboard rows:
-- KPI strip: 4 columns desktop, 2 tablet, 1 mobile.
-- Main operational row: 8/3 or 7/5 split depending on content.
-- Evidence rail: 320-420px target width.
-- Full-width tables/logs must sit below the main operational row.
+- Metrics: one joined 4-cell strip desktop, 2×2 mobile.
+- Fleet: a full-bleed command deck with a floating decision overlay, not a
+  map/decision column split.
+- Forecast: demand/context split at roughly 70/30.
+- Planning: scenario/allocation split, approval full-width below.
+- Audit: registry/evidence split.
 
 Do not create equal card grids for unrelated content. Data importance decides
 width, not component convenience.
@@ -136,38 +138,50 @@ Control rules:
 
 ### Fleet Operations
 
-Order:
-1. KPI strip: active trucks, route efficiency, queue delay, coverage.
-2. Live map: dominant full-width or 8/4 split with inspector.
-3. Route evidence: selected vehicle, planned route, wrong-route alert.
-4. Operational table: vehicles, drivers, status, latest event.
+The Armada workspace is a command deck: the map is the desk, and every
+decision instrument is layered on it rather than split into competing columns.
 
-Map must be the visual anchor. Tables and evidence support the map, not the other
-way around.
+Order:
+1. Compact head band: workspace purpose, auto-refresh state, joined metric
+   strip, and a problem strip of triage chips (deviasi, kerusakan, antrean
+   TPA) derived from the live snapshot.
+2. Full-bleed deck: the operational map fills the remaining viewport height.
+   Map controls (layers, route replay, legend, alert queue, A* traffic
+   monitor) live in a pinned overlay panel inside the deck, never a detached
+   drawer.
+3. Decision overlay: one instrument floating over the map's right edge. It
+   retargets when the operator clicks a truck marker, a table row, or the
+   problem strip; a truck with no active alert shows an informational state,
+   and the send flow resets on every retarget.
+4. Evidence below: four operational tabs (Kondisi Armada, Riwayat, Antrean
+   TPA, Bukti Rute) plus document links (SPJ, Kerusakan, Kolektor Liar, Jejak
+   Karbon) in the records heading.
+
+The deck must fit one viewport: the head band stays compact so the map's
+bottom edge never drops below the fold. On mobile the decision overlay
+collapses into a bottom sheet and the deck becomes a working map window.
 
 ### Waste Forecast
 
 Order:
-1. KPI strip: forecast spike, high-risk districts, peak rainfall, readiness.
-2. Main row:
-   - Left 70-75%: district forecast grid/table.
-   - Right 25-30%: weather risk, event driver, planning note.
-3. AI/report tools below the forecast row.
+1. Workspace purpose, horizon, and report action.
+2. Joined forecast metrics.
+3. District demand surface / weather-event context split.
+4. Model evidence below.
 
-The district list must not create a long left column while the right rail is short.
-If the list grows, use a scrollable table or two-column compact records with a
-fixed max height.
+District demand stays primary. Permit and facility context share the remaining
+space rather than creating a long stack. Secondary panels become two columns on
+tablet and one column on mobile.
 
 ### Integrated Planning
 
 Order:
-1. Scenario inputs: compact left/control column.
-2. Recommended plan: dominant center column with preflight metrics, generated plan,
-   route assignments, crew/truck changes, and handoff actions.
-3. Evidence and approval: right rail with executive summary and decision authority.
+1. Visible three-step progress: scenario, allocation, approval.
+2. Scenario and allocation surfaces side-by-side on desktop.
+3. Approval summary and authority evidence below.
 
-The recommended plan column must never be blank. Before generation, show a
-preflight plan preview and expected outputs.
+The allocation surface must never be blank. Before generation it shows demand,
+fleet need, TPA queue, and a plain-language explanation of the next action.
 
 ### Driver Analytics
 
@@ -176,32 +190,33 @@ Order:
 2. Trend/score chart.
 3. Driver table with risk reasons and recommended coaching.
 
-### Weighbridge Logs
+### Data & Model Audit
 
 Order:
-1. KPI strip.
-2. Filter/search row.
-3. Full-width table.
-4. Anomaly/evidence rail only if a row is selected.
+1. Evidence-readiness metric strip.
+2. Data provenance registry as the primary surface.
+3. Supported resolution and model-suitability evidence rail.
+4. Export/report actions after the evidence, not before it.
 
 Opening this page must never show a blank white workspace.
 
 ## 8. Responsive Behavior
 
 Desktop:
-- Sidebar fixed at 248px.
-- Topbar fixed height.
-- Workspace grid uses full remaining width.
+- Command rail fixed at 232px.
+- Context bar remains sticky.
+- Primary/evidence splits use the full remaining canvas.
 
 Tablet:
-- Sidebar may collapse.
-- Main/evidence split becomes 1 column when evidence would be under 300px.
+- Command rail becomes a fixed bottom workspace navigator.
+- Primary/evidence splits become one column.
+- Supporting panels may use two columns when each remains at least 280px.
 
 Mobile:
-- Sidebar becomes drawer/bottom entry.
-- KPI strip becomes stacked.
-- Tables become horizontally scrollable, not broken card stacks unless specifically
-  designed as mobile records.
+- Fixed five-item bottom navigation.
+- Priority action appears before the map.
+- Metrics become a 2×2 joined strip.
+- Tables scroll horizontally; field and supervisor routes use dedicated layouts.
 
 ## 9. Acceptance Checklist
 

@@ -447,3 +447,133 @@
   z-index: var(--z-toast);
   max-width: 90vw;
 }
+
+/* Total mobile experience redesign */
+.driver-shell {
+  min-height: 100dvh;
+  padding: 0 0 64px;
+  gap: 16px;
+  background: #eef2ef;
+}
+
+.driver-header {
+  width: 100%;
+  max-width: none;
+  min-height: 72px;
+  padding: 0 max(20px, calc((100vw - 560px) / 2));
+  color: #ffffff;
+  background: var(--ui-primary);
+}
+
+.driver-brand-mark {
+  width: 38px;
+  height: 38px;
+  color: #ffffff;
+  background: var(--ui-accent);
+}
+
+.driver-brand small {
+  color: #8fa59b;
+}
+
+.driver-link {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 7px;
+  color: #ffffff;
+}
+
+.driver-card {
+  width: min(520px, calc(100% - 32px));
+  margin-inline: auto;
+  padding: 22px;
+  border: 0;
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(20, 32, 28, .07);
+}
+
+.driver-shell > .driver-card:first-of-type {
+  margin-top: 4px;
+}
+
+.driver-card h2 {
+  font-size: 18px;
+  letter-spacing: -.02em;
+}
+
+.driver-pick-list {
+  gap: 0;
+  margin-top: 18px;
+  max-height: calc(100dvh - 210px);
+  border-top: 1px solid var(--ui-border);
+}
+
+.driver-pick-list li {
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.driver-pick {
+  min-height: 64px;
+  padding: 10px 4px;
+  border: 0;
+  border-radius: 0;
+}
+
+.driver-pick:hover {
+  border-color: transparent;
+  box-shadow: none;
+  background: var(--ui-canvas);
+}
+
+.driver-pick strong {
+  font-size: 14px;
+}
+
+.driver-pick small {
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.driver-identity {
+  color: #ffffff;
+  background: var(--ui-primary);
+}
+
+.driver-identity h1 {
+  color: #ffffff;
+  font-size: 28px;
+}
+
+.driver-identity .driver-muted {
+  color: #91a39b;
+}
+
+.driver-progress {
+  height: 4px;
+}
+
+.pretrip-item {
+  min-height: 48px;
+  padding-block: 5px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+.pretrip-choice {
+  min-height: 36px;
+  padding: 6px 12px;
+}
+
+.driver-btn {
+  min-height: 44px;
+}
+
+.driver-btn.primary {
+  color: #ffffff;
+  background: var(--ui-accent);
+}
+
+.driver-btn.primary:hover:not(:disabled) {
+  background: var(--ui-accent-hover);
+}

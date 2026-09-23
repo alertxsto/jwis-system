@@ -219,6 +219,7 @@ export function LiveFleetMap({
   playbackTruck, 
   onBreadcrumbsLoaded,
   jamActive = false,
+  focusRequest = null,
 }) {
   const { lang, t } = useLanguage();
   const containerRef = useRef(null);
@@ -1782,6 +1783,22 @@ popup.on("open", () => {
     if (!coords) return;
     map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 700 });
   }, [followTruck, trucks, mapTruth, mapInstance]);
+
+  // External focus (problem strip / decision overlay): center the map on a
+  // truck without hijacking the follow state the operator controls.
+  const lastFocusTsRef = useRef(0);
+  useEffect(() => {
+    const map = mapInstance;
+    if (!map || !focusRequest || !focusRequest.code) return;
+    if (focusRequest.ts === lastFocusTsRef.current) return;
+    lastFocusTsRef.current = focusRequest.ts;
+    const truck = (trucks || []).find((t) => t.truck_code === focusRequest.code);
+    const snapped = truck && mapTruthRef.current[truck?.truck_code]?.snapped_gps;
+    const coords = snapped ? [snapped.lng, snapped.lat]
+      : truck?.latest_position ? [truck.latest_position.lng, truck.latest_position.lat] : null;
+    if (!coords) return;
+    map.easeTo({ center: coords, zoom: Math.max(map.getZoom(), 14), duration: 700 });
+  }, [focusRequest, trucks, mapInstance]);
 
   return (
     <div className="maplibre-shell">

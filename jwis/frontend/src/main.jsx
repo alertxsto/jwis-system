@@ -150,26 +150,25 @@ function KpiCard({ icon: Icon, label, value, helper, tone = "neutral" }) {
   );
 }
 
-function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded, jamActive }) {
+function MapPanel({ trucks, attendance, rainfall, onSelectTruck, layers, playbackTruck, onBreadcrumbsLoaded, jamActive, focusRequest }) {
+  const { lang } = useLanguage();
   return (
     <section className="panel map-panel">
-      <div className="panel-title">
-        <div>
-          <h2>Live Fleet Supervision</h2>
-          <p>MapLibre tracking of assigned corridors, actual movement, and field status. Positions are simulated, not live GPS.</p>
-        </div>
-        <StatusPill tone="warning"><Radio size={14} /> Simulation</StatusPill>
+      <div className="map-data-notice">
+        <StatusPill tone="warning"><Radio size={14} /> {lang === "id" ? "Data simulasi" : "Simulated data"}</StatusPill>
+        <span>{lang === "id" ? "Posisi bukan GPS langsung" : "Positions are not live GPS"}</span>
       </div>
-      <Suspense fallback={<div className="map-loading-fallback">Loading map…</div>}>
-        <LiveFleetMap 
-          trucks={trucks} 
-          attendance={attendance} 
-          rainfall={rainfall} 
-          onSelectTruck={onSelectTruck} 
+      <Suspense fallback={<div className="map-loading-fallback">{lang === "id" ? "Memuat peta…" : "Loading map…"}</div>}>
+        <LiveFleetMap
+          trucks={trucks}
+          attendance={attendance}
+          rainfall={rainfall}
+          onSelectTruck={onSelectTruck}
           layers={layers}
           playbackTruck={playbackTruck}
           onBreadcrumbsLoaded={onBreadcrumbsLoaded}
           jamActive={jamActive}
+          focusRequest={focusRequest}
         />
       </Suspense>
     </section>
@@ -184,6 +183,8 @@ function CommandCenter({ onLogout }) {
   const [activeWorkspace, setActiveWorkspace] = useState("fleet");
   const [fleetDetailTab, setFleetDetailTab] = useState("fleet");
   const [historyScrollRequest, setHistoryScrollRequest] = useState(0);
+  const [selectedMapTruck, setSelectedMapTruck] = useState(null);
+  const [mapFocusRequest, setMapFocusRequest] = useState(null);
 
   const [attendance, setAttendance] = useState(85000);
   const [rainfall, setRainfall] = useState(42);
@@ -243,10 +244,16 @@ function CommandCenter({ onLogout }) {
 
   function selectFleetTruck(code, openTripHistory = false) {
     setFilterTruck(code);
+    setSelectedMapTruck(code);
     if (openTripHistory) {
       setFleetDetailTab("history");
       setHistoryScrollRequest((request) => request + 1);
     }
+  }
+
+  function focusFleetTruck(code) {
+    setSelectedMapTruck(code);
+    setMapFocusRequest({ code, ts: Date.now() });
   }
 
   async function dispatch(alert) {
@@ -294,7 +301,11 @@ function CommandCenter({ onLogout }) {
         <FleetOperations
           detailTab={fleetDetailTab}
           onDetailTabChange={setFleetDetailTab}
-          actionCard={<ActionCard snapshot={snapshot} />}
+          actionCard={<ActionCard snapshot={snapshot} targetTruck={selectedMapTruck} />}
+          trucks={snapshot.trucks}
+          queueTrucks={snapshot.kpis.tpa_queue_trucks}
+          queueWaitMinutes={snapshot.kpis.tpa_wait_minutes}
+          onFocusProblem={focusFleetTruck}
           metrics={[
             { label: t("kpi_active_trucks"), value: snapshot.kpis.active_trucks, helper: t("kpi_active_trucks_sub") },
             { label: t("kpi_operational_issues"), value: snapshot.kpis.trucks_with_issues, helper: t("kpi_operational_issues_sub"), tone: "danger" },
@@ -312,70 +323,61 @@ function CommandCenter({ onLogout }) {
                 playbackTruck={playbackTruck}
                 onBreadcrumbsLoaded={setPlaybackOptions}
                 jamActive={jamActive}
+                focusRequest={mapFocusRequest}
               />
             </div>
           )}
-          mapFooter={(
+          mapTools={(
             <>
-              <div className="map-footer-panels">
-                <div className="panel map-controls-card">
-                  <div className="panel-title">
-                    <h2>{lang === "id" ? "Kontrol Peta" : "Map Controls"}</h2>
-                  </div>
-                  <div className="map-controls-grid">
-                    <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> {lang === "id" ? "Peta Panas" : "Heatmap"}</label>
-                    <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> {lang === "id" ? "Rute OSRM" : "OSRM route"}</label>
-                    <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> {lang === "id" ? "Titik TPS" : "TPS"}</label>
-                    <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"}</label>
-                  </div>
-                  <div className="playback-select-wrap">
-                    <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
-                      <option value="">{lang === "id" ? "Putar riwayat rute..." : "Trip playback..."}</option>
-                      {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    {playbackTruck && (
-                      <button className="compact-enforce-btn" onClick={() => setPlaybackTruck(null)}>
-                        Tutup replay
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                <div className="panel map-legend-card">
-                  <div className="panel-title">
-                    <h2>{lang === "id" ? "Legenda Peta" : "Legend"}</h2>
-                  </div>
-                  <details className="map-legend" open aria-label="Map legend">
-                    <summary style={{ display: "none" }}>Legend</summary>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Titik TPS" : "TPS locations"} <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"} <em className="legend-tag">REAL</em></span>
-                    <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> {lang === "id" ? "Risiko Sampah Wilayah" : "District waste risk"} <em className="legend-tag">MODEL</em></span>
-                    <span><i className="legend-assigned" style={{ display: "inline-block" }} /> {lang === "id" ? "Koridor Ditugaskan" : "Assigned corridor"} <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> {lang === "id" ? "Rute Aktual" : "Actual (clean)"} <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> {lang === "id" ? "Segmen Pelanggaran" : "Violation segment"} <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> {lang === "id" ? "Rute OSRM" : "OSRM route"} <em className="legend-tag">LIVE</em></span>
-                    <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
-                    <span><span className="legend-icon-unlicensed" /> {lang === "id" ? "Kolektor Liar" : "Unlicensed Collector"} <em className="legend-tag">SIM</em></span>
-                    <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> {lang === "id" ? "Event Keramaian" : "Crowd Event"} <em className="legend-tag">SIM</em></span>
-                  </details>
+              <div className="deck-tools-section">
+                <span className="deck-tools-label">{lang === "id" ? "Lapisan" : "Layers"}</span>
+                <div className="map-controls-grid">
+                  <label><input type="checkbox" checked={layers.heatmap} onChange={(e) => setLayers((s) => ({ ...s, heatmap: e.target.checked }))} /> {lang === "id" ? "Peta Panas" : "Heatmap"}</label>
+                  <label><input type="checkbox" checked={layers.osrm} onChange={(e) => setLayers((s) => ({ ...s, osrm: e.target.checked }))} /> {lang === "id" ? "Rute OSRM" : "OSRM route"}</label>
+                  <label><input type="checkbox" checked={layers.tps} onChange={(e) => setLayers((s) => ({ ...s, tps: e.target.checked }))} /> {lang === "id" ? "Titik TPS" : "TPS"}</label>
+                  <label><input type="checkbox" checked={layers.wr} onChange={(e) => setLayers((s) => ({ ...s, wr: e.target.checked }))} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"}</label>
                 </div>
               </div>
-
-              <div className="map-footer-inspector-row">
-                <div className="inspector-col">
-                  <details className="alert-queue-collapsible">
-                    <summary>{t("ac_all_alerts").replace("{n}", snapshot.alerts.length)}</summary>
-                    <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
-                  </details>
+              <div className="deck-tools-section">
+                <span className="deck-tools-label">{lang === "id" ? "Replay rute" : "Route replay"}</span>
+                <div className="playback-select-wrap">
+                  <select value={playbackTruck || ""} onChange={(e) => setPlaybackTruck(e.target.value || null)} aria-label="Trip playback">
+                    <option value="">{lang === "id" ? "Putar riwayat rute..." : "Trip playback..."}</option>
+                    {playbackOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  {playbackTruck && (
+                    <button className="compact-enforce-btn" onClick={() => setPlaybackTruck(null)}>
+                      Tutup replay
+                    </button>
+                  )}
                 </div>
-                <div className="inspector-col">
-                  <AStarReroutingPanel jamActive={jamActive} aiEvents={aiEvents} onAckEvent={ackAiEvent} />
+              </div>
+              <details className="deck-tools-section deck-legend">
+                <summary>{lang === "id" ? "Legenda peta" : "Map legend"}</summary>
+                <div className="map-legend deck-legend-body" aria-label="Map legend">
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#22c55e", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Titik TPS" : "TPS locations"} <em className="legend-tag">REAL</em></span>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#f97316", borderRadius: "50%", width: "10px", height: "10px", border: "1.5px solid #fff", display: "inline-block" }} /> {lang === "id" ? "Wajib Retribusi" : "Retribution registry"} <em className="legend-tag">REAL</em></span>
+                  <span><i className="legend-heatmap" style={{ backgroundColor: "#a5b4fc", display: "inline-block" }} /> {lang === "id" ? "Risiko Sampah Wilayah" : "District waste risk"} <em className="legend-tag">MODEL</em></span>
+                  <span><i className="legend-assigned" style={{ display: "inline-block" }} /> {lang === "id" ? "Koridor Ditugaskan" : "Assigned corridor"} <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-actual" style={{ backgroundColor: "#176b54", display: "inline-block" }} /> {lang === "id" ? "Rute Aktual" : "Actual (clean)"} <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-critical" style={{ backgroundColor: "#b42318", borderRadius: "50%", width: "10px", height: "10px", display: "inline-block" }} /> {lang === "id" ? "Segmen Pelanggaran" : "Violation segment"} <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-osrm" style={{ backgroundColor: "#0891b2", display: "inline-block" }} /> {lang === "id" ? "Rute OSRM" : "OSRM route"} <em className="legend-tag">LIVE</em></span>
+                  <span><span className="legend-icon-tpa" /> TPA Bantargebang <em className="legend-tag">MODEL</em></span>
+                  <span><span className="legend-icon-unlicensed" /> {lang === "id" ? "Kolektor Liar" : "Unlicensed Collector"} <em className="legend-tag">SIM</em></span>
+                  <span><i className="legend-event" style={{ backgroundColor: "#eab308", borderRadius: "4px", width: "16px", height: "12px", display: "inline-block" }} /> {lang === "id" ? "Event Keramaian" : "Crowd Event"} <em className="legend-tag">SIM</em></span>
                 </div>
+              </details>
+              <div className="deck-tools-section">
+                <details className="alert-queue-collapsible">
+                  <summary>{t("ac_all_alerts").replace("{n}", snapshot.alerts.length)}</summary>
+                  <AlertQueue alerts={snapshot.alerts} onDispatch={dispatch} onWhatsApp={sendWhatsAppAlert} />
+                </details>
+              </div>
+              <div className="deck-tools-section">
+                <AStarReroutingPanel jamActive={jamActive} aiEvents={aiEvents} onAckEvent={ackAiEvent} />
               </div>
             </>
           )}
-          alerts={null}
-          rerouting={null}
           routeEvidence={<RouteEvidencePanel route={snapshot.osrm_route} />}
           queue={<div className="fleet-queue-stack"><TpaQueuePanel /><StaggerSimulatorPanel /></div>}
           fleetTable={<FleetTable trucks={snapshot.trucks} onOpenTripHistory={(code) => selectFleetTruck(code, true)} />}

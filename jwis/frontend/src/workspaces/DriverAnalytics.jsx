@@ -1,98 +1,75 @@
 import React from "react";
+import { AlertTriangle, Fuel, Gauge, Route, Users } from "lucide-react";
 import { useLanguage } from "../i18n.jsx";
-import {
-  Truck,
-} from "lucide-react";
+
+const drivers = [
+  { name: "Budi Santoso", truck: "T-001", score: 98, fuel: 4.8, trips: 142, deviations: 0 },
+  { name: "Agus Pratama", truck: "T-047", score: 72, fuel: 3.5, trips: 118, deviations: 12 },
+  { name: "Joko Wijaya", truck: "T-088", score: 95, fuel: 4.6, trips: 135, deviations: 1 },
+  { name: "Rizky Maulana", truck: "T-112", score: 90, fuel: 4.2, trips: 98, deviations: 0 },
+];
+
+function initials(name) {
+  return name.split(" ").map((part) => part[0]).slice(0, 2).join("");
+}
 
 export function DriverAnalytics() {
   const { lang } = useLanguage();
-  const drivers = [
-    { name: "Budi Santoso", truck: "T-001", score: 98, fuel: 4.8, trips: 142, deviations: 0 },
-    { name: "Agus Pratama", truck: "T-047", score: 72, fuel: 3.5, trips: 118, deviations: 12 },
-    { name: "Joko Wijaya", truck: "T-088", score: 95, fuel: 4.6, trips: 135, deviations: 1 },
-    { name: "Rizky Maulana", truck: "T-112", score: 90, fuel: 4.2, trips: 98, deviations: 0 },
-  ];
+  const risky = drivers.find((driver) => driver.deviations > 5);
 
   return (
-    <section className="panel wide">
-      <div className="panel-title">
+    <section className="driver-workspace workspace-page">
+      <header className="workspace-heading">
         <div>
-          <h2>{lang === "id" ? "Analisis Kinerja Pengemudi" : "Driver Performance Analytics"}</h2>
-          <p>{lang === "id" ? "Penilaian skor kepatuhan koridor rute, keselamatan, dan efisiensi bahan bakar driver." : "Real-time scoring of route corridor compliance, safety, and fuel efficiency across active drivers."}</p>
+          <span className="workspace-kicker"><Users size={14} /> Kesiapan personel</span>
+          <h1>{lang === "id" ? "Kinerja pengemudi" : "Driver performance"}</h1>
+          <p>{lang === "id" ? "Temukan pengemudi yang membutuhkan tindak lanjut berdasarkan kepatuhan rute dan efisiensi kendaraan." : "Identify drivers who need follow-up based on route compliance and vehicle efficiency."}</p>
         </div>
-        <div className="panel-header-icon-wrap">
-          <Truck size={18} />
-        </div>
+      </header>
+
+      <div className="driver-metric-strip">
+        <div><Gauge size={18} /><span>Skor rata-rata<strong>88,8</strong></span></div>
+        <div><Users size={18} /><span>Pengemudi aktif<strong>{drivers.length}</strong></span></div>
+        <div><Fuel size={18} /><span>Efisiensi rata-rata<strong>4,28 km/L</strong></span></div>
+        <div><Route size={18} /><span>Perlu pembinaan<strong>1 orang</strong></span></div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
-        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
-          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Rata-rata Skor" : "Fleet Avg Score"}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>88.75%</strong>
-        </div>
-        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
-          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Pengemudi Aktif" : "Active Drivers"}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>{drivers.length} {lang === "id" ? "orang" : "personnel"}</strong>
-        </div>
-        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
-          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Efisiensi BBM" : "Avg Fuel Economy"}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "var(--ui-ink)" }}>4.28 km/L</strong>
-        </div>
-        <div style={{ background: "var(--ui-surface-muted)", padding: "12px 14px", borderRadius: "10px", border: "1px solid var(--ui-border)" }}>
-          <span style={{ fontSize: "11px", color: "var(--ui-muted)", textTransform: "uppercase", fontWeight: 600 }}>{lang === "id" ? "Bebas Pelanggaran" : "Zero-Deviation"}</span>
-          <strong style={{ display: "block", fontSize: "18px", marginTop: "2px", color: "#15803d" }}>50% {lang === "id" ? "patuh" : "compliant"}</strong>
-        </div>
-      </div>
+      <div className="driver-command-grid">
+        <section className="driver-table-surface">
+          <div className="section-intro compact">
+            <div><span className="surface-kicker">Seluruh pengemudi</span><h2>Skor kepatuhan</h2></div>
+          </div>
+          <div className="table-wrap">
+            <table className="driver-table">
+              <thead><tr><th>Pengemudi</th><th>Kendaraan</th><th>Kepatuhan rute</th><th>Efisiensi</th><th>Perjalanan</th><th>Deviasi</th></tr></thead>
+              <tbody>
+                {drivers.map((driver) => (
+                  <tr key={driver.truck} className={driver.deviations > 5 ? "needs-attention" : ""}>
+                    <td><span className="driver-person"><i>{initials(driver.name)}</i><strong>{driver.name}</strong></span></td>
+                    <td><code>{driver.truck}</code></td>
+                    <td><span className="score-cell"><span><i style={{ width: `${driver.score}%` }} /></span><b>{driver.score}%</b></span></td>
+                    <td>{driver.fuel.toFixed(1)} km/L</td>
+                    <td>{driver.trips}</td>
+                    <td><span className={`deviation-badge ${driver.deviations > 5 ? "danger" : driver.deviations ? "warning" : "success"}`}>{driver.deviations ? `${driver.deviations} kali` : "Nihil"}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col" style={{ width: "22%" }}>{lang === "id" ? "Nama Pengemudi" : "Driver Name"}</th>
-              <th scope="col" style={{ width: "16%" }}>{lang === "id" ? "Kode Truk" : "Assigned Truck"}</th>
-              <th scope="col" style={{ width: "24%" }}>{lang === "id" ? "Skor Kepatuhan Koridor" : "Compliance Score"}</th>
-              <th scope="col" style={{ width: "14%" }}>{lang === "id" ? "Efisiensi Bahan Bakar" : "Fuel Economy"}</th>
-              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Total Trip" : "Trips"}</th>
-              <th scope="col" style={{ width: "12%" }}>{lang === "id" ? "Deviasi Rute" : "Deviations"}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {drivers.map((d) => {
-              const isHigh = d.score >= 90;
-              const isMed = d.score >= 80;
-              const scoreTone = isHigh ? "success" : isMed ? "warning" : "danger";
-              return (
-                <tr key={d.name}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                      <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "#e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11.5px", fontWeight: 700, color: "#334155" }}>
-                        {d.name.split(" ").map(n => n[0]).join("")}
-                      </div>
-                      <strong style={{ color: "var(--ui-ink)", fontWeight: 600 }}>{d.name}</strong>
-                    </div>
-                  </td>
-                  <td><span className="plate-badge">{d.truck}</span></td>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ flex: 1, height: "6px", background: "var(--ui-surface-muted)", borderRadius: "9999px", overflow: "hidden", border: "1px solid var(--ui-border)" }}>
-                        <div style={{ height: "100%", width: `${d.score}%`, background: isHigh ? "#16a34a" : isMed ? "#d97706" : "#dc2626", borderRadius: "9999px" }} />
-                      </div>
-                      <span className={`pill ${scoreTone}`} style={{ minWidth: "46px", justifyContent: "center" }}>{d.score}%</span>
-                    </div>
-                  </td>
-                  <td><span className="speed-badge">{d.fuel} km/L</span></td>
-                  <td><span style={{ fontFamily: "var(--mono, monospace)", fontWeight: 600 }}>{d.trips}</span></td>
-                  <td>
-                    <span className={`pill ${d.deviations > 0 ? "danger" : "success"}`}>
-                      <span className={`status-dot ${d.deviations > 0 ? "danger" : "success"}`} />
-                      {d.deviations > 0 ? `${d.deviations} ${lang === "id" ? "kali" : "alerts"}` : (lang === "id" ? "Nihil" : "None")}
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <aside className="driver-attention-rail">
+          <span className="attention-icon"><AlertTriangle size={19} /></span>
+          <span className="surface-kicker">Prioritas pembinaan</span>
+          <h2>{risky.name}</h2>
+          <p>{risky.deviations} deviasi rute terdeteksi pada {risky.trips} perjalanan. Efisiensi BBM juga berada di bawah rerata armada.</p>
+          <dl>
+            <div><dt>Kendaraan</dt><dd>{risky.truck}</dd></div>
+            <div><dt>Kepatuhan</dt><dd>{risky.score}%</dd></div>
+            <div><dt>Efisiensi</dt><dd>{risky.fuel.toFixed(1)} km/L</dd></div>
+          </dl>
+          <div className="attention-note"><strong>Rekomendasi</strong><span>Tinjau bukti rute dan lakukan briefing sebelum sif berikutnya.</span></div>
+        </aside>
       </div>
     </section>
   );

@@ -58,9 +58,13 @@ function getPosition(stop) {
 }
 
 async function post(path, data) {
+  const token = localStorage.getItem("jwis_token");
   const res = await fetch(`${API_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(data),
   });
   if (!res.ok) {

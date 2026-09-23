@@ -223,13 +223,6 @@
     padding: 14px;
   }
 
-  .fleet-map-stage,
-  .fleet-map-stage .map-panel,
-  .fleet-map-stage .maplibre-shell,
-  .fleet-map-stage .maplibre-container {
-    min-height: 440px;
-  }
-
   .map-legend {
     max-width: min(190px, calc(100vw - 48px));
   }

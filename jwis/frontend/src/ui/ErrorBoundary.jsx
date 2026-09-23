@@ -13,7 +13,7 @@ export class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("workspace failed:", this.props.name || "unknown", error, info);
+    console.error("workspace failed:", this.props.name || "unknown", error?.message || String(error), info);
   }
 
   render() {

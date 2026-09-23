@@ -17,28 +17,62 @@ function pickAlert(alerts) {
   return alerts.find((a) => (a.recommended_routes?.length || 0) > 0) || alerts[0];
 }
 
-export function ActionCard({ snapshot }) {
+function localizeIssue(text, lang) {
+  if (lang !== "id") return text;
+  const corridor = String(text).match(/Truck is ([\d.]+) meters from the assigned corridor\.?/i);
+  if (!corridor) return text;
+  const meters = Number(corridor[1]);
+  const distance = meters >= 1000
+    ? `${(meters / 1000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} km`
+    : `${Math.round(meters)} m`;
+  return `Kendaraan berada ${distance} di luar koridor tugas.`;
+}
+
+function localizeRoute(name, lang) {
+  if (lang !== "id") return name;
+  return String(name)
+    .replace(/^Route /i, "Rute ")
+    .replace("Recovery", "Pemulihan");
+}
+
+export function ActionCard({ snapshot, targetTruck = null }) {
   const { t, lang } = useLanguage();
   const [phase, setPhase] = useState("idle"); // idle | sending | sent | confirmed | error
   const [waConnected, setWaConnected] = useState(null); // null = unknown, checked on click
   const [confirmedAt, setConfirmedAt] = useState("");
   const pollRef = useRef(null);
 
-  const alert = pickAlert(snapshot?.alerts);
+  const fallbackAlert = pickAlert(snapshot?.alerts);
+  const alerts = Array.isArray(snapshot?.alerts) ? snapshot.alerts : [];
+  const targetedAlert = targetTruck ? alerts.find((a) => a.truck_code === targetTruck) : null;
+  const alert = targetedAlert || fallbackAlert;
   const truckCode = alert?.truck_code || "";
   const truck = (snapshot?.trucks || []).find((item) => item.truck_code === truckCode);
   const driverName = truck?.driver_name || t("ac_unknown_driver");
   const route = alert?.recommended_routes?.[0] || null;
-  const issueText = alert?.description || alert?.title || "";
+  const issueText = localizeIssue(alert?.description || alert?.title || "", lang);
+  // A map/table click on a truck with no active alert shows that truck as an
+  // informational target; the action stays bound to the live alert flow.
+  const targetOnly = Boolean(targetTruck) && !targetedAlert;
+  const infoTruck = targetOnly ? (snapshot?.trucks || []).find((item) => item.truck_code === targetTruck) : null;
 
   useEffect(() => {
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      clearInterval(pollRef.current);
     };
   }, []);
 
+  useEffect(() => {
+    // Retargeting the overlay resets the send flow so a "sent/confirmed"
+    // state never bleeds onto a different truck.
+    setPhase("idle");
+    setConfirmedAt("");
+    clearInterval(pollRef.current);
+    pollRef.current = null;
+  }, [truckCode]);
+
   function startConfirmationPoll(code) {
-    if (pollRef.current) clearInterval(pollRef.current);
+    clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
         const res = await fetch(`${API_URL}/dispatch/${code}`, { headers: authHeaders() });
@@ -113,12 +147,33 @@ export function ActionCard({ snapshot }) {
     startConfirmationPoll(truckCode);
   }
 
-  if (!alert) {
+  if (!alert && !infoTruck) {
     return (
       <section className="action-card" data-testid="action-card">
         <div className="action-card-head">
           <span className="action-card-icon ok"><Check size={22} /></span>
           <h2 className="action-card-title">{t("ac_no_alerts")}</h2>
+        </div>
+      </section>
+    );
+  }
+
+  if (infoTruck) {
+    const zone = infoTruck.assigned_zone || infoTruck.zone || "";
+    const activity = infoTruck.activity || infoTruck.status || "";
+    return (
+      <section className="action-card action-card-info" data-testid="action-card">
+        <div className="action-card-head">
+          <span className="action-card-icon ok"><Check size={22} /></span>
+          <div>
+            <h2 className="action-card-title">
+              {infoTruck.truck_code} — {infoTruck.driver_name || t("ac_unknown_driver")}
+            </h2>
+            <p className="action-card-issue">
+              {(lang === "id" ? "Tidak ada peringatan aktif untuk unit ini." : "No active alert for this unit.")}
+              {zone ? ` ${zone}` : ""}{activity ? ` · ${activity}` : ""}
+            </p>
+          </div>
         </div>
       </section>
     );
@@ -140,7 +195,7 @@ export function ActionCard({ snapshot }) {
         <div className="action-card-route">
           <Route size={18} />
           <div>
-            <strong>{route.name}</strong>
+            <strong>{localizeRoute(route.name, lang)}</strong>
             <span className="action-card-route-meta">
               <Clock size={14} /> ETA {route.eta_minutes} {t("ac_minutes")}
             </span>
