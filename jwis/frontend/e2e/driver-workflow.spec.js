@@ -121,9 +121,61 @@ test("driver runs full SPJ flow: pretrip, stop evidence, receipt", async ({ page
   expect(receipt.weight_source).toBe("manual");
   expect(receipt.has_photo).toBe(true);
   expect(receipt.photo_b64).toBeUndefined();
-  const photo = await page.request.get(`${API}/spj/${spj.spj_id}/receipt/photo`);
+  const photo = await page.request.get(`${API}/spj/${spj.spj_id}/receipt/photo`,
+                                       { headers });
   expect(photo.ok()).toBeTruthy();
   expect((await photo.json()).photo_b64).toContain("data:image/");
+});
+
+test("driver is offered the newest receipt-pending SPJ, not the oldest", async ({ page, context }) => {
+  const headers = await signIn(page);
+  await cancelLeftoverSpj(page, headers);
+
+  // Two completed SPJs for one truck: the older one already has its receipt,
+  // the newer one is still pending. Position must come from server state.
+  async function completedSpj(truck) {
+    const created = await page.request.post(`${API}/spj`, {
+      headers,
+      data: { driver_name: "E2E Receipt", truck_code: truck,
+              destination: "TPST Bantargebang", weigh_on_site: true,
+              priority: "normal", note: "e2e receipt order" },
+    });
+    const spj = await created.json();
+    await page.request.post(`${API}/spj/${spj.spj_id}/stops`, {
+      headers,
+      data: { name: "TPS Receipt", kecamatan: "Cilandak", address: "Jl. Receipt",
+              lat: -6.29, lng: 106.79 },
+    });
+    await page.request.post(`${API}/spj/${spj.spj_id}/activate`, { headers });
+    await page.request.post(`${API}/spj/${spj.spj_id}/stops/0/complete`, {
+      headers,
+      data: { evidence: {
+        arrival: { photo_name: "a.jpg", lat: -6.29, lng: 106.79,
+                   at: "2026-09-14T09:00:00" },
+        weighing: [{ fraction: "Residu", weight_kg: 40.0, photo_name: "t.jpg" }],
+        officer: { photo_name: "p.jpg", name: "Dicky" },
+      } },
+    });
+    return spj;
+  }
+
+  const older = await completedSpj(TEST_TRUCK);
+  await page.request.post(`${API}/spj/${older.spj_id}/receipt`, {
+    headers,
+    data: { photo_name: "struk-lama.jpg", photo_b64: "data:image/jpeg;base64,AA",
+            total_weight_kg: 100, weight_source: "manual" },
+  });
+  const newer = await completedSpj(TEST_TRUCK);
+
+  await page.goto("/driver");
+  await page.locator(`[data-testid="pick-${TEST_TRUCK}"]`).click();
+  const card = page.getByTestId("delivery-card");
+  await expect(card).toBeVisible({ timeout: 15000 });
+  await expect(card).toHaveAttribute("data-spj-id", newer.spj_id);
+  const history = await (await page.request.get(`${API}/spj?status=selesai`)).json();
+  const mine = history.spj.filter((s) => s.truck_code === TEST_TRUCK);
+  expect(mine[0].spj_id).toBe(newer.spj_id);
+  expect(mine[0].receipt).toBeNull();
 });
 
 test("pretrip with a TIDAK item auto-creates a damage report", async ({ page, context }) => {

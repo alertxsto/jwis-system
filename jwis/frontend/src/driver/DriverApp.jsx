@@ -579,7 +579,8 @@ function DeliveryCard({ spj, say, onDone }) {
   };
 
   return (
-    <section className="driver-card" data-testid="delivery-card">
+    <section className="driver-card" data-testid="delivery-card"
+             data-spj-id={spj.spj_id}>
       <div className="driver-card-head">
         <h2>
           <PackageCheck size={18} /> Bukti serah terima
@@ -733,10 +734,11 @@ export default function DriverApp() {
       .catch(() => setOnline(false));
     fetch(`${API_URL}/spj?status=selesai`)
       .then((r) => r.json())
+      // The API orders completed SPJs newest first; the pending-receipt task is
+      // chosen from that order and the server-side receipt field, not from
+      // localStorage.
       .then((body) =>
-        setHistory((body.spj || [])
-          .filter((s) => s.truck_code === driver.truck_code)
-          .sort((a, b) => (b.completed_at || "").localeCompare(a.completed_at || ""))),
+        setHistory((body.spj || []).filter((s) => s.truck_code === driver.truck_code)),
       )
       .catch(() => {});
   }, [driver]);
@@ -835,6 +837,9 @@ export default function DriverApp() {
   const stops = spjAktif?.stops || [];
   const pendingIndex = stops.findIndex((s) => s.status !== "completed");
   const allStopsDone = spjAktif && pendingIndex === -1 && stops.length > 0;
+  // Newest completed SPJ still missing its receipt: `history` arrives newest
+  // first, and receipt state comes from the server, so two browsers agree.
+  const pendingReceipt = spjAktif ? null : history.find((s) => !s.receipt) || null;
 
   return (
     <main className="driver-shell" data-testid="driver-app">
@@ -924,9 +929,9 @@ export default function DriverApp() {
             />
           )}
 
-          {!spjAktif && history.some((s) => !s.receipt) && (
+          {!spjAktif && pendingReceipt && (
             <DeliveryCard
-              spj={history.find((s) => !s.receipt)}
+              spj={pendingReceipt}
               say={say}
               onDone={() => {
                 setDoneScreen(true);
