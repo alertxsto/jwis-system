@@ -5,13 +5,11 @@ from unittest import mock
 with mock.patch.dict(os.environ, {"JWIS_SPJ_SEED": "off"}):
     from app.spj import Spj, SpjStore, next_spj_number
 
+from spj_testutil import fresh_store_path
+
 
 def _store(tmp_name="test_spj_store.json"):
-    import tempfile
-    path = os.path.join(tempfile.gettempdir(), tmp_name)
-    if os.path.exists(path):
-        os.remove(path)
-    return SpjStore(persist_path=path)
+    return SpjStore(persist_path=fresh_store_path(tmp_name))
 
 
 class SpjModelTests(unittest.TestCase):
@@ -119,10 +117,7 @@ class SpjModelTests(unittest.TestCase):
             store.activate(spj.spj_id)
 
     def test_persistence_round_trip(self):
-        import tempfile
-        path = os.path.join(tempfile.gettempdir(), "test_spj_persist.json")
-        if os.path.exists(path):
-            os.remove(path)
+        path = fresh_store_path("test_spj_persist.json")
         store = SpjStore(persist_path=path)
         spj = store.create(driver_name="A", truck_code="T-001",
                            destination="TPST Bantargebang", weigh_on_site=True,

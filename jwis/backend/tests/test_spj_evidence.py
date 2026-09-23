@@ -4,12 +4,11 @@ import unittest
 
 from app.spj import SpjStore
 
+from spj_testutil import fresh_store_path
+
 
 def _store(name="test_spj_evidence.json"):
-    path = os.path.join(tempfile.gettempdir(), name)
-    if os.path.exists(path):
-        os.remove(path)
-    return SpjStore(persist_path=path)
+    return SpjStore(persist_path=fresh_store_path(name))
 
 
 EVIDENCE = {
@@ -52,9 +51,7 @@ class SpjEvidenceTests(unittest.TestCase):
             store.complete_stop(spj.spj_id, 0, evidence={"weighing": []})
 
     def test_evidence_persists(self):
-        path = os.path.join(tempfile.gettempdir(), "test_spj_evi_persist.json")
-        if os.path.exists(path):
-            os.remove(path)
+        path = fresh_store_path("test_spj_evi_persist.json")
         store = SpjStore(persist_path=path)
         spj = self._active_spj(store)
         store.complete_stop(spj.spj_id, 0, evidence=EVIDENCE)
