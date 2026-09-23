@@ -56,16 +56,74 @@ class SpjEndpointTests(unittest.TestCase):
         r = self.client.post(f"/api/spj/{self.spj['spj_id']}/activate")
         self.assertEqual(r.status_code, 409)
 
+    EVIDENCE = {
+        "arrival": {"photo_name": "datang.jpg", "photo_b64": "data:image/jpeg;base64,AAA",
+                    "lat": -6.2379, "lng": 106.7826, "at": "2026-09-14T08:00:00"},
+        "weighing": [{"fraction": "Residu", "weight_kg": 37.2,
+                      "photo_name": "timbang1.jpg", "photo_b64": "data:image/jpeg;base64,BBB"}],
+        "officer": {"photo_name": "petugas.jpg", "photo_b64": "data:image/jpeg;base64,CCC",
+                    "name": "Dicky"},
+    }
+
     def test_full_lifecycle(self):
         activated = self._add_stop_and_activate()
         self.assertEqual(activated["status"], "aktif")
         self.assertEqual(len(activated["stops"]), 1)
-        done = self.client.post(
+        # Stop completion without evidence is rejected.
+        bare = self.client.post(
             f"/api/spj/{self.spj['spj_id']}/stops/0/complete")
+        self.assertEqual(bare.status_code, 409)
+        done = self.client.post(
+            f"/api/spj/{self.spj['spj_id']}/stops/0/complete",
+            json={"evidence": self.EVIDENCE})
         self.assertEqual(done.status_code, 200)
         self.assertEqual(done.json()["status"], "selesai")
         cancel = self.client.post(f"/api/spj/{self.spj['spj_id']}/cancel")
         self.assertEqual(cancel.status_code, 409)  # selesai cannot cancel
+
+    def test_complete_without_evidence_409(self):
+        self._add_stop_and_activate()
+        r = self.client.post(f"/api/spj/{self.spj['spj_id']}/complete")
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("evidence", r.json()["detail"])
+        # cleanup
+        self.client.post(f"/api/spj/{self.spj['spj_id']}/cancel")
+
+    def test_complete_override_requires_permission(self):
+        self._add_stop_and_activate()
+        # dispatcher lacks spj:override
+        login = self.client.post("/api/auth/login", json={
+            "username": "dispatcher", "password": "dispatcher-demo-pass"})
+        token = login.json()["token"]
+        r = self.client.post(
+            f"/api/spj/{self.spj['spj_id']}/complete",
+            json={"override": True, "reason": "device lost"},
+            headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(r.status_code, 403)
+        # cleanup with admin session
+        self.client.post(f"/api/spj/{self.spj['spj_id']}/cancel")
+
+    def test_complete_override_with_permission_records_audit(self):
+        self._add_stop_and_activate()
+        r = self.client.post(
+            f"/api/spj/{self.spj['spj_id']}/complete",
+            json={"override": True, "reason": "driver device lost"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "selesai")
+        audit = self.client.get(f"/api/spj/{self.spj['spj_id']}/audit")
+        self.assertEqual(audit.status_code, 200)
+        entries = audit.json()["audit"]
+        self.assertTrue(any(e["action"] == "override" and e["reason"] == "driver device lost"
+                            for e in entries))
+
+    def test_complete_override_empty_reason_409(self):
+        self._add_stop_and_activate()
+        r = self.client.post(
+            f"/api/spj/{self.spj['spj_id']}/complete",
+            json={"override": True, "reason": "  "})
+        self.assertEqual(r.status_code, 409)
+        # cleanup
+        self.client.post(f"/api/spj/{self.spj['spj_id']}/cancel")
 
     def test_active_path_endpoint(self):
         self._add_stop_and_activate()

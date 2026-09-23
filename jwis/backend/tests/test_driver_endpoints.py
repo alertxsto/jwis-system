@@ -105,7 +105,10 @@ class DamageEndpointTests(unittest.TestCase):
             "name": "S", "kecamatan": "K", "address": "A",
             "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
-        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
+            "arrival": {"photo_name": "a.jpg",
+                        "photo_b64": "data:image/jpeg;base64,AAA"},
+            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
         ok = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "struk.jpg", "photo_b64": "data:image/jpeg;base64,AA",
             "total_weight_kg": 120.5})
@@ -168,7 +171,10 @@ class DamageEndpointTests(unittest.TestCase):
         self.client.post(f"/api/spj/{spj_id}/stops", json={
             "name": "S", "kecamatan": "K", "address": "A", "lat": -6.2, "lng": 106.8})
         self.client.post(f"/api/spj/{spj_id}/activate")
-        self.client.post(f"/api/spj/{spj_id}/stops/0/complete")
+        self.client.post(f"/api/spj/{spj_id}/stops/0/complete", json={"evidence": {
+            "arrival": {"photo_name": "a.jpg",
+                        "photo_b64": "data:image/jpeg;base64,AAA"},
+            "weighing": [], "officer": {"photo_name": "p.jpg"}}})
         r = self.client.post(f"/api/spj/{spj_id}/receipt", json={
             "photo_name": "", "photo_b64": "", "total_weight_kg": 10.0})
         self.assertEqual(r.status_code, 409)

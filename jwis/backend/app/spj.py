@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import tempfile
 import threading
+from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -92,52 +94,232 @@ def _today() -> str:
 
 
 def next_spj_number(store: "SpjStore") -> str:
+    """Next daily sequence number, read from the database (not the cache).
+
+    Reading from SQLite is what makes the number multi-process safe: every
+    worker sees committed numbers from other workers.
+    """
     today = datetime.now(timezone.utc)
     prefix = today.strftime("DLH-DKI/SPJ/%d-%m-%Y/")
-    max_seq = 0
-    for spj in store.list():
-        if spj.spj_number.startswith(prefix):
-            try:
-                max_seq = max(max_seq, int(spj.spj_number.rsplit("/", 1)[1]))
-            except (ValueError, IndexError):
-                continue
+    with closing(store._connect()) as connection:
+        row = connection.execute(
+            "SELECT MAX(CAST(SUBSTR(spj_number, ?) AS INTEGER)) AS max_seq "
+            "FROM spj WHERE spj_number LIKE ?",
+            (len(prefix) + 1, prefix + "%"),
+        ).fetchone()
+    max_seq = row["max_seq"] or 0
     return f"{prefix}{max_seq + 1:06d}"
 
 
 def _default_persist_path() -> str:
     db_path = os.environ.get("JWIS_DB_PATH")
     if db_path:
-        return os.path.join(os.path.dirname(db_path), "jwis_spj.json")
-    return os.path.join(tempfile.gettempdir(), "jwis_spj.json")
+        return os.path.join(os.path.dirname(db_path), "jwis_spj.db")
+    return os.path.join(tempfile.gettempdir(), "jwis_spj.db")
+
+
+def _legacy_json_path(db_path: str) -> str:
+    """Where the pre-SQLite store kept its whole-file JSON state."""
+    return os.path.splitext(db_path)[0] + ".json"
 
 
 class SpjStore:
+    """SQLite-backed SPJ store, safe across worker processes.
+
+    Every mutation runs inside one SQLite transaction (BEGIN IMMEDIATE),
+    so concurrent workers serialize on the database itself rather than an
+    in-process lock. The daily spj_number is allocated inside the same
+    transaction as the INSERT, guarded by a UNIQUE constraint; a conflict
+    retries with a fresh number.
+    """
+
+    _BUSY_TIMEOUT_MS = 10_000
+
     def __init__(self, persist_path: str | None = None) -> None:
         self._path = persist_path or _default_persist_path()
-        self._spj: dict[str, Spj] = {}
-        self._lock = threading.RLock()  # reentrant: create/activate call locked helpers
-        self._load()
+        self._spj: dict[str, Spj] = {}  # read cache; SQLite is the source of truth
+        self._lock = threading.RLock()
+        self._init_schema()
+        self._migrate_legacy_json()
+        self._reload_cache()
 
-    def _load(self) -> None:
-        if not os.path.exists(self._path):
+    # -- connection helpers -------------------------------------------------
+
+    def _connect(self) -> sqlite3.Connection:
+        connection = sqlite3.connect(self._path, timeout=self._BUSY_TIMEOUT_MS / 1000)
+        connection.row_factory = sqlite3.Row
+        connection.execute("PRAGMA journal_mode=WAL")
+        connection.execute(f"PRAGMA busy_timeout={self._BUSY_TIMEOUT_MS}")
+        connection.execute("PRAGMA foreign_keys=ON")
+        return connection
+
+    def _init_schema(self) -> None:
+        with closing(self._connect()) as connection:
+            with connection:
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS spj (
+                        spj_id TEXT PRIMARY KEY,
+                        spj_number TEXT NOT NULL UNIQUE,
+                        date TEXT NOT NULL,
+                        driver_name TEXT NOT NULL,
+                        truck_code TEXT NOT NULL,
+                        destination TEXT NOT NULL,
+                        weigh_on_site INTEGER NOT NULL DEFAULT 0,
+                        priority TEXT NOT NULL DEFAULT 'normal',
+                        note TEXT NOT NULL DEFAULT '',
+                        status TEXT NOT NULL DEFAULT 'draft',
+                        created_by TEXT NOT NULL DEFAULT 'admin',
+                        created_at TEXT NOT NULL,
+                        activated_at TEXT,
+                        completed_at TEXT
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS spj_stops (
+                        spj_id TEXT NOT NULL REFERENCES spj(spj_id) ON DELETE CASCADE,
+                        idx INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        kecamatan TEXT NOT NULL,
+                        address TEXT NOT NULL,
+                        lat REAL NOT NULL,
+                        lng REAL NOT NULL,
+                        location_type TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        completed_at TEXT,
+                        evidence TEXT,
+                        PRIMARY KEY (spj_id, idx)
+                    )
+                    """
+                )
+                connection.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS spj_audit (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        spj_id TEXT NOT NULL,
+                        action TEXT NOT NULL,
+                        actor TEXT NOT NULL,
+                        reason TEXT NOT NULL DEFAULT '',
+                        payload TEXT NOT NULL DEFAULT '{}',
+                        created_at TEXT NOT NULL
+                    )
+                    """
+                )
+
+    @staticmethod
+    def _audit(connection: sqlite3.Connection, spj_id: str, action: str,
+               actor: str, reason: str = "", payload: dict | None = None) -> None:
+        connection.execute(
+            "INSERT INTO spj_audit (spj_id, action, actor, reason, payload, created_at) "
+            "VALUES (?,?,?,?,?,?)",
+            (spj_id, action, actor, reason, json.dumps(payload or {}),
+             _utc_now()),
+        )
+
+    def audit_log(self, spj_id: str) -> list[dict]:
+        """Audit entries for one SPJ, oldest first."""
+        with closing(self._connect()) as connection:
+            rows = connection.execute(
+                "SELECT action, actor, reason, payload, created_at FROM spj_audit "
+                "WHERE spj_id=? ORDER BY id", (spj_id,)).fetchall()
+        return [
+            {"action": r["action"], "actor": r["actor"], "reason": r["reason"],
+             "payload": json.loads(r["payload"]), "created_at": r["created_at"]}
+            for r in rows
+        ]
+
+    def _migrate_legacy_json(self) -> None:
+        """One-time import from the pre-SQLite whole-file JSON store."""
+        legacy = _legacy_json_path(self._path)
+        if not os.path.exists(legacy):
             return
+        with open(legacy, "rb") as fh:
+            head = fh.read(16)
+        if head.startswith(b"SQLite format 3"):
+            return  # the "legacy" path is itself a SQLite file (test habit)
         try:
-            raw = json.loads(open(self._path, encoding="utf-8").read())
-            for item in raw:
-                stops = [SpjStop(**s) for s in item.pop("stops", [])]
-                spj = Spj(stops=stops, **item)
-                self._spj[spj.spj_id] = spj
+            with closing(self._connect()) as connection:
+                row = connection.execute("SELECT COUNT(*) AS n FROM spj").fetchone()
+                if row["n"] > 0:
+                    return  # DB already populated; JSON is stale
+                raw = json.loads(open(legacy, encoding="utf-8").read())
+                with connection:
+                    for item in raw:
+                        stops = item.pop("stops", [])
+                        connection.execute(
+                            "INSERT INTO spj (spj_id, spj_number, date, driver_name, "
+                            "truck_code, destination, weigh_on_site, priority, note, "
+                            "status, created_by, created_at, activated_at, completed_at) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (item.get("spj_id"), item.get("spj_number"), item.get("date"),
+                             item.get("driver_name"), item.get("truck_code"),
+                             item.get("destination"), int(bool(item.get("weigh_on_site"))),
+                             item.get("priority", "normal"), item.get("note", ""),
+                             item.get("status", "draft"), item.get("created_by", "admin"),
+                             item.get("created_at", ""), item.get("activated_at"),
+                             item.get("completed_at")),
+                        )
+                        for idx, stop in enumerate(stops):
+                            connection.execute(
+                                "INSERT INTO spj_stops (spj_id, idx, name, kecamatan, "
+                                "address, lat, lng, location_type, status, completed_at, "
+                                "evidence) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                                (item["spj_id"], idx, stop.get("name"),
+                                 stop.get("kecamatan"), stop.get("address"),
+                                 stop.get("lat"), stop.get("lng"),
+                                 stop.get("location_type", "Pemukiman Kelas Menengah"),
+                                 stop.get("status", "pending"), stop.get("completed_at"),
+                                 json.dumps(stop["evidence"]) if stop.get("evidence") else None),
+                            )
+            logger.info("migrated legacy SPJ JSON %s into %s", legacy, self._path)
         except Exception:  # noqa: BLE001
-            logger.exception("SPJ store corrupt at %s; starting empty", self._path)
-            self._spj = {}
+            logger.exception("legacy SPJ JSON migration failed for %s", legacy)
 
-    def _save(self) -> None:
-        try:
-            payload = [asdict(s) for s in self._spj.values()]
-            with open(self._path, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False, indent=1)
-        except Exception:  # noqa: BLE001
-            logger.exception("failed to persist SPJ store to %s", self._path)
+    # -- row <-> dataclass ---------------------------------------------------
+
+    @staticmethod
+    def _row_to_spj(spj_row: sqlite3.Row, stop_rows: list) -> Spj:
+        return Spj(
+            spj_id=spj_row["spj_id"], spj_number=spj_row["spj_number"],
+            date=spj_row["date"], driver_name=spj_row["driver_name"],
+            truck_code=spj_row["truck_code"], destination=spj_row["destination"],
+            weigh_on_site=bool(spj_row["weigh_on_site"]),
+            priority=spj_row["priority"], note=spj_row["note"],
+            stops=[SpjStop(
+                name=r["name"], kecamatan=r["kecamatan"], address=r["address"],
+                lat=r["lat"], lng=r["lng"], location_type=r["location_type"],
+                status=r["status"], completed_at=r["completed_at"],
+                evidence=json.loads(r["evidence"]) if r["evidence"] else None,
+            ) for r in sorted(stop_rows, key=lambda r: r["idx"])],
+            status=spj_row["status"], created_by=spj_row["created_by"],
+            created_at=spj_row["created_at"], activated_at=spj_row["activated_at"],
+            completed_at=spj_row["completed_at"],
+        )
+
+    def _load_spj(self, connection: sqlite3.Connection, spj_id: str) -> Spj | None:
+        row = connection.execute("SELECT * FROM spj WHERE spj_id=?", (spj_id,)).fetchone()
+        if row is None:
+            return None
+        stops = connection.execute(
+            "SELECT * FROM spj_stops WHERE spj_id=? ORDER BY idx", (spj_id,)
+        ).fetchall()
+        return self._row_to_spj(row, stops)
+
+    def _reload_cache(self) -> None:
+        with closing(self._connect()) as connection:
+            rows = connection.execute("SELECT spj_id FROM spj").fetchall()
+            self._spj = {}
+            for row in rows:
+                spj = self._load_spj(connection, row["spj_id"])
+                if spj is not None:
+                    self._spj[spj.spj_id] = spj
+
+    def _save(self) -> None:  # kept for API compat; SQLite persists per mutation
+        self._reload_cache()
+
+    # -- public API (transactional, multi-process safe) -----------------------
 
     def create(self, driver_name: str, truck_code: str, destination: str,
                weigh_on_site: bool, priority: str, note: str,
@@ -147,14 +329,36 @@ class SpjStore:
         if priority not in ("normal", "vip"):
             raise ValueError("priority must be 'normal' or 'vip'")
         with self._lock:
-            spj = Spj(spj_id=uuid4().hex[:12], spj_number=next_spj_number(self),
-                      date=_today(), driver_name=driver_name, truck_code=truck_code,
-                      destination=destination, weigh_on_site=weigh_on_site,
-                      priority=priority, note=note, created_by=created_by,
-                      created_at=_utc_now())
-            self._spj[spj.spj_id] = spj
-            self._save()
-            return spj
+            for _attempt in range(20):
+                spj_id = uuid4().hex[:12]
+                now = _utc_now()
+                spj = None
+                connection = self._connect()
+                connection.isolation_level = None  # explicit transactions
+                try:
+                    with closing(connection):
+                        connection.execute("BEGIN IMMEDIATE")
+                        number = next_spj_number(self)
+                        try:
+                            connection.execute(
+                                "INSERT INTO spj (spj_id, spj_number, date, driver_name, "
+                                "truck_code, destination, weigh_on_site, priority, note, "
+                                "status, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (spj_id, number, _today(), driver_name, truck_code,
+                                 destination, int(bool(weigh_on_site)), priority, note,
+                                 "draft", created_by, now),
+                            )
+                            connection.execute("COMMIT")
+                        except sqlite3.IntegrityError:
+                            connection.execute("ROLLBACK")
+                            continue  # daily-number race: retry with a fresh number
+                        spj = self._load_spj(connection, spj_id)
+                except sqlite3.OperationalError:
+                    raise
+                if spj is not None:
+                    self._spj[spj_id] = spj
+                    return spj
+            raise RuntimeError("SPJ create failed after repeated number conflicts")
 
     def get(self, spj_id: str) -> Spj | None:
         with self._lock:
@@ -174,79 +378,160 @@ class SpjStore:
                     return spj
         return None
 
+    def _mutate(self, spj_id: str, mutate_fn) -> Spj:
+        """Run mutate_fn(connection, row) inside BEGIN IMMEDIATE, then reload."""
+        with self._lock:
+            connection = self._connect()
+            connection.isolation_level = None
+            try:
+                with closing(connection):
+                    connection.execute("BEGIN IMMEDIATE")
+                    try:
+                        mutate_fn(connection)
+                    except Exception:
+                        connection.execute("ROLLBACK")
+                        raise
+                    else:
+                        connection.execute("COMMIT")
+            except sqlite3.OperationalError:
+                raise
+            spj = self._load_fresh(spj_id)
+            self._spj[spj_id] = spj
+            return spj
+
+    def _fetch_status(self, connection: sqlite3.Connection, spj_id: str) -> sqlite3.Row:
+        row = connection.execute("SELECT * FROM spj WHERE spj_id=?", (spj_id,)).fetchone()
+        if row is None:
+            raise ValueError(f"SPJ {spj_id} not found")
+        return row
+
     def add_stop(self, spj_id: str, name: str, kecamatan: str, address: str,
                  lat: float, lng: float,
                  location_type: str = "Pemukiman Kelas Menengah") -> Spj:
-        with self._lock:
-            spj = self._require(spj_id)
-            if spj.status != "draft":
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "draft":
                 raise ValueError("stops can only be added to a draft SPJ")
-            spj.stops.append(SpjStop(name=name, kecamatan=kecamatan,
-                                     address=address, lat=lat, lng=lng,
-                                     location_type=location_type))
-            self._save()
-            return spj
+            idx = connection.execute(
+                "SELECT COALESCE(MAX(idx)+1, 0) FROM spj_stops WHERE spj_id=?",
+                (spj_id,)).fetchone()[0]
+            connection.execute(
+                "INSERT INTO spj_stops (spj_id, idx, name, kecamatan, address, "
+                "lat, lng, location_type, status) VALUES (?,?,?,?,?,?,?,?,?)",
+                (spj_id, idx, name, kecamatan, address, lat, lng,
+                 location_type, "pending"),
+            )
+        return self._mutate(spj_id, mutate)
 
     def activate(self, spj_id: str) -> Spj:
-        with self._lock:
-            spj = self._require(spj_id)
-            if spj.status != "draft":
-                raise ValueError(f"cannot activate SPJ in status '{spj.status}'")
-            if not spj.stops:
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "draft":
+                raise ValueError(f"cannot activate SPJ in status '{row['status']}'")
+            stop_count = connection.execute(
+                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=?", (spj_id,)).fetchone()[0]
+            if stop_count < 1:
                 raise ValueError("SPJ needs at least one stop before activation")
-            if self.active_for_truck(spj.truck_code) is not None:
-                raise ValueError(
-                    f"truck {spj.truck_code} already has an active SPJ")
-            spj.status = "aktif"
-            spj.activated_at = _utc_now()
-            self._save()
-            return spj
+            active = connection.execute(
+                "SELECT spj_id FROM spj WHERE truck_code=? AND status='aktif'",
+                (row["truck_code"],)).fetchone()
+            if active is not None:
+                raise ValueError(f"truck {row['truck_code']} already has an active SPJ")
+            connection.execute(
+                "UPDATE spj SET status='aktif', activated_at=? WHERE spj_id=?",
+                (_utc_now(), spj_id))
+            self._audit(connection, spj_id, "activate", row["created_by"])
+        return self._mutate(spj_id, mutate)
 
     def complete_stop(self, spj_id: str, index: int,
                       evidence: dict | None = None) -> Spj:
-        with self._lock:
-            spj = self._require(spj_id)
-            if spj.status != "aktif":
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "aktif":
                 raise ValueError("stops can only be completed on an active SPJ")
-            if not 0 <= index < len(spj.stops):
+            stops = connection.execute(
+                "SELECT idx, status FROM spj_stops WHERE spj_id=? ORDER BY idx",
+                (spj_id,)).fetchall()
+            if not 0 <= index < len(stops):
                 raise ValueError(f"stop index {index} out of range")
-            if evidence is not None:
-                _validate_evidence(evidence)
-            stop = spj.stops[index]
-            if stop.status == "completed":
-                return spj
-            if evidence is not None:
-                stop.evidence = evidence
-            stop.status = "completed"
-            stop.completed_at = _utc_now()
-            if all(s.status == "completed" for s in spj.stops):
-                spj.status = "selesai"
-                spj.completed_at = _utc_now()
-            self._save()
-            return spj
+            if stops[index]["status"] == "completed":
+                return  # idempotent
+            if evidence is None:
+                raise ValueError(
+                    "stop completion requires field evidence "
+                    "(arrival, weighing, officer)")
+            _validate_evidence(evidence)
+            connection.execute(
+                "UPDATE spj_stops SET status='completed', completed_at=?, "
+                "evidence=? WHERE spj_id=? AND idx=?",
+                (_utc_now(), json.dumps(evidence), spj_id, index))
+            self._audit(connection, spj_id, "complete_stop", row["created_by"],
+                        payload={"stop_index": index})
+            pending = connection.execute(
+                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
+                "AND status != 'completed'", (spj_id,)).fetchone()[0]
+            if pending == 0:
+                connection.execute(
+                    "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?",
+                    (_utc_now(), spj_id))
+        return self._mutate(spj_id, mutate)
 
-    def complete(self, spj_id: str) -> Spj:
-        with self._lock:
-            spj = self._require(spj_id)
-            if spj.status != "aktif":
-                raise ValueError(f"cannot complete SPJ in status '{spj.status}'")
-            spj.status = "selesai"
-            spj.completed_at = _utc_now()
-            for stop in spj.stops:
-                if stop.status != "completed":
-                    stop.status = "completed"
-                    stop.completed_at = spj.completed_at
-            self._save()
-            return spj
+    def complete(self, spj_id: str, override: dict | None = None) -> Spj:
+        """Close an active SPJ.
+
+        Normal completion requires every stop to be completed WITH field
+        evidence — the same invariant the driver workflow enforces. A
+        supervisor override ({"actor": ..., "reason": ...}) forces closure
+        and is recorded in the audit trail; the reason must be non-empty.
+        """
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] != "aktif":
+                raise ValueError(f"cannot complete SPJ in status '{row['status']}'")
+            unevidenced = connection.execute(
+                "SELECT COUNT(*) FROM spj_stops WHERE spj_id=? "
+                "AND (status != 'completed' OR evidence IS NULL)",
+                (spj_id,)).fetchone()[0]
+            actor = None
+            reason = None
+            if unevidenced:
+                if override is None:
+                    raise ValueError(
+                        f"cannot complete: {unevidenced} stop(s) lack field evidence; "
+                        "a supervisor override with a reason is required")
+                actor = (override or {}).get("actor") or "unknown"
+                reason = str((override or {}).get("reason") or "").strip()
+                if not reason:
+                    raise ValueError("override requires a non-empty reason")
+            now = _utc_now()
+            connection.execute(
+                "UPDATE spj_stops SET status='completed', completed_at=? "
+                "WHERE spj_id=? AND status != 'completed'", (now, spj_id))
+            connection.execute(
+                "UPDATE spj SET status='selesai', completed_at=? WHERE spj_id=?",
+                (now, spj_id))
+            if unevidenced:
+                self._audit(connection, spj_id, "override", actor, reason,
+                            payload={"forced_stops": unevidenced})
+            else:
+                self._audit(connection, spj_id, "complete", row["created_by"])
+        return self._mutate(spj_id, mutate)
 
     def cancel(self, spj_id: str) -> Spj:
-        with self._lock:
-            spj = self._require(spj_id)
-            if spj.status not in ("draft", "aktif"):
-                raise ValueError(f"cannot cancel SPJ in status '{spj.status}'")
-            spj.status = "batal"
-            self._save()
-            return spj
+        def mutate(connection):
+            row = self._fetch_status(connection, spj_id)
+            if row["status"] not in ("draft", "aktif"):
+                raise ValueError(f"cannot cancel SPJ in status '{row['status']}'")
+            connection.execute("UPDATE spj SET status='batal' WHERE spj_id=?", (spj_id,))
+            self._audit(connection, spj_id, "cancel", row["created_by"])
+        return self._mutate(spj_id, mutate)
+
+    def _load_fresh(self, spj_id: str) -> Spj:
+        with closing(self._connect()) as connection:
+            spj = self._load_spj(connection, spj_id)
+        if spj is None:
+            raise ValueError(f"SPJ {spj_id} not found")
+        return spj
 
     def _require(self, spj_id: str) -> Spj:
         spj = self._spj.get(spj_id)

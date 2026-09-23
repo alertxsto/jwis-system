@@ -16,12 +16,13 @@ import time
 ROLES: dict[str, set[str]] = {
     "executive": {"dashboard:read", "reports:read", "history:read"},
     "dispatcher": {"dashboard:read", "operations:plan", "dispatch:create", "history:read"},
-    "supervisor": {"dashboard:read", "dispatch:create", "operations:approve", "history:read"},
+    "supervisor": {"dashboard:read", "dispatch:create", "operations:approve", "history:read",
+                   "spj:override"},
     "driver": {"dispatch:confirm"},
     "auditor": {"history:read", "reports:read", "provenance:read"},
     "administrator": {"dashboard:read", "reports:read", "history:read", "operations:plan",
                       "operations:approve", "dispatch:create", "dispatch:confirm",
-                      "provenance:read", "admin:manage"},
+                      "provenance:read", "admin:manage", "spj:override"},
 }
 
 # Demo credentials: password is "<role>-demo-pass" unless overridden by env

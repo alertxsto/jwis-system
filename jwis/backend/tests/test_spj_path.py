@@ -6,6 +6,8 @@ with mock.patch.dict(os.environ, {"JWIS_SPJ_SEED": "off"}):
     import app.spj as spj_module
     from app.spj import SpjStore, active_path_for, spj_polyline
 
+from spj_testutil import fresh_store_path
+
 
 class SpjPolylineTests(unittest.TestCase):
     def _active_spj(self, store, truck="T-001"):
@@ -16,15 +18,10 @@ class SpjPolylineTests(unittest.TestCase):
                        lat=-6.20, lng=106.80)
         store.add_stop(spj.spj_id, name="S2", kecamatan="K", address="B",
                        lat=-6.25, lng=106.85)
-        store.activate(spj.spj_id)
-        return spj
+        return store.activate(spj.spj_id)
 
     def test_polyline_appends_destination(self):
-        import tempfile
-        path = os.path.join(tempfile.gettempdir(), "test_spj_poly.json")
-        if os.path.exists(path):
-            os.remove(path)
-        store = SpjStore(persist_path=path)
+        store = SpjStore(persist_path=fresh_store_path("test_spj_poly.json"))
         spj = self._active_spj(store)
         line = spj_polyline(spj)
         self.assertEqual(len(line), 3)
@@ -33,11 +30,7 @@ class SpjPolylineTests(unittest.TestCase):
         self.assertAlmostEqual(line[-1][1], 106.991, places=3)
 
     def test_active_path_for_truck_with_spj(self):
-        import tempfile
-        path = os.path.join(tempfile.gettempdir(), "test_spj_active.json")
-        if os.path.exists(path):
-            os.remove(path)
-        store = SpjStore(persist_path=path)
+        store = SpjStore(persist_path=fresh_store_path("test_spj_active.json"))
         self._active_spj(store, truck="T-999")
         old = spj_module.SPJ_STORE
         try:
@@ -50,11 +43,7 @@ class SpjPolylineTests(unittest.TestCase):
             spj_module.SPJ_STORE = old
 
     def test_active_path_none_when_polyline_degenerate(self):
-        import tempfile
-        path = os.path.join(tempfile.gettempdir(), "test_spj_degenerate.json")
-        if os.path.exists(path):
-            os.remove(path)
-        store = SpjStore(persist_path=path)
+        store = SpjStore(persist_path=fresh_store_path("test_spj_degenerate.json"))
         spj = self._active_spj(store, truck="T-998")
         spj.stops.clear()  # zero-stop edge: polyline is destination-only
         old = spj_module.SPJ_STORE
@@ -65,12 +54,8 @@ class SpjPolylineTests(unittest.TestCase):
             spj_module.SPJ_STORE = old
 
     def test_reference_path_prefers_spj(self):
-        import tempfile
         from app.data import _assigned_reference_path
-        path = os.path.join(tempfile.gettempdir(), "test_spj_ref.json")
-        if os.path.exists(path):
-            os.remove(path)
-        store = SpjStore(persist_path=path)
+        store = SpjStore(persist_path=fresh_store_path("test_spj_ref.json"))
         self._active_spj(store, truck="T-001")
         old = spj_module.SPJ_STORE
         try:
@@ -84,9 +69,7 @@ class SpjPolylineTests(unittest.TestCase):
         from app.data import _assigned_reference_path
         old = spj_module.SPJ_STORE
         try:
-            import tempfile
-            empty = SpjStore(persist_path=os.path.join(
-                tempfile.gettempdir(), "test_spj_empty.json"))
+            empty = SpjStore(persist_path=fresh_store_path("test_spj_empty.json"))
             spj_module.SPJ_STORE = empty
             ref = _assigned_reference_path("T-001")
             # With no SPJ in the store, the road-cache-or-ASSIGNED_PATHS
