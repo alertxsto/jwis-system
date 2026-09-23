@@ -329,9 +329,10 @@ class SpjStore:
             status=spj_row["status"], created_by=spj_row["created_by"],
             created_at=spj_row["created_at"], activated_at=spj_row["activated_at"],
             completed_at=spj_row["completed_at"],
-            receipt=({key: receipt_row[key] for key in
-                      ("photo_name", "total_weight_kg", "weight_source",
-                       "submitted_by", "recorded_at", "has_photo")}
+            receipt=({**{key: receipt_row[key] for key in
+                        ("photo_name", "total_weight_kg", "weight_source",
+                         "submitted_by", "recorded_at")},
+                      "has_photo": bool(receipt_row["has_photo"])}
                      if receipt_row is not None else None),
         )
 
